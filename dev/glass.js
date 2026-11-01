@@ -89,8 +89,8 @@
   }
   readTint();
 
-  let tex = null, natW = 0, natH = 0, queued = false;
-  function upload(src, w, h) {                       // src: a picture, or the video's current frame
+  let tex = null, natW = 0, natH = 0, texW = 0, queued = false;
+  function upload(src, w, h, tw) {                   // src: a picture, or the video's current frame; tw: its width as uploaded
     if (!tex) {
       tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
@@ -102,7 +102,7 @@
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
     gl.generateMipmap(gl.TEXTURE_2D);
-    natW = w; natH = h;
+    natW = w; natH = h; texW = tw || w;
     request();
   }
   function loadPicture(url) {
@@ -117,7 +117,19 @@
   } else {
     // the video: start from its poster, then copy each new frame while it plays (only while the header is over it)
     if (hero.poster) loadPicture(hero.poster);
-    const grab = () => { if (hero.readyState >= 2 && hero.videoWidth) upload(hero, hero.videoWidth, hero.videoHeight); };
+    // the glass only shows a blurred copy, so each frame is first shrunk to about half the picture's size on screen
+    // (in CSS pixels): copying a whole 4K frame to the graphics card every frame made scrolling judder
+    const small = document.createElement('canvas'), sctx = small.getContext('2d');
+    const grab = () => {
+      if (hero.readyState < 2 || !hero.videoWidth) return;
+      const vw = hero.videoWidth, vh = hero.videoHeight, b = hero.getBoundingClientRect();
+      const shown = Math.max(b.width / vw, b.height / vh) * vw;           // the picture's width on screen, CSS px
+      const sw = Math.min(vw, Math.max(256, Math.ceil(shown / 2))), sh_ = Math.round(vh * sw / vw);
+      if (sw >= vw) { upload(hero, vw, vh); return; }
+      if (small.width !== sw || small.height !== sh_) { small.width = sw; small.height = sh_; }
+      sctx.drawImage(hero, 0, 0, sw, sh_);
+      upload(small, vw, vh, sw);
+    };
     const rvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
     function onFrame() {
       if (underHeader()) grab();
@@ -155,7 +167,7 @@
     gl.uniform1f(U.dpr, dpr);
     gl.uniform4f(U.box, b.left - hr.left, vTop - hr.top, b.width, vBottom - vTop);
     gl.uniform4f(U.place, b.left - hr.left + (b.width - pw) / 2, b.top - hr.top + (b.height - ph) / 2, pw, ph);
-    gl.uniform1f(U.lod, Math.max(0, Math.log2(natW / pw * BLUR * 0.5)));
+    gl.uniform1f(U.lod, Math.max(0, Math.log2(texW / pw * BLUR * 0.5)));
     gl.uniform1f(U.bend, bend);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
