@@ -24,6 +24,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../face/face-dev.css">
+  <script>
+    /* Phones: the opening picture's height is set in pixels when the page opens (and again only when the phone turns),
+       so it never changes size or re-crops while Safari's bars show and hide during scrolling */
+    (function () {
+      var w = 0, touch = matchMedia('(pointer: coarse)').matches;
+      function set() {
+        if (!touch || innerWidth !== w) { w = innerWidth; document.documentElement.style.setProperty('--hero-h', innerHeight + 'px'); }
+      }
+      set(); addEventListener('resize', set);
+    })();
+  </script>
   <style>
     /* Fundamentals */
     * {
@@ -111,6 +122,17 @@
       opacity: 1;
       transform: none;
     }
+    .footer-email { position: relative; }
+    #footer-email { cursor: pointer; }
+    .footer-tip {
+      top: auto;
+      right: auto;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      white-space: nowrap;
+      transform: translate(-50%, 4px);
+    }
+    .footer-tip.show { transform: translate(-50%, 0); }
     .site-title {
       display: flex;
       align-items: baseline;
@@ -169,6 +191,7 @@
       width: 100%;
       height: 100vh;
       height: 100svh;     /* fills the window exactly (on phones, with the browser's bars showing) */
+      height: var(--hero-h, 100svh);   /* on phones, fixed in pixels when the page opens (see the script in the head) */
       object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
     }
     .hero-title {
@@ -894,15 +917,29 @@
   </main>
 
   <footer id="contact" class="site-footer">
-    <p class="footer-email" id="footer-email"></p>
-    <script>(function(){var p=['chrisjones.org.uk', '@', 'hello'];document.getElementById("footer-email").textContent=p.reverse().join("");
-      /* the header's email button copies the address (put together only when clicked, so spam robots never see it) */
-      var b=document.getElementById("header-email"),tip=document.getElementById("copied-tip"),timer;
-      function copied(){tip.classList.add("show");clearTimeout(timer);timer=setTimeout(function(){tip.classList.remove("show");},2200);}
-      if(b)b.addEventListener("click",function(e){e.preventDefault();var a=p.join("");
-        if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(a).then(copied,function(){location.hash="#contact";});}
-        else{var t=document.createElement("textarea");t.value=a;t.setAttribute("readonly","");t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();
-          try{document.execCommand("copy");copied();}catch(err){location.hash="#contact";}document.body.removeChild(t);}});})();</script>
+    <p class="footer-email"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
+    <script>
+      (function () {
+        var addr = ['chrisjones.org.uk', '@', 'hello'].reverse().join('');   // put together here, so spam robots never find the address in the page
+        var footer = document.getElementById('footer-email');
+        footer.textContent = addr;
+        /* the header's email button and the footer's address both copy the address, and say so for a moment */
+        function copy(tip) {
+          function shown() { tip.classList.add('show'); clearTimeout(tip.timer); tip.timer = setTimeout(function () { tip.classList.remove('show'); }, 2200); }
+          function fallback() {
+            var t = document.createElement('textarea'); t.value = addr; t.setAttribute('readonly', '');
+            t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select();
+            try { document.execCommand('copy'); shown(); } catch (err) {}
+            document.body.removeChild(t);
+          }
+          if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(addr).then(shown, fallback); else fallback();
+        }
+        var button = document.getElementById('header-email');
+        if (button) button.addEventListener('click', function (e) { e.preventDefault(); copy(document.getElementById('copied-tip')); });
+        footer.addEventListener('click', function () { copy(document.getElementById('footer-copied')); });
+        footer.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copy(document.getElementById('footer-copied')); } });
+      })();
+    </script>
     <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
     <p>&copy;2026 Christopher Jones</p>
   </footer>
