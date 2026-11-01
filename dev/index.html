@@ -355,7 +355,7 @@
 
     <!-- Opening image -->
     <section class="hero">
-      <video src="../med/painted-forest-v4.mp4" poster="../med/jpg/forest-1536.jpg"
+      <video src="../med/painted-forest-v5.mp4" poster="../med/jpg/forest-1536.jpg"
              autoplay muted playsinline preload="auto"
              role="img" aria-label="Woodland with bracken, being painted over in oils"></video>
       <script>
@@ -364,7 +364,7 @@
           var v = document.querySelector('.hero video');
           if (v && matchMedia('(prefers-reduced-motion: reduce)').matches) {
             v.removeAttribute('autoplay'); v.pause(); v.preload = 'none';
-            v.poster = '../med/jpg/painted-forest-v3-end.jpg';
+            v.poster = '../med/jpg/painted-forest-v5-end.jpg';
             v.removeAttribute('src'); v.load();
           }
         })();
