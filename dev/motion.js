@@ -67,3 +67,21 @@
   addEventListener('resize', wake);
   wake();
 })();
+
+/* Parallax: the opening picture moves up more slowly than the page as you scroll, as if it were further away.
+   Nothing moves for visitors who have asked their device to reduce motion. */
+(function () {
+  const PARALLAX = 0.4;     // 0: scrolls with the page; 1: stays still in the window
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const hero = document.querySelector('.hero'), pic = document.querySelector('.hero video, .hero img');
+  if (!hero || !pic) return;
+  let queued = false;
+  function update() {
+    queued = false;
+    const y = Math.max(-hero.getBoundingClientRect().top, 0);
+    if (y > hero.offsetHeight + 50) return;                     // scrolled well past: nothing to see
+    pic.style.transform = `translate3d(0, ${(y * PARALLAX).toFixed(1)}px, 0)`;
+  }
+  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+  update();
+})();

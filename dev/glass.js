@@ -135,12 +135,15 @@
     queued = false;
     if (!tex) return;
     const hr = header.getBoundingClientRect(), b = hero.getBoundingClientRect();
+    // the picture can be moved within its section (the parallax); only the part inside the section shows
+    const c = (hero.closest('.hero') || hero).getBoundingClientRect();
+    const vTop = Math.max(b.top, c.top), vBottom = Math.min(b.bottom, c.bottom);
     const dpr = Math.min(devicePixelRatio || 1, 2);
     const w = Math.round(hr.width * dpr), h = Math.round(hr.height * dpr);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     // how much of the picture is still under the header decides the bending and the fade
-    const under = b.bottom - hr.top;                                   // picture left under the header, px
-    const bend = Math.min(Math.max((b.bottom - hr.bottom) / EASE, 0), 1);
+    const under = vBottom - hr.top;                                    // picture left under the header, px
+    const bend = Math.min(Math.max((vBottom - hr.bottom) / EASE, 0), 1);
     const show = Math.min(Math.max(under / hr.height, 0), 1);
     canvas.style.opacity = show.toFixed(3);
     header.classList.toggle('glass-on', show >= 1);                    // the CSS frost isn't needed underneath
@@ -150,7 +153,7 @@
     gl.viewport(0, 0, w, h);
     gl.uniform2f(U.res, hr.width, hr.height);
     gl.uniform1f(U.dpr, dpr);
-    gl.uniform4f(U.box, b.left - hr.left, b.top - hr.top, b.width, b.height);
+    gl.uniform4f(U.box, b.left - hr.left, vTop - hr.top, b.width, vBottom - vTop);
     gl.uniform4f(U.place, b.left - hr.left + (b.width - pw) / 2, b.top - hr.top + (b.height - ph) / 2, pw, ph);
     gl.uniform1f(U.lod, Math.max(0, Math.log2(natW / pw * BLUR * 0.5)));
     gl.uniform1f(U.bend, bend);

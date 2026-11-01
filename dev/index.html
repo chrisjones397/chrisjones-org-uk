@@ -25,12 +25,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../face/face-dev.css">
   <script>
-    /* Phones: the opening picture's height is set in pixels when the page opens (and again only when the phone turns),
-       so it never changes size or re-crops while Safari's bars show and hide during scrolling */
+    /* The window's height, as --vh (one hundredth of it, in pixels). On phones it is measured when the page opens and
+       again only when the phone turns, so nothing changes size, and the page doesn't jump, as Safari's bars show and
+       hide while scrolling (Safari changes its own vh units then). Everything sized by the window height uses this. */
     (function () {
       var w = 0, touch = matchMedia('(pointer: coarse)').matches;
       function set() {
-        if (!touch || innerWidth !== w) { w = innerWidth; document.documentElement.style.setProperty('--hero-h', innerHeight + 'px'); }
+        if (!touch || innerWidth !== w) { w = innerWidth; document.documentElement.style.setProperty('--vh', innerHeight / 100 + 'px'); }
       }
       set(); addEventListener('resize', set);
     })();
@@ -189,9 +190,8 @@
     .hero img, .hero video {
       display: block;
       width: 100%;
-      height: 100vh;
-      height: 100svh;     /* fills the window exactly (on phones, with the browser's bars showing) */
-      height: var(--hero-h, 100svh);   /* on phones, fixed in pixels when the page opens (see the script in the head) */
+      height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
+      height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
       object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
     }
     .hero-title {
@@ -211,7 +211,7 @@
        (with smooth scrolling, the animation fast-forwards on the way there) */
     .face-anchor {
       position: absolute;
-      top: calc(100% - 100vh);
+      top: calc(100% - var(--vh, 1vh) * 100);
       left: 0;
     }
 
@@ -244,7 +244,7 @@
 
     /* Gallery */
     section#gallery {
-      min-height: 100vh;
+      min-height: calc(var(--vh, 1vh) * 100);
     }
     .gallery-block {
       max-width: 1200px;
