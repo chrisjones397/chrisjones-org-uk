@@ -92,6 +92,25 @@
       display: inline-flex;
       filter: drop-shadow(0 1px 4px rgba(0,0,0,0.25));
     }
+    /* "Email address copied", shown briefly under the header after the email button is pressed */
+    .copied-tip {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 20px;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      background: rgba(40, 40, 40, 0.85);
+      color: #fff;
+      font-size: 0.85rem;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+    }
+    .copied-tip.show {
+      opacity: 1;
+      transform: none;
+    }
     .site-title {
       display: flex;
       align-items: baseline;
@@ -300,12 +319,13 @@
           <li><a href="#gallery" class="nav-link">Gallery</a></li>
           <li><a href="#contact" class="nav-link">Contact</a></li>
           <li class="nav-icons">
-            <a href="#contact" class="nav-link nav-icon" id="header-email" aria-label="Email" title="Email"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
+            <a href="#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
             <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
           </li>
         </ul>
       </nav>
     </div>
+    <p class="copied-tip" id="copied-tip" role="status" aria-live="polite">Email address copied</p>
   </header>
   
   <main id="main-content">
@@ -379,7 +399,7 @@
                 type="image/jpeg"
                 sizes="100vw">
               <img 
-                src="../img/jpg/green-background-with-seven-figures-768.jpg" 
+                src="../img/jpg/green-background-with-seven-figures-768.jpg" width="768" height="512" 
                 alt="Green Background with Seven Figures"
                 loading="lazy">
             </picture>
@@ -416,7 +436,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/composition-in-blue-with-border-480.jpg" 
+                  src="../img/jpg/composition-in-blue-with-border-480.jpg" width="480" height="320" 
                   alt="Composition in Blue with Border"
                   loading="lazy">
               </picture>
@@ -450,7 +470,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/composition-in-red-with-border-480.jpg" 
+                  src="../img/jpg/composition-in-red-with-border-480.jpg" width="480" height="320" 
                   alt="Composition in Red with Border"
                   loading="lazy">
               </picture>
@@ -484,7 +504,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/composition-in-purple-480.jpg" 
+                  src="../img/jpg/composition-in-purple-480.jpg" width="480" height="320" 
                   alt="Composition in Purple"
                   loading="lazy">
               </picture>
@@ -518,7 +538,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/collaboration-with-teo-1-480.jpg" 
+                  src="../img/jpg/collaboration-with-teo-1-480.jpg" width="480" height="360" 
                   alt="Collaboration with Teo #1"
                   loading="lazy">
               </picture>
@@ -552,7 +572,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/collaboration-with-teo-2-480.jpg" 
+                  src="../img/jpg/collaboration-with-teo-2-480.jpg" width="480" height="360" 
                   alt="Collaboration with Teo #2"
                   loading="lazy">
               </picture>
@@ -586,7 +606,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/collaboration-with-teo-3-480.jpg" 
+                  src="../img/jpg/collaboration-with-teo-3-480.jpg" width="480" height="360" 
                   alt="Collaboration with Teo #3"
                   loading="lazy">
               </picture>
@@ -624,7 +644,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/seascape-2018-480.jpg" 
+                  src="../img/jpg/seascape-2018-480.jpg" width="480" height="320" 
                   alt="Seascape, 2018"
                   loading="lazy">
               </picture>
@@ -658,7 +678,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/mont-sainte-victoire-after-cezanne-480.jpg" 
+                  src="../img/jpg/mont-sainte-victoire-after-cezanne-480.jpg" width="480" height="320" 
                   alt="Mont Sainte&#8209;Victoire, after Cézanne"
                   loading="lazy">
               </picture>
@@ -690,7 +710,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/cjon-de-las-tomasas-albaicin-granada-480.jpg" 
+                  src="../img/jpg/cjon-de-las-tomasas-albaicin-granada-480.jpg" width="480" height="720" 
                   alt="Cjón. de las Tomasas, Albaicín, Granada"
                   loading="lazy">
               </picture>
@@ -722,7 +742,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/ponte-alda-merini-milan-480.jpg" 
+                  src="../img/jpg/ponte-alda-merini-milan-480.jpg" width="480" height="720" 
                   alt="Ponte Alda Merini, Milan"
                   loading="lazy">
               </picture>
@@ -754,7 +774,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/nighttime-brussels-2013-480.jpg" 
+                  src="../img/jpg/nighttime-brussels-2013-480.jpg" width="480" height="720" 
                   alt="Nighttime, Brussels, 2013"
                   loading="lazy">
               </picture>
@@ -788,7 +808,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/porthmadog-wales-480.jpg" 
+                  src="../img/jpg/porthmadog-wales-480.jpg" width="480" height="320" 
                   alt="Porthmadog, Wales"
                   loading="lazy">
               </picture>
@@ -825,7 +845,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/apple-1-480.jpg" 
+                  src="../img/jpg/apple-1-480.jpg" width="480" height="328" 
                   alt="Apple #1"
                   loading="lazy">
               </picture>
@@ -859,7 +879,7 @@
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="../img/jpg/apple-2-480.jpg" 
+                  src="../img/jpg/apple-2-480.jpg" width="480" height="319" 
                   alt="Apple #2"
                   loading="lazy">
               </picture>
@@ -876,8 +896,13 @@
   <footer id="contact" class="site-footer">
     <p class="footer-email" id="footer-email"></p>
     <script>(function(){var p=['chrisjones.org.uk', '@', 'hello'];document.getElementById("footer-email").textContent=p.reverse().join("");
-      /* the header's email button: the address is put together only when it is clicked, so spam robots never see it */
-      var b=document.getElementById("header-email");if(b)b.addEventListener("click",function(e){e.preventDefault();location.href="mai"+"lto:"+p.join("");});})();</script>
+      /* the header's email button copies the address (put together only when clicked, so spam robots never see it) */
+      var b=document.getElementById("header-email"),tip=document.getElementById("copied-tip"),timer;
+      function copied(){tip.classList.add("show");clearTimeout(timer);timer=setTimeout(function(){tip.classList.remove("show");},2200);}
+      if(b)b.addEventListener("click",function(e){e.preventDefault();var a=p.join("");
+        if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(a).then(copied,function(){location.hash="#contact";});}
+        else{var t=document.createElement("textarea");t.value=a;t.setAttribute("readonly","");t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();
+          try{document.execCommand("copy");copied();}catch(err){location.hash="#contact";}document.body.removeChild(t);}});})();</script>
     <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
     <p>&copy;2026 Christopher Jones</p>
   </footer>
