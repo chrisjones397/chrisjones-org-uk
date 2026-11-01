@@ -20,7 +20,8 @@
   let lastY = scrollY, queued = false;
   function update() {
     queued = false;
-    const y = scrollY;
+    // ignore the bounce past the top or bottom of the page (iPhone), which would look like scrolling back
+    const y = Math.min(Math.max(scrollY, 0), Math.max(document.documentElement.scrollHeight - innerHeight, 0));
     if (!phone.matches || y < TOP) header.classList.remove('compact');
     else if (y > lastY) header.classList.add('compact');
     else if (y < lastY - UP) header.classList.remove('compact');

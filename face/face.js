@@ -515,7 +515,7 @@ function frame(t) {
 const section = document.querySelector('.face-section');
 let tShown = -1;
 function scrollTime() {
-  const r = section.getBoundingClientRect(), travel = section.offsetHeight - innerHeight;
+  const r = section.getBoundingClientRect(), travel = section.offsetHeight - stage.offsetHeight;   // the stage's height doesn't change when Safari's bars show or hide
   return clamp01(clamp01(-r.top / travel) / PLAY) * T_DONE;
 }
 function tick(now) {
@@ -526,7 +526,9 @@ function tick(now) {
   if (seaMoving || Math.abs(next - tShown) > 1e-4) { tShown = next; frame(tShown); }
   requestAnimationFrame(tick);
 }
-addEventListener('resize', fit); fit();
+let fitW = 0, fitH = 0;                                             // only re-fit when the stage really changes size
+addEventListener('resize', () => { if (winW() !== fitW || winH() !== fitH) { fitW = winW(); fitH = winH(); fit(); } });
+fitW = winW(); fitH = winH(); fit();
 if (window.ResizeObserver) { const ro = new ResizeObserver(() => fit()); if (wordsEl) ro.observe(wordsEl); }
 window.__T_DONE = T_DONE; window.__frame = t => { tShown = t; frame(t); };
 window.__times = { T_WHIRL, T_ARRIVE, T_MOVE, T_MOVED, T_BUILD, T_DONE };

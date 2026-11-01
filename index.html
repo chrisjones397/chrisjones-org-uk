@@ -8,10 +8,33 @@
   <link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png">
   <link rel="manifest" href="favicon/site.webmanifest">
   <title>Christopher Jones - Fine Art</title>
+  <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
+  <!-- Link previews (messages, social media): the finished painting from the opening video -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Christopher Jones - Fine Art">
+  <meta property="og:title" content="Christopher Jones - Fine Art">
+  <meta property="og:description" content="Paintings in oil, watercolour, and pastel">
+  <meta property="og:url" content="https://chrisjones.org.uk/">
+  <meta property="og:image" content="https://chrisjones.org.uk/med/jpg/painted-forest-v8-end-1200.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="900">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="face/face.css">
+  <script>
+    /* The window's height, as --vh (one hundredth of it, in pixels). On phones it is measured when the page opens and
+       again only when the phone turns, so nothing changes size, and the page doesn't jump, as Safari's bars show and
+       hide while scrolling (Safari changes its own vh units then). Everything sized by the window height uses this. */
+    (function () {
+      var w = 0, touch = matchMedia('(pointer: coarse)').matches;
+      function set() {
+        if (!touch || innerWidth !== w) { w = innerWidth; document.documentElement.style.setProperty('--vh', innerHeight / 100 + 'px'); }
+      }
+      set(); addEventListener('resize', set);
+    })();
+  </script>
   <style>
     /* Fundamentals */
     * {
@@ -67,8 +90,49 @@
     }
     .nav-list {
       display: flex;
+      align-items: center;
       column-gap: 20px;
     }
+    /* Email and Instagram buttons beside the menu */
+    .nav-icons {
+      display: flex;
+      align-items: center;
+      column-gap: 14px;
+    }
+    .nav-icon {
+      display: inline-flex;
+      filter: drop-shadow(0 1px 4px rgba(0,0,0,0.25));
+    }
+    /* "Email address copied", shown briefly under the header after the email button is pressed */
+    .copied-tip {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 20px;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      background: rgba(40, 40, 40, 0.85);
+      color: #fff;
+      font-size: 0.85rem;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+    }
+    .copied-tip.show {
+      opacity: 1;
+      transform: none;
+    }
+    .footer-email { position: relative; }
+    #footer-email { cursor: pointer; }
+    .footer-tip {
+      top: auto;
+      right: auto;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      white-space: nowrap;
+      transform: translate(-50%, 4px);
+    }
+    .footer-tip.show { transform: translate(-50%, 0); }
     .site-title {
       display: flex;
       align-items: baseline;
@@ -122,11 +186,11 @@
       position: relative;
       overflow: hidden;   /* the title drifts down with the scroll; it stays within the picture */
     }
-    .hero img {
+    .hero img, .hero video {
       display: block;
       width: 100%;
-      height: 100vh;
-      height: 100svh;     /* fills the window exactly (on phones, with the browser's bars showing) */
+      height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
+      height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
       object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
     }
     .hero-title {
@@ -146,7 +210,7 @@
        (with smooth scrolling, the animation fast-forwards on the way there) */
     .face-anchor {
       position: absolute;
-      top: calc(100% - 100vh);
+      top: calc(100% - var(--vh, 1vh) * 100);
       left: 0;
     }
 
@@ -179,7 +243,7 @@
 
     /* Gallery */
     section#gallery {
-      min-height: 100vh;
+      min-height: calc(var(--vh, 1vh) * 100);
     }
     .gallery-block {
       max-width: 1200px;
@@ -276,37 +340,41 @@
           <li><a href="#profile" class="nav-link">Profile</a></li>
           <li><a href="#gallery" class="nav-link">Gallery</a></li>
           <li><a href="#contact" class="nav-link">Contact</a></li>
+          <li class="nav-icons">
+            <a href="#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
+            <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
+          </li>
         </ul>
       </nav>
     </div>
+    <p class="copied-tip" id="copied-tip" role="status" aria-live="polite">Email address copied</p>
   </header>
   
   <main id="main-content">
 
     <!-- Opening image -->
     <section class="hero">
-      <picture>
-        <source
-          srcset="
-            med/webp/forest-1024.webp 1024w,
-            med/webp/forest-1536.webp 1536w,
-            med/webp/forest-2560.webp 2560w,
-            med/webp/forest-3840.webp 3840w
-          "
-          type="image/webp"
-          sizes="100vw">
-        <img
-          src="med/jpg/forest-1536.jpg"
-          srcset="
-            med/jpg/forest-1024.jpg 1024w,
-            med/jpg/forest-1536.jpg 1536w,
-            med/jpg/forest-2560.jpg 2560w,
-            med/jpg/forest-3840.jpg 3840w
-          "
-          sizes="100vw"
-          alt="Woodland with bracken in evening light"
-          fetchpriority="high">
-      </picture>
+      <video poster="med/jpg/forest-1536.jpg"
+             autoplay muted playsinline preload="auto"
+             role="img" aria-label="Woodland with bracken, being painted over in oils">
+        <!-- the browser takes the first that matches: the size the screen can actually show (window width x pixel density) -->
+        <source src="med/painted-forest-v8-3840.mp4" type="video/mp4"
+                media="(min-width: 2561px), (min-width: 1281px) and (min-resolution: 2dppx), (min-width: 854px) and (min-resolution: 3dppx)">
+        <source src="med/painted-forest-v8-2560.mp4" type="video/mp4"
+                media="(min-width: 1537px), (min-width: 769px) and (min-resolution: 2dppx), (min-width: 513px) and (min-resolution: 3dppx)">
+        <source src="med/painted-forest-v8-1536.mp4" type="video/mp4">
+      </video>
+      <script>
+        /* Visitors who have asked their device to reduce motion see the finished painting straight away */
+        (function () {
+          var v = document.querySelector('.hero video');
+          if (v && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            v.removeAttribute('autoplay'); v.pause(); v.preload = 'none';
+            v.poster = 'med/jpg/painted-forest-v8-end.jpg';
+            v.querySelectorAll('source').forEach(function (s) { s.remove(); }); v.load();
+          }
+        })();
+      </script>
       <h1 class="hero-title">Fine art in oil, watercolour, and pastel</h1>
     </section>
 
@@ -347,8 +415,7 @@
                   img/webp/green-background-with-seven-figures-480.webp 480w,
                   img/webp/green-background-with-seven-figures-768.webp 768w,
                   img/webp/green-background-with-seven-figures-1024.webp 1024w,
-                  img/webp/green-background-with-seven-figures-1536.webp 1536w
-                "
+                  img/webp/green-background-with-seven-figures-1536.webp 1536w"
                 type="image/webp"
                 sizes="100vw">
               <source 
@@ -357,12 +424,11 @@
                   img/jpg/green-background-with-seven-figures-480.jpg 480w,
                   img/jpg/green-background-with-seven-figures-768.jpg 768w,
                   img/jpg/green-background-with-seven-figures-1024.jpg 1024w,
-                  img/jpg/green-background-with-seven-figures-1536.jpg 1536w
-                "
+                  img/jpg/green-background-with-seven-figures-1536.jpg 1536w"
                 type="image/jpeg"
                 sizes="100vw">
               <img 
-                src="img/jpg/green-background-with-seven-figures-768.jpg" 
+                src="img/jpg/green-background-with-seven-figures-768.jpg" width="768" height="512" 
                 alt="Green Background with Seven Figures"
                 loading="lazy">
             </picture>
@@ -382,8 +448,7 @@
                     img/webp/composition-in-blue-with-border-480.webp 480w, 
                     img/webp/composition-in-blue-with-border-768.webp 768w, 
                     img/webp/composition-in-blue-with-border-1024.webp 1024w, 
-                    img/webp/composition-in-blue-with-border-1536.webp 1536w
-                    "
+                    img/webp/composition-in-blue-with-border-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -394,14 +459,13 @@
                     img/jpg/composition-in-blue-with-border-480.jpg 480w,
                     img/jpg/composition-in-blue-with-border-768.jpg 768w,
                     img/jpg/composition-in-blue-with-border-1024.jpg 1024w,
-                    img/jpg/composition-in-blue-with-border-1536.jpg 1536w
-                  "
+                    img/jpg/composition-in-blue-with-border-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/composition-in-blue-with-border-480.jpg" 
+                  src="img/jpg/composition-in-blue-with-border-480.jpg" width="480" height="320" 
                   alt="Composition in Blue with Border"
                   loading="lazy">
               </picture>
@@ -418,8 +482,7 @@
                     img/webp/composition-in-red-with-border-480.webp 480w, 
                     img/webp/composition-in-red-with-border-768.webp 768w, 
                     img/webp/composition-in-red-with-border-1024.webp 1024w, 
-                    img/webp/composition-in-red-with-border-1536.webp 1536w
-                  "
+                    img/webp/composition-in-red-with-border-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -430,14 +493,13 @@
                     img/jpg/composition-in-red-with-border-480.jpg 480w,
                     img/jpg/composition-in-red-with-border-768.jpg 768w,
                     img/jpg/composition-in-red-with-border-1024.jpg 1024w,
-                    img/jpg/composition-in-red-with-border-1536.jpg 1536w
-                  "
+                    img/jpg/composition-in-red-with-border-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/composition-in-red-with-border-480.jpg" 
+                  src="img/jpg/composition-in-red-with-border-480.jpg" width="480" height="320" 
                   alt="Composition in Red with Border"
                   loading="lazy">
               </picture>
@@ -454,8 +516,7 @@
                     img/webp/composition-in-purple-480.webp 480w, 
                     img/webp/composition-in-purple-768.webp 768w, 
                     img/webp/composition-in-purple-1024.webp 1024w, 
-                    img/webp/composition-in-purple-1536.webp 1536w
-                  "
+                    img/webp/composition-in-purple-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -466,14 +527,13 @@
                     img/jpg/composition-in-purple-480.jpg 480w,
                     img/jpg/composition-in-purple-768.jpg 768w,
                     img/jpg/composition-in-purple-1024.jpg 1024w,
-                    img/jpg/composition-in-purple-1536.jpg 1536w
-                  "
+                    img/jpg/composition-in-purple-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/composition-in-purple-480.jpg" 
+                  src="img/jpg/composition-in-purple-480.jpg" width="480" height="320" 
                   alt="Composition in Purple"
                   loading="lazy">
               </picture>
@@ -490,8 +550,7 @@
                     img/webp/collaboration-with-teo-1-480.webp 480w, 
                     img/webp/collaboration-with-teo-1-768.webp 768w, 
                     img/webp/collaboration-with-teo-1-1024.webp 1024w, 
-                    img/webp/collaboration-with-teo-1-1536.webp 1536w
-                  "
+                    img/webp/collaboration-with-teo-1-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -502,14 +561,13 @@
                     img/jpg/collaboration-with-teo-1-480.jpg 480w,
                     img/jpg/collaboration-with-teo-1-768.jpg 768w,
                     img/jpg/collaboration-with-teo-1-1024.jpg 1024w,
-                    img/jpg/collaboration-with-teo-1-1536.jpg 1536w
-                  "
+                    img/jpg/collaboration-with-teo-1-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/collaboration-with-teo-1-480.jpg" 
+                  src="img/jpg/collaboration-with-teo-1-480.jpg" width="480" height="360" 
                   alt="Collaboration with Teo #1"
                   loading="lazy">
               </picture>
@@ -526,8 +584,7 @@
                     img/webp/collaboration-with-teo-2-480.webp 480w, 
                     img/webp/collaboration-with-teo-2-768.webp 768w, 
                     img/webp/collaboration-with-teo-2-1024.webp 1024w, 
-                    img/webp/collaboration-with-teo-2-1536.webp 1536w
-                  "
+                    img/webp/collaboration-with-teo-2-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -538,14 +595,13 @@
                     img/jpg/collaboration-with-teo-2-480.jpg 480w,
                     img/jpg/collaboration-with-teo-2-768.jpg 768w,
                     img/jpg/collaboration-with-teo-2-1024.jpg 1024w,
-                    img/jpg/collaboration-with-teo-2-1536.jpg 1536w
-                  "
+                    img/jpg/collaboration-with-teo-2-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/collaboration-with-teo-2-480.jpg" 
+                  src="img/jpg/collaboration-with-teo-2-480.jpg" width="480" height="360" 
                   alt="Collaboration with Teo #2"
                   loading="lazy">
               </picture>
@@ -562,8 +618,7 @@
                     img/webp/collaboration-with-teo-3-480.webp 480w, 
                     img/webp/collaboration-with-teo-3-768.webp 768w, 
                     img/webp/collaboration-with-teo-3-1024.webp 1024w, 
-                    img/webp/collaboration-with-teo-3-1536.webp 1536w
-                  "
+                    img/webp/collaboration-with-teo-3-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -574,14 +629,13 @@
                     img/jpg/collaboration-with-teo-3-480.jpg 480w, 
                     img/jpg/collaboration-with-teo-3-768.jpg 768w, 
                     img/jpg/collaboration-with-teo-3-1024.jpg 1024w, 
-                    img/jpg/collaboration-with-teo-3-1536.jpg 1536w
-                  "
+                    img/jpg/collaboration-with-teo-3-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/collaboration-with-teo-3-480.jpg" 
+                  src="img/jpg/collaboration-with-teo-3-480.jpg" width="480" height="360" 
                   alt="Collaboration with Teo #3"
                   loading="lazy">
               </picture>
@@ -602,8 +656,7 @@
                     img/webp/seascape-2018-480.webp 480w, 
                     img/webp/seascape-2018-768.webp 768w, 
                     img/webp/seascape-2018-1024.webp 1024w, 
-                    img/webp/seascape-2018-1536.webp 1536w
-                    "
+                    img/webp/seascape-2018-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -614,14 +667,13 @@
                     img/jpg/seascape-2018-480.jpg 480w,
                     img/jpg/seascape-2018-768.jpg 768w,
                     img/jpg/seascape-2018-1024.jpg 1024w,
-                    img/jpg/seascape-2018-1536.jpg 1536w
-                  "
+                    img/jpg/seascape-2018-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/seascape-2018-480.jpg" 
+                  src="img/jpg/seascape-2018-480.jpg" width="480" height="320" 
                   alt="Seascape, 2018"
                   loading="lazy">
               </picture>
@@ -638,8 +690,7 @@
                     img/webp/mont-sainte-victoire-after-cezanne-480.webp 480w, 
                     img/webp/mont-sainte-victoire-after-cezanne-768.webp 768w, 
                     img/webp/mont-sainte-victoire-after-cezanne-1024.webp 1024w, 
-                    img/webp/mont-sainte-victoire-after-cezanne-1536.webp 1536w
-                  "
+                    img/webp/mont-sainte-victoire-after-cezanne-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -650,14 +701,13 @@
                     img/jpg/mont-sainte-victoire-after-cezanne-480.jpg 480w,
                     img/jpg/mont-sainte-victoire-after-cezanne-768.jpg 768w,
                     img/jpg/mont-sainte-victoire-after-cezanne-1024.jpg 1024w,
-                    img/jpg/mont-sainte-victoire-after-cezanne-1536.jpg 1536w
-                  "
+                    img/jpg/mont-sainte-victoire-after-cezanne-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/mont-sainte-victoire-after-cezanne-480.jpg" 
+                  src="img/jpg/mont-sainte-victoire-after-cezanne-480.jpg" width="480" height="320" 
                   alt="Mont Sainte&#8209;Victoire, after Cézanne"
                   loading="lazy">
               </picture>
@@ -673,8 +723,7 @@
                     img/webp/cjon-de-las-tomasas-albaicin-granada-300.webp 300w,
                     img/webp/cjon-de-las-tomasas-albaicin-granada-480.webp 480w,
                     img/webp/cjon-de-las-tomasas-albaicin-granada-768.webp 768w,
-                    img/webp/cjon-de-las-tomasas-albaicin-granada-1024.webp 1024w
-                  "
+                    img/webp/cjon-de-las-tomasas-albaicin-granada-1024.webp 1024w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -684,14 +733,13 @@
                     img/jpg/cjon-de-las-tomasas-albaicin-granada-300.jpg 300w,
                     img/jpg/cjon-de-las-tomasas-albaicin-granada-480.jpg 480w,
                     img/jpg/cjon-de-las-tomasas-albaicin-granada-768.jpg 768w,
-                    img/jpg/cjon-de-las-tomasas-albaicin-granada-1024.jpg 1024w
-                  "
+                    img/jpg/cjon-de-las-tomasas-albaicin-granada-1024.jpg 1024w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/cjon-de-las-tomasas-albaicin-granada-480.jpg" 
+                  src="img/jpg/cjon-de-las-tomasas-albaicin-granada-480.jpg" width="480" height="720" 
                   alt="Cjón. de las Tomasas, Albaicín, Granada"
                   loading="lazy">
               </picture>
@@ -707,8 +755,7 @@
                     img/webp/ponte-alda-merini-milan-300.webp 300w, 
                     img/webp/ponte-alda-merini-milan-480.webp 480w, 
                     img/webp/ponte-alda-merini-milan-768.webp 768w, 
-                    img/webp/ponte-alda-merini-milan-1024.webp 1024w
-                  "
+                    img/webp/ponte-alda-merini-milan-1024.webp 1024w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -718,14 +765,13 @@
                     img/jpg/ponte-alda-merini-milan-300.jpg 300w,
                     img/jpg/ponte-alda-merini-milan-480.jpg 480w,
                     img/jpg/ponte-alda-merini-milan-768.jpg 768w,
-                    img/jpg/ponte-alda-merini-milan-1024.jpg 1024w
-                  "
+                    img/jpg/ponte-alda-merini-milan-1024.jpg 1024w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/ponte-alda-merini-milan-480.jpg" 
+                  src="img/jpg/ponte-alda-merini-milan-480.jpg" width="480" height="720" 
                   alt="Ponte Alda Merini, Milan"
                   loading="lazy">
               </picture>
@@ -741,8 +787,7 @@
                     img/webp/nighttime-brussels-2013-300.webp 300w, 
                     img/webp/nighttime-brussels-2013-480.webp 480w, 
                     img/webp/nighttime-brussels-2013-768.webp 768w, 
-                    img/webp/nighttime-brussels-2013-1024.webp 1024w
-                  "
+                    img/webp/nighttime-brussels-2013-1024.webp 1024w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -752,14 +797,13 @@
                     img/jpg/nighttime-brussels-2013-300.jpg 300w,
                     img/jpg/nighttime-brussels-2013-480.jpg 480w,
                     img/jpg/nighttime-brussels-2013-768.jpg 768w,
-                    img/jpg/nighttime-brussels-2013-1024.jpg 1024w
-                  "
+                    img/jpg/nighttime-brussels-2013-1024.jpg 1024w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/nighttime-brussels-2013-480.jpg" 
+                  src="img/jpg/nighttime-brussels-2013-480.jpg" width="480" height="720" 
                   alt="Nighttime, Brussels, 2013"
                   loading="lazy">
               </picture>
@@ -776,8 +820,7 @@
                     img/webp/porthmadog-wales-480.webp 480w,
                     img/webp/porthmadog-wales-768.webp 768w,
                     img/webp/porthmadog-wales-1024.webp 1024w,
-                    img/webp/porthmadog-wales-1536.webp 1536w
-                  "
+                    img/webp/porthmadog-wales-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -788,14 +831,13 @@
                     img/jpg/porthmadog-wales-480.jpg 480w,
                     img/jpg/porthmadog-wales-768.jpg 768w,
                     img/jpg/porthmadog-wales-1024.jpg 1024w,
-                    img/jpg/porthmadog-wales-1536.jpg 1536w
-                  "
+                    img/jpg/porthmadog-wales-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/porthmadog-wales-480.jpg" 
+                  src="img/jpg/porthmadog-wales-480.jpg" width="480" height="320" 
                   alt="Porthmadog, Wales"
                   loading="lazy">
               </picture>
@@ -815,8 +857,7 @@
                     img/webp/apple-1-480.webp 480w,
                     img/webp/apple-1-768.webp 768w,
                     img/webp/apple-1-1024.webp 1024w,
-                    img/webp/apple-1-1536.webp 1536w
-                  "
+                    img/webp/apple-1-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -827,14 +868,13 @@
                     img/jpg/apple-1-480.jpg 480w,
                     img/jpg/apple-1-768.jpg 768w,
                     img/jpg/apple-1-1024.jpg 1024w,
-                    img/jpg/apple-1-1536.jpg 1536w
-                  "
+                    img/jpg/apple-1-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/apple-1-480.jpg" 
+                  src="img/jpg/apple-1-480.jpg" width="480" height="328" 
                   alt="Apple #1"
                   loading="lazy">
               </picture>
@@ -851,8 +891,7 @@
                     img/webp/apple-2-480.webp 480w,
                     img/webp/apple-2-768.webp 768w,
                     img/webp/apple-2-1024.webp 1024w,
-                    img/webp/apple-2-1536.webp 1536w
-                  "
+                    img/webp/apple-2-1536.webp 1536w"
                   type="image/webp"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
@@ -863,14 +902,13 @@
                     img/jpg/apple-2-480.jpg 480w,
                     img/jpg/apple-2-768.jpg 768w,
                     img/jpg/apple-2-1024.jpg 1024w,
-                    img/jpg/apple-2-1536.jpg 1536w
-                  "
+                    img/jpg/apple-2-1536.jpg 1536w"
                   type="image/jpeg"
                   sizes="(max-width: 540px) 100vw, 
                     (max-width: 899px) 50vw, 
                     33vw">
                 <img 
-                  src="img/jpg/apple-2-480.jpg" 
+                  src="img/jpg/apple-2-480.jpg" width="480" height="319" 
                   alt="Apple #2"
                   loading="lazy">
               </picture>
@@ -885,15 +923,36 @@
   </main>
 
   <footer id="contact" class="site-footer">
-    <p class="footer-email" id="footer-email"></p>
-    <script>(function(){var p=['chrisjones.org.uk', '@', 'hello'];document.getElementById("footer-email").textContent=p.reverse().join("");})();</script>
+    <p class="footer-email"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
+    <script>
+      (function () {
+        var addr = ['chrisjones.org.uk', '@', 'hello'].reverse().join('');   // put together here, so spam robots never find the address in the page
+        var footer = document.getElementById('footer-email');
+        footer.textContent = addr;
+        /* the header's email button and the footer's address both copy the address, and say so for a moment */
+        function copy(tip) {
+          function shown() { tip.classList.add('show'); clearTimeout(tip.timer); tip.timer = setTimeout(function () { tip.classList.remove('show'); }, 2200); }
+          function fallback() {
+            var t = document.createElement('textarea'); t.value = addr; t.setAttribute('readonly', '');
+            t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select();
+            try { document.execCommand('copy'); shown(); } catch (err) {}
+            document.body.removeChild(t);
+          }
+          if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(addr).then(shown, fallback); else fallback();
+        }
+        var button = document.getElementById('header-email');
+        if (button) button.addEventListener('click', function (e) { e.preventDefault(); copy(document.getElementById('copied-tip')); });
+        footer.addEventListener('click', function () { copy(document.getElementById('footer-copied')); });
+        footer.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copy(document.getElementById('footer-copied')); } });
+      })();
+    </script>
     <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
     <p>&copy;2026 Christopher Jones</p>
   </footer>
       
   <script type="module" src="face/face.js"></script>
   <script src="header.js"></script>
-  <script src="glass.js"></script>
+  <script src="glass.js?v=2"></script>
   <script src="motion.js"></script>
 
   </body>

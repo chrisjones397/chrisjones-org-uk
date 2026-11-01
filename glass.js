@@ -1,4 +1,4 @@
-/* Thick-glass header over the opening image.
+/* Thick-glass header over the opening image (a picture, or the painting video).
    While the header sits over the forest, it draws that part of the picture itself: frosted exactly
    like the normal header (saturate 140%, blur 10px, 40% white), plus a rounded glass edge along the
    bottom that bends the picture. As the picture scrolls away the bending eases off and the drawing
@@ -11,8 +11,9 @@
   const EASE = 160;        // CSS pixels of scrolling over which the bending eases off
 
   const header = document.querySelector('.header');
-  const hero = document.querySelector('.hero img');
+  const hero = document.querySelector('.hero video, .hero img');
   if (!header || !hero) return;
+  const isVideo = hero.tagName === 'VIDEO';
 
   const canvas = document.createElement('canvas');
   canvas.className = 'glass-canvas';
@@ -88,35 +89,73 @@
   }
   readTint();
 
-  let tex = null, natW = 0, natH = 0, queued = false;
-  function loadTexture() {
-    const im = new Image();
-    im.onload = () => {
+  let tex = null, natW = 0, natH = 0, texW = 0, queued = false;
+  function upload(src, w, h, tw) {                   // src: a picture, or the video's current frame; tw: its width as uploaded
+    if (!tex) {
       tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
-      gl.generateMipmap(gl.TEXTURE_2D);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      natW = im.naturalWidth; natH = im.naturalHeight;
-      request();
-    };
-    im.src = hero.currentSrc || hero.src;             // the same file the page already loaded
+    }
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    natW = w; natH = h; texW = tw || w;
+    request();
   }
-  if (hero.complete && hero.naturalWidth) loadTexture(); else hero.addEventListener('load', loadTexture, { once: true });
+  function loadPicture(url) {
+    const im = new Image();
+    im.onload = () => { if (!isVideo || hero.readyState < 2) upload(im, im.naturalWidth, im.naturalHeight); };
+    im.src = url;
+  }
+  const underHeader = () => hero.getBoundingClientRect().bottom > header.getBoundingClientRect().top;
+  if (!isVideo) {
+    if (hero.complete && hero.naturalWidth) loadPicture(hero.currentSrc || hero.src);
+    else hero.addEventListener('load', () => loadPicture(hero.currentSrc || hero.src), { once: true });
+  } else {
+    // the video: start from its poster, then copy each new frame while it plays (only while the header is over it)
+    if (hero.poster) loadPicture(hero.poster);
+    // the glass only shows a blurred copy, so each frame is first shrunk to about half the picture's size on screen
+    // (in CSS pixels): copying a whole 4K frame to the graphics card every frame made scrolling judder
+    const small = document.createElement('canvas'), sctx = small.getContext('2d');
+    const grab = () => {
+      if (hero.readyState < 2 || !hero.videoWidth) return;
+      const vw = hero.videoWidth, vh = hero.videoHeight, b = hero.getBoundingClientRect();
+      const shown = Math.max(b.width / vw, b.height / vh) * vw;           // the picture's width on screen, CSS px
+      const sw = Math.min(vw, Math.max(256, Math.ceil(shown / 2))), sh_ = Math.round(vh * sw / vw);
+      if (sw >= vw) { upload(hero, vw, vh); return; }
+      if (small.width !== sw || small.height !== sh_) { small.width = sw; small.height = sh_; }
+      sctx.drawImage(hero, 0, 0, sw, sh_);
+      upload(small, vw, vh, sw);
+    };
+    const rvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+    function onFrame() {
+      if (underHeader()) grab();
+      if (rvfc) hero.requestVideoFrameCallback(onFrame);
+      else if (!hero.paused && !hero.ended) requestAnimationFrame(onFrame);
+    }
+    if (rvfc) hero.requestVideoFrameCallback(onFrame);
+    else hero.addEventListener('play', () => requestAnimationFrame(onFrame));
+    hero.addEventListener('loadeddata', grab);
+    hero.addEventListener('seeked', grab);
+    hero.addEventListener('ended', grab);           // the finished painting stays under the glass
+  }
 
   function draw() {
     queued = false;
     if (!tex) return;
     const hr = header.getBoundingClientRect(), b = hero.getBoundingClientRect();
+    // the picture can be moved within its section (the parallax); only the part inside the section shows
+    const c = (hero.closest('.hero') || hero).getBoundingClientRect();
+    const vTop = Math.max(b.top, c.top), vBottom = Math.min(b.bottom, c.bottom);
     const dpr = Math.min(devicePixelRatio || 1, 2);
     const w = Math.round(hr.width * dpr), h = Math.round(hr.height * dpr);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     // how much of the picture is still under the header decides the bending and the fade
-    const under = b.bottom - hr.top;                                   // picture left under the header, px
-    const bend = Math.min(Math.max((b.bottom - hr.bottom) / EASE, 0), 1);
+    const under = vBottom - hr.top;                                    // picture left under the header, px
+    const bend = Math.min(Math.max((vBottom - hr.bottom) / EASE, 0), 1);
     const show = Math.min(Math.max(under / hr.height, 0), 1);
     canvas.style.opacity = show.toFixed(3);
     header.classList.toggle('glass-on', show >= 1);                    // the CSS frost isn't needed underneath
@@ -126,9 +165,9 @@
     gl.viewport(0, 0, w, h);
     gl.uniform2f(U.res, hr.width, hr.height);
     gl.uniform1f(U.dpr, dpr);
-    gl.uniform4f(U.box, b.left - hr.left, b.top - hr.top, b.width, b.height);
+    gl.uniform4f(U.box, b.left - hr.left, vTop - hr.top, b.width, vBottom - vTop);
     gl.uniform4f(U.place, b.left - hr.left + (b.width - pw) / 2, b.top - hr.top + (b.height - ph) / 2, pw, ph);
-    gl.uniform1f(U.lod, Math.max(0, Math.log2(natW / pw * BLUR * 0.5)));
+    gl.uniform1f(U.lod, Math.max(0, Math.log2(texW / pw * BLUR * 0.5)));
     gl.uniform1f(U.bend, bend);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
