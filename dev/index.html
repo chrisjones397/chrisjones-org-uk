@@ -355,9 +355,16 @@
 
     <!-- Opening image -->
     <section class="hero">
-      <video src="../med/painted-forest-v8.mp4" poster="../med/jpg/forest-1536.jpg"
+      <video poster="../med/jpg/forest-1536.jpg"
              autoplay muted playsinline preload="auto"
-             role="img" aria-label="Woodland with bracken, being painted over in oils"></video>
+             role="img" aria-label="Woodland with bracken, being painted over in oils">
+        <!-- the browser takes the first that matches: the size the screen can actually show (window width x pixel density) -->
+        <source src="../med/painted-forest-v8-3840.mp4" type="video/mp4"
+                media="(min-width: 2561px), (min-width: 1281px) and (min-resolution: 2dppx), (min-width: 854px) and (min-resolution: 3dppx)">
+        <source src="../med/painted-forest-v8-2560.mp4" type="video/mp4"
+                media="(min-width: 1537px), (min-width: 769px) and (min-resolution: 2dppx), (min-width: 513px) and (min-resolution: 3dppx)">
+        <source src="../med/painted-forest-v8-1536.mp4" type="video/mp4">
+      </video>
       <script>
         /* Visitors who have asked their device to reduce motion see the finished painting straight away */
         (function () {
@@ -365,7 +372,7 @@
           if (v && matchMedia('(prefers-reduced-motion: reduce)').matches) {
             v.removeAttribute('autoplay'); v.pause(); v.preload = 'none';
             v.poster = '../med/jpg/painted-forest-v8-end.jpg';
-            v.removeAttribute('src'); v.load();
+            v.querySelectorAll('source').forEach(function (s) { s.remove(); }); v.load();
           }
         })();
       </script>
