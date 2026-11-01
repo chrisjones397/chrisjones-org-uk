@@ -1,0 +1,11 @@
+/* The face section. Its height sets how much scrolling the animation takes (300vh = three screens).
+   The drawing stays in place, filling the window, while the section scrolls past. */
+.face-section { position: relative; height: 300vh; }
+.face-stage { position: sticky; top: 0; height: 100vh; height: 100lvh; overflow: hidden; }
+.face-stage canvas { position: absolute; inset: 0; display: block; }
+
+/* The profile text. face.js places it (and the head) from the head's real outline and the gallery's
+   edges; these are only the starting values, used until it runs. */
+.face-words { position: absolute; z-index: 1; right: 8vw; top: 50%; transform: translateY(-50%); width: 40vw; }
+/* When the text sits under the head, it is a little smaller on short screens */
+.face-stacked .face-words { font-size: clamp(0.75rem, min(3.7vw, 1.95vh), 1rem); }
