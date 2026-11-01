@@ -49,11 +49,15 @@ def scale(s):
             m = max(t['L'], t['w'])
             nlv = 2 if m < 24 else (1 if m < 60 else 0)       # same rule as the planner, applied at the new size
             if nlv < lv:
-                al, tx = [BS[bi], BSM[bi][0], BSM[bi][1]][nlv]
-                if fx: al, tx = al[:, ::-1], tx[:, ::-1]
-                if fy: al, tx = al[::-1], tx[::-1]
-                t['al'], t['tx'] = np.ascontiguousarray(al), np.ascontiguousarray(tx)
+                key = (bi, nlv, fx, fy)
+                if key not in STAMPS:                         # one shared copy per stamp, not one per stroke
+                    al, tx = [BS[bi], BSM[bi][0], BSM[bi][1]][nlv]
+                    if fx: al, tx = al[:, ::-1], tx[:, ::-1]
+                    if fy: al, tx = al[::-1], tx[::-1]
+                    STAMPS[key] = (np.ascontiguousarray(al), np.ascontiguousarray(tx))
+                t['al'], t['tx'] = STAMPS[key]
     return t
+STAMPS = {}
 
 def place(s, frac, C, A):                                # paint7.py's place(), at the new size
     L, w, ang = s['L'], s['w'], s['ang']; ca, sa = np.cos(ang), np.sin(ang)
