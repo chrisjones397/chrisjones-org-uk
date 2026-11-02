@@ -86,7 +86,7 @@ function start() {
   const travel = START - (lastZ + STOP);           // the whole journey in depth, start to end
 
   // The spread and sizes follow the window's shape: wide on a computer, tall and narrow on a phone
-  let scale = 1, rx = 5, ry = 3;
+  let scale = 1, rx = 5, ry = 3, limX = 6, limY = 4;
   function layout() {
     const w = stage.clientWidth, h = stage.clientHeight;
     renderer.setSize(w, h, false);
@@ -97,11 +97,16 @@ function start() {
     scale = Math.min(1, halfW / 4);
     rx = halfW * 0.85 * SPREAD;
     ry = halfH * 0.7 * SPREAD;
+    limX = 0; limY = 0;
     for (const m of planes) {
       const u = m.userData;
       m.scale.set(u.w * scale, u.h * scale, 1);
       u.x = u.ax * rx;
       u.y = u.ay * ry;
+      // how far the view may pan: far enough to centre on the outermost edge of any painting, so even
+      // right up close you can look along a painting to its very edges
+      limX = Math.max(limX, Math.abs(u.x) + (u.w * scale) / 2);
+      limY = Math.max(limY, Math.abs(u.y) + (u.h * scale) / 2);
     }
   }
   layout();
@@ -142,8 +147,8 @@ function start() {
   const clamp = (v, a) => Math.min(Math.max(v, -a), a);
   function go(dDepth, dx = 0, dy = 0) {
     target.depth = Math.min(Math.max(target.depth + dDepth, 0), travel);
-    target.x = clamp(target.x + dx, rx * 1.05);                 // just beyond the outermost paintings
-    target.y = clamp(target.y + dy, ry * 1.05);
+    target.x = clamp(target.x + dx, limX);                      // as far as the outermost painting's edge
+    target.y = clamp(target.y + dy, limY);
     if (!moved && (dDepth || dx || dy)) { moved = true; stage.classList.add('moved'); }
   }
   const perPixel = () => 12 / stage.clientHeight;             // a movement across the screen ~ the view's width
