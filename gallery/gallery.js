@@ -12,7 +12,13 @@
    (the "gallery-data" block). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
    the plain grid that is already in the page. The eased movement (a target position, chased each frame) and
    the scattering in three dimensions follow the Infinite Canvas demo by Edoardo Lunardi for Codrops (MIT
-   licence), rewritten here without React. */
+   licence), rewritten here without React.
+
+   It runs in two places. On its own page (gallery/) it fills the window. On the home page it is a section
+   (data-mode="section" on the stage): there it hangs still until the visitor chooses to fly, so the page
+   scrolls past it as normal; "Enter the gallery" switches to flying (the gallery fills the window and takes
+   the wheel, trackpad and touch), and "Back to the page" or Escape switches back. Either way, the view is
+   remembered for the rest of the visit, so the gallery opens where the visitor left it. */
 import * as THREE from '../face/vendor/three.module.min.js';
 
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
@@ -30,13 +36,22 @@ const PINCH_TOUCH = 0.06;   // depth per pixel of pinch on a touch screen
 const BG = 0x646464;        // the page colour, rgb(100, 100, 100)
 
 const stage = document.getElementById('float-stage');
+const SECTION = stage && stage.dataset.mode === 'section';
+const BASE = (stage && stage.dataset.base) ?? '../';       // the way from this page to the site's top folder
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function webgl() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); }
   catch (e) { return false; }
 }
-if (stage && data.length && !reduce && webgl()) start();
+if (stage && data.length && !reduce && webgl()) {
+  if (!SECTION || !window.IntersectionObserver) start();
+  else {                                         // on the home page: only once the section is getting near
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); start(); } },
+                                        { rootMargin: '100% 0px' });
+    io.observe(stage);
+  }
+}
 
 // A painting's height in the space. Its real size counts, but softened (by a square root), so an A5 sketch
 // isn't dwarfed by a 60 x 90 canvas: real sizes 1 : 0.24 become about 1 : 0.5 here.
@@ -50,7 +65,10 @@ function heightOf(p) {
 }
 
 function start() {
-  document.documentElement.classList.add('float-on');
+  const html = document.documentElement;
+  if (!SECTION) html.classList.add('float-on');
+  const section = SECTION ? stage.closest('section') : null;
+  let flying = !SECTION;                         // on the home page, only once the visitor chooses to
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -111,6 +129,7 @@ function start() {
   }
   layout();
   addEventListener('resize', layout);
+  if (window.ResizeObserver) new ResizeObserver(layout).observe(stage);
 
   // The pictures: first one size per painting, about what this screen needs at a distance; then, as you
   // come close enough to look at the brushwork, its largest copy (see sharpen(), in the frame loop)
@@ -130,19 +149,30 @@ function start() {
     const p = m.userData.p;
     const w = p.widths.find((x) => x >= want) || p.widths[p.widths.length - 1];
     m.userData.loadedWidth = w;
-    show(m, `../img/${p.name}-${w}.webp`);
+    show(m, `${BASE}img/${p.name}-${w}.webp`);
   });
   function sharpen(m, fill) {                     // fill: the painting's height, in view heights
     const u = m.userData, best = u.p.widths[u.p.widths.length - 1];
     if (fill < 0.9 || u.sharpening || u.loadedWidth >= best) return;
     u.sharpening = true;
-    show(m, `../img/${u.p.name}-${best}.webp`, () => { u.loadedWidth = best; });
+    show(m, `${BASE}img/${u.p.name}-${best}.webp`, () => { u.loadedWidth = best; });
   }
   const viewTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 
   // Moving: everything sets a target; each frame the view covers part of the way there.
   // depth: how far through; x, y: looking around, kept within the space's edges.
   const target = { depth: 0, x: 0, y: 0 }, now = { depth: 0, x: 0, y: 0 };
+  // where the visitor left the gallery earlier in this visit (on either page)
+  try {
+    const v = JSON.parse(sessionStorage.getItem('gallery-view') || 'null');
+    if (v) for (const k of ['depth', 'x', 'y']) if (Number.isFinite(v[k])) target[k] = now[k] = v[k];
+    target.depth = now.depth = Math.min(Math.max(target.depth, 0), travel);
+  } catch (e) { /* no storage: start at the beginning */ }
+  let saveTimer = 0;
+  const save = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { try { sessionStorage.setItem('gallery-view', JSON.stringify(target)); } catch (e) {} }, 300);
+  };
   let mx = 0, my = 0, px = 0, py = 0, moved = false;
   const clamp = (v, a) => Math.min(Math.max(v, -a), a);
   function go(dDepth, dx = 0, dy = 0) {
@@ -150,6 +180,7 @@ function start() {
     target.x = clamp(target.x + dx, limX);                      // as far as the outermost painting's edge
     target.y = clamp(target.y + dy, limY);
     if (!moved && (dDepth || dx || dy)) { moved = true; stage.classList.add('moved'); }
+    save();
   }
   const perPixel = () => 12 / stage.clientHeight;             // a movement across the screen ~ the view's width
 
@@ -169,6 +200,7 @@ function start() {
     return wheelKind;
   }
   stage.addEventListener('wheel', (e) => {
+    if (!flying) return;                                        // the page scrolls past as normal
     e.preventDefault();
     const k = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1;   // lines or pages, in pixels
     if (e.ctrlKey) go(-e.deltaY * k * PINCH);                   // a trackpad pinch (or Ctrl + scroll wheel)
@@ -178,8 +210,9 @@ function start() {
 
   // Safari reports a trackpad pinch as a gesture rather than a Ctrl scroll
   let gestureScale = 1;
-  stage.addEventListener('gesturestart', (e) => { e.preventDefault(); gestureScale = 1; });
+  stage.addEventListener('gesturestart', (e) => { if (!flying) return; e.preventDefault(); gestureScale = 1; });
   stage.addEventListener('gesturechange', (e) => {
+    if (!flying) return;
     e.preventDefault();
     go((e.scale - gestureScale) * 60);
     gestureScale = e.scale;
@@ -190,7 +223,7 @@ function start() {
   let drag = null, pinchDist = 0;
   const spanOf = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   stage.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('a, button')) return;                // the links over the canvas work as normal
+    if (!flying || e.target.closest('a, button')) return;                // the links over the canvas work as normal
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
       drag = { travelled: 0 };
@@ -204,7 +237,7 @@ function start() {
     mx = (e.clientX / innerWidth) * 2 - 1;
     my = (e.clientY / innerHeight) * 2 - 1;
     const p = pointers.get(e.pointerId);
-    if (!p) { hover(e); return; }
+    if (!p) { if (flying) hover(e); return; }
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 2) {
@@ -227,6 +260,8 @@ function start() {
   addEventListener('pointercancel', lift);
 
   addEventListener('keydown', (e) => {
+    if (!flying) return;
+    if (e.key === 'Escape' && SECTION) { e.preventDefault(); land(); return; }
     if (e.target.closest && e.target.closest('a, button, input')) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     const move = {
@@ -263,6 +298,7 @@ function start() {
     target.x = u.x;
     target.y = u.y;
     if (!moved) { moved = true; stage.classList.add('moved'); }
+    save();
   }
 
   // The caption: the painting under the pointer, or else the one nearest the middle of the view ahead
@@ -285,7 +321,7 @@ function start() {
       setTimeout(() => {
         if (shown !== best || !best) return;
         capTitle.textContent = best.userData.p.title;
-        capTitle.href = `../paintings/${best.userData.p.name}/`;
+        capTitle.href = `${BASE}paintings/${best.userData.p.name}/`;
         capDetails.textContent = best.userData.p.details || '';
         cap.classList.add('on');
       }, 180);
@@ -293,11 +329,48 @@ function start() {
   }
 
   // The header's thick glass (glass.js) draws what's under it from this canvas, one copy per frame
-  dispatchEvent(new CustomEvent('glass-source', { detail: renderer.domElement }));
+  if (!SECTION) dispatchEvent(new CustomEvent('glass-source', { detail: renderer.domElement }));
   const frameDone = new Event('glass-frame');
 
   const clock = new THREE.Clock();
+  // On the home page: switching between scrolling the page and flying through the gallery
+  let at0 = 0;                                   // where the page was, to return to it
+  function fly() {
+    if (flying) return;
+    at0 = section.getBoundingClientRect().top + scrollY;
+    scrollTo({ top: at0, behavior: 'instant' });  // the section exactly in place, for the way back
+    flying = true;
+    html.classList.add('flying');
+    layout();
+    const exit = stage.querySelector('.float-exit');
+    if (exit) exit.focus({ preventScroll: true });
+  }
+  function land() {
+    if (!flying) return;
+    flying = false;
+    pointers.clear(); drag = null; pointed = null;
+    renderer.domElement.style.cursor = '';
+    html.classList.remove('flying');
+    layout();
+    scrollTo({ top: at0, behavior: 'instant' });
+    const enter = section.querySelector('.invite-button');
+    if (enter) enter.focus({ preventScroll: true });
+  }
+  if (SECTION) {
+    const enter = section.querySelector('.invite-button');
+    if (enter) enter.addEventListener('click', (e) => { e.preventDefault(); fly(); });
+    const exit = stage.querySelector('.float-exit');
+    if (exit) exit.addEventListener('click', land);
+    // a tap or click on the gallery itself goes in too (a swipe still scrolls the page)
+    stage.addEventListener('click', (e) => { if (!flying && !e.target.closest('a, button')) fly(); });
+  }
+
+  let first = true;
   renderer.setAnimationLoop(() => {
+    if (SECTION && !flying) {                    // still in the page: nothing to draw while it's out of sight
+      const r = stage.getBoundingClientRect();
+      if (!first && (r.bottom < 0 || r.top > innerHeight)) return;
+    }
     const t = clock.getElapsedTime();
     for (const k of ['depth', 'x', 'y']) now[k] += (target[k] - now[k]) * EASE;
     px += (mx - px) * 0.05; py += (my - py) * 0.05;
@@ -318,6 +391,7 @@ function start() {
     if (pointed && !pointed.visible) pointed = null;
     caption(cam);
     renderer.render(scene, camera);
-    dispatchEvent(frameDone);
+    if (first && planes.every((m) => m.userData.ready)) { first = false; if (section) section.classList.add('gallery-live'); }
+    if (!SECTION) dispatchEvent(frameDone);
   });
 }

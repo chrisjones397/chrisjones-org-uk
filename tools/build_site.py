@@ -336,9 +336,12 @@ INVITE_END = "<!-- gallery invitation: end -->"
 INVITE_COUNT = 5
 
 
-def invite_html(site, paintings):
-    """The home page's invitation to the gallery: a few paintings hung around the words, each linking to its
-    page. They're the titles listed under gallery_invitation: in paintings.yaml, or the first five paintings."""
+def invite_html(site, paintings, settings):
+    """The home page's gallery section: the floating gallery, hanging still until the visitor chooses to fly
+    (gallery/gallery.js), and, until it has loaded or where it can't run, a few paintings hung around the
+    words, each linking to its page. Those are the titles listed under gallery_invitation: in
+    paintings.yaml, or the first five paintings."""
+    import json
     with open(os.path.join(site, "paintings.yaml"), encoding="utf-8") as f:
         wanted = (yaml.safe_load(f) or {}).get("gallery_invitation")
     by_title = {p["title"]: p for p in paintings}
@@ -350,11 +353,27 @@ def invite_html(site, paintings):
     else:
         chosen = paintings[:INVITE_COUNT]
     ind = "          "
-    out = []
-    for k, p in enumerate(chosen):
-        out.append(f'\n        <a class="invite-pic" href="{PAGES_DIR}/{p["name"]}/" tabindex="-1">'
-                   f'\n{ind}{img_tag(p, "", "(max-width: 700px) 40vw, 24vw", True, ind)}\n        </a>')
-    return "".join(out) + "\n        "
+    pics = "".join(f'\n        <a class="invite-pic" href="{PAGES_DIR}/{p["name"]}/" tabindex="-1">'
+                   f'\n{ind}{img_tag(p, "", "(max-width: 700px) 40vw, 24vw", True, ind)}\n        </a>'
+                   for p in chosen)
+    items = [dict(name=p["name"], title=p["title"], details=p["details"], wide=p["wide"],
+                  w=p["w"], h=p["h"], widths=p["widths"], cm=p["cm"]) for p in paintings]
+    data = json.dumps(dict(settings=settings, paintings=items), ensure_ascii=False).replace("</", "<\\/")
+    return f"""
+      <div class="invite-wall" aria-hidden="true">{pics}
+      </div>
+      <div id="float-stage" class="float-stage float-section" data-mode="section" data-base="">
+        <button class="float-exit" type="button">Back to the page</button>
+        <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through; click a painting to bring it close</span><span class="touch">Swipe to look around; pinch to move through; tap a painting to bring it close</span></p>
+        <div class="float-text">
+          <div id="float-caption" class="float-caption"><a class="t" href="gallery/list/" title="Open this painting's page"></a><p class="d"></p></div>
+          <a class="float-list" href="gallery/list/">View as a list</a>
+        </div>
+      </div>
+      <style>{FLOAT_UI_CSS}  </style>
+      <script type="application/json" id="gallery-data">{data}</script>
+      <script type="module" src="gallery/gallery.js?v=3"></script>
+      """
 
 
 # ---------------------------------------------------------------------------
@@ -537,6 +556,10 @@ GALLERY_CSS = """
     .float-on .float-grid img { display: none; }    /* its captions and links stay for screen readers; no downloads */
     .float-grid { padding-top: 130px; }
     .float-grid h1 { text-align: center; font-weight: 500; font-size: 1.5rem; margin-bottom: 1rem; }
+"""
+
+# The caption, hint and links over the floating gallery: on its own page and in the home page's section
+FLOAT_UI_CSS = """
     /* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right
        edges line up with the name and the menu above */
     .float-text {
@@ -631,7 +654,7 @@ def build_gallery_page(paintings, sections, settings, head_bits, style, header):
   <meta property="og:image:width" content="{pw}">
   <meta property="og:image:height" content="{ph}">
   <meta name="twitter:card" content="summary_large_image">
-  <style>{style}{PAGE_CSS}{GALLERY_CSS}  </style>
+  <style>{style}{PAGE_CSS}{GALLERY_CSS}{FLOAT_UI_CSS}  </style>
   {EXTRAS_START}
   {EXTRAS_HEAD}
   {EXTRAS_END}
@@ -796,7 +819,7 @@ def main():
             s = s[:i] + "\n      " + tag + "\n      " + s[j:]
     if INVITE_START in s and INVITE_END in s:
         i, j = s.index(INVITE_START) + len(INVITE_START), s.index(INVITE_END)
-        s = s[:i] + invite_html(site, paintings) + s[j:]
+        s = s[:i] + invite_html(site, paintings, settings) + s[j:]
     s = EXTRAS_RE.sub("", s).replace("</head>", f"  {EXTRAS_START}\n  {EXTRAS_HEAD}\n  {EXTRAS_END}\n</head>", 1)
     write(index_path, s, "index.html", dry)
 
