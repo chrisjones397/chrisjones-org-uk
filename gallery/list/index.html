@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="apple-touch-icon" sizes="180x180" href="../../favicon/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="../../favicon/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../../favicon/favicon-16x16.png">
@@ -255,6 +255,20 @@
     .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; transition: opacity 0.3s; }
     .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
     .contact-line svg { width: 0.95em; height: 0.95em; }
+
+    /* iPhones held sideways: the page now runs right across the screen, under the rounded corners and
+       beside the camera cut-out (viewport-fit=cover, above), so backgrounds such as the header's bar reach
+       the edges; the words and buttons are kept clear of them (env(safe-area-inset-...) is 0 elsewhere) */
+    .header {
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+    }
+    @media (orientation: landscape) and (max-height: 540px) {
+      html .gallery-block, html .painting-page, html .site-footer, html .float-text, html .contact-words {
+        padding-left: max(20px, env(safe-area-inset-left, 0px));
+        padding-right: max(20px, env(safe-area-inset-right, 0px));
+      }
+    }
 
     /* Footer, as on the painting pages */
     .site-footer {
