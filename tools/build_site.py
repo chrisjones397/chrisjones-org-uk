@@ -508,6 +508,7 @@ GALLERY_CSS = """
       position: absolute; width: 1px; height: 1px; overflow: hidden;
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
+    .float-on .float-grid img { display: none; }    /* its captions and links stay for screen readers; no downloads */
     .float-grid { padding-top: 130px; }
     .float-grid h1 { text-align: center; font-weight: 500; font-size: 1.5rem; margin-bottom: 1rem; }
     /* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right

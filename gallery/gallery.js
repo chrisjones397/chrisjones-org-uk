@@ -22,6 +22,8 @@ const EASE = settings.glide ?? 0.075;    // share of the remaining distance cove
 const SIZE = 3.6;           // a 60 x 90 cm painting is about 2.9 high; smaller ones less, but not in proportion
 const START = 12;           // how far in front of the first painting the visitor starts
 const STOP = 5;             // how far in front of the last painting the journey ends
+const FADE_START = 1.1;     // a painting starts to fade this close (a 60 x 90 cm one then fills over 3 view heights)
+const FADE_GONE = 0.35;     // ...and has gone at this distance, just before you pass through it
 const PINCH = 0.15;         // depth per unit of trackpad pinch (and Ctrl + scroll wheel)
 const WHEEL = 0.02;         // depth per unit of a mouse's scroll wheel (one notch is usually 100: 2 units)
 const PINCH_TOUCH = 0.06;   // depth per pixel of pinch on a touch screen
@@ -105,20 +107,33 @@ function start() {
   layout();
   addEventListener('resize', layout);
 
-  // The pictures: one size per painting, about what this screen needs
+  // The pictures: first one size per painting, about what this screen needs at a distance; then, as you
+  // come close enough to look at the brushwork, its largest copy (see sharpen(), in the frame loop)
   const want = Math.min(stage.clientWidth * renderer.getPixelRatio() * 0.5, 1536);
   const loader = new THREE.TextureLoader();
+  const show = (m, url, then) => loader.load(url, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const old = m.material.map;
+    m.material.map = tex;
+    m.material.color.set(0xffffff);
+    m.material.needsUpdate = true;
+    if (old) old.dispose();
+    if (then) then();
+  });
   planes.forEach((m) => {
     const p = m.userData.p;
     const w = p.widths.find((x) => x >= want) || p.widths[p.widths.length - 1];
-    loader.load(`../img/${p.name}-${w}.webp`, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      m.material.map = tex;
-      m.material.color.set(0xffffff);
-      m.material.needsUpdate = true;
-    });
+    m.userData.loadedWidth = w;
+    show(m, `../img/${p.name}-${w}.webp`);
   });
+  function sharpen(m, fill) {                     // fill: the painting's height, in view heights
+    const u = m.userData, best = u.p.widths[u.p.widths.length - 1];
+    if (fill < 0.9 || u.sharpening || u.loadedWidth >= best) return;
+    u.sharpening = true;
+    show(m, `../img/${u.p.name}-${best}.webp`, () => { u.loadedWidth = best; });
+  }
+  const viewTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 
   // Moving: everything sets a target; each frame the view covers part of the way there.
   // depth: how far through; x, y: looking around, kept within the space's edges.
@@ -238,7 +253,7 @@ function start() {
     const m = at(e);
     if (!m) return;
     const u = m.userData;
-    const near = Math.max((u.h * scale) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.6), 5.5);
+    const near = Math.max((u.h * scale) / (2 * viewTan * 0.6), 1.5);
     target.depth = Math.min(Math.max(START - (u.z + near), 0), travel);
     target.x = u.x;
     target.y = u.y;
@@ -254,7 +269,7 @@ function start() {
     if (!best) {
       for (const m of planes) {
         const u = m.userData, d = cam.z - u.z;
-        if (d < 2.5 || d > 30) continue;
+        if (d < 0.6 || d > 30) continue;
         const s = Math.hypot(u.x - cam.x, u.y - cam.y) / d + d * 0.02;
         if (s < bestS) { bestS = s; best = m; }
       }
@@ -287,7 +302,11 @@ function start() {
       const u = m.userData;
       const d = cam.z - u.z;                                   // how far ahead of the visitor
       m.position.set(u.x, u.y + Math.sin(t * 0.45 + u.phase) * 0.07 * scale, u.z);   // drifting, never turning
-      const o = Math.min(Math.max((d - 2) / 3, 0), 1);         // fades as you reach it, gone before you pass
+      // Fully solid until you're right up against it (it fills the view several times over), then a quick
+      // eased fade over the last stretch, so you can look closely at the brushwork before it slips past
+      const k = Math.min(Math.max((d - FADE_GONE) / (FADE_START - FADE_GONE), 0), 1);
+      const o = k * k * (3 - 2 * k);
+      if (m.material.map) sharpen(m, (u.h * scale) / (2 * viewTan * Math.max(d, 0.01)));
       m.material.opacity += (o - m.material.opacity) * 0.2;
       m.visible = m.material.opacity > 0.01;
     }

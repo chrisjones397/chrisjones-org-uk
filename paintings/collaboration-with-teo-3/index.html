@@ -228,16 +228,17 @@
     .contact-pic {
       position: absolute;
       left: 0;
-      top: -10%;            /* taller than the section, so the parallax never shows an edge */
+      top: -10%;            /* a little taller than the section, so the parallax never shows an edge */
       width: 100%;
-      height: 150%;
+      height: 120%;
       object-fit: cover;
+      object-position: 85% 100%;   /* the palette and brush are low and to the right: keep them in view */
     }
     .contact::after {       /* a light shade over the picture, so the words always read */
       content: "";
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.28);
+      background: rgba(0, 0, 0, 0.12);
     }
     .contact-words {
       position: relative;
