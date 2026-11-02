@@ -534,7 +534,9 @@ GALLERY_CSS = """
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     .float-caption.on { opacity: 1; transform: none; }
-    .float-caption .t { font-size: 1.5rem; font-weight: 500; }            /* as a painting page's title */
+    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 500; transition: opacity 0.3s; }   /* as a painting page's title */
+    .float-caption .t:hover, .float-caption .t:focus { opacity: 0.8; }
+    .float-caption:not(.on) a { pointer-events: none; }
     .float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
     .float-list {
       font-size: 0.95rem;                                                    /* as Previous / Next */
@@ -602,9 +604,9 @@ def build_gallery_page(paintings, sections, settings, head_bits, style, header):
 
   <main id="main-content">
     <div id="float-stage" class="float-stage">
-      <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through</span><span class="touch">Swipe to look around; pinch to move through</span></p>
+      <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through; click a painting to bring it close</span><span class="touch">Swipe to look around; pinch to move through; tap a painting to bring it close</span></p>
       <div class="float-text">
-        <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
+        <div id="float-caption" class="float-caption"><a class="t" href="list/" title="Open this painting's page"></a><p class="d"></p></div>
         <a class="float-list" href="list/">View as a list</a>
       </div>
     </div>

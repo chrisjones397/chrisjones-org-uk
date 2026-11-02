@@ -5,7 +5,8 @@
    Looking around (panning): drag (mouse or finger), scroll on a trackpad, or the arrow keys.
    Moving through (depth): a mouse's scroll wheel, pinching (trackpad or touch screen), or + and - (also W and S).
    The paintings drift gently, always square to you; the view shifts a little with the pointer; distant ones
-   fade into the grey. Clicking a painting opens its page.
+   fade into the grey. Clicking (or tapping) a painting brings it to the middle of the view at a good size;
+   the caption's title opens its page.
 
    The list of paintings and the settings from paintings.yaml are written into the page by tools/build_site.py
    (the "gallery-data" block). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
@@ -126,8 +127,8 @@ function start() {
   const clamp = (v, a) => Math.min(Math.max(v, -a), a);
   function go(dDepth, dx = 0, dy = 0) {
     target.depth = Math.min(Math.max(target.depth + dDepth, 0), travel);
-    target.x = clamp(target.x + dx, rx * 0.85);
-    target.y = clamp(target.y + dy, ry * 0.85);
+    target.x = clamp(target.x + dx, rx * 1.05);                 // just beyond the outermost paintings
+    target.y = clamp(target.y + dy, ry * 1.05);
     if (!moved && (dDepth || dx || dy)) { moved = true; stage.classList.add('moved'); }
   }
   const perPixel = () => 12 / stage.clientHeight;             // a movement across the screen ~ the view's width
@@ -198,7 +199,7 @@ function start() {
   const lift = (e) => {
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
-    if (drag && pointers.size === 0 && drag.travelled < 8 && e.type === 'pointerup') open(e);   // a tap or click
+    if (drag && pointers.size === 0 && drag.travelled < 8 && e.type === 'pointerup') bring(e);  // a tap or click
     if (pointers.size === 0) drag = null;
     renderer.domElement.style.cursor = 'grab';
   };
@@ -231,7 +232,18 @@ function start() {
     pointed = at(e);
     renderer.domElement.style.cursor = pointed ? 'pointer' : 'grab';
   }
-  function open(e) { const m = at(e); if (m) location.href = `../paintings/${m.userData.p.name}/`; }
+  // Bringing a painting to the middle: the view glides until it's straight ahead, near enough to fill
+  // about 60% of the view's height (but never so near that it starts to fade)
+  function bring(e) {
+    const m = at(e);
+    if (!m) return;
+    const u = m.userData;
+    const near = Math.max((u.h * scale) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.6), 5.5);
+    target.depth = Math.min(Math.max(START - (u.z + near), 0), travel);
+    target.x = u.x;
+    target.y = u.y;
+    if (!moved) { moved = true; stage.classList.add('moved'); }
+  }
 
   // The caption: the painting under the pointer, or else the one nearest the middle of the view ahead
   const cap = document.getElementById('float-caption');
@@ -253,6 +265,7 @@ function start() {
       setTimeout(() => {
         if (shown !== best || !best) return;
         capTitle.textContent = best.userData.p.title;
+        capTitle.href = `../paintings/${best.userData.p.name}/`;
         capDetails.textContent = best.userData.p.details || '';
         cap.classList.add('on');
       }, 180);

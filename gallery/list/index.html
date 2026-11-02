@@ -248,7 +248,10 @@
       font-weight: 300;
       margin-top: 0.4em;
     }
-    .contact-line a, #footer-email { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+    #footer-email { cursor: pointer; }                                     /* clicking the address copies it */
+    .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; transition: opacity 0.3s; }
+    .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
+    .contact-line svg { width: 0.95em; height: 0.95em; }
 
     /* Footer, as on the painting pages */
     .site-footer {

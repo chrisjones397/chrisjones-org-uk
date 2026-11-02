@@ -268,7 +268,10 @@
       font-weight: 300;
       margin-top: 0.4em;
     }
-    .contact-line a, #footer-email { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+    #footer-email { cursor: pointer; }                                     /* clicking the address copies it */
+    .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; transition: opacity 0.3s; }
+    .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
+    .contact-line svg { width: 0.95em; height: 0.95em; }
 
     /* Footer, as on the painting pages */
     .site-footer {
@@ -451,7 +454,7 @@
       <div class="contact-words">
         <h2 class="contact-title">Get in touch</h2>
         <p class="footer-email contact-line"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
-        <p class="contact-line"><a href="https://www.instagram.com/only1jones2/">Instagram: only1jones2</a></p>
+        <p class="contact-line"><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/></svg>@only1jones2</a></p>
       </div>
     </section>
 
