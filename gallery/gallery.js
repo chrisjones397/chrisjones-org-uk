@@ -162,11 +162,26 @@ function start() {
   // Moving: everything sets a target; each frame the view covers part of the way there.
   // depth: how far through; x, y: looking around, kept within the space's edges.
   const target = { depth: 0, x: 0, y: 0 }, now = { depth: 0, x: 0, y: 0 };
+  function centreOn(m) {                          // the view with this painting in the middle, at a good size
+    const u = m.userData;
+    const near = Math.max((u.h * scale) / (2 * viewTan * 0.6), 1.5);
+    return { depth: Math.min(Math.max(START - (u.z + near), 0), travel), x: u.x, y: u.y };
+  }
   // where the visitor left the gallery earlier in this visit (on either page)
   try {
     const v = JSON.parse(sessionStorage.getItem('gallery-view') || 'null');
     if (v) for (const k of ['depth', 'x', 'y']) if (Number.isFinite(v[k])) target[k] = now[k] = v[k];
     target.depth = now.depth = Math.min(Math.max(target.depth, 0), travel);
+    // ...unless they have since been looking at a painting's own page (perhaps stepping on with Next):
+    // then the gallery opens with that painting in front of them, as if they had just clicked it
+    const name = sessionStorage.getItem('gallery-focus');
+    sessionStorage.removeItem('gallery-focus');
+    const m = name && planes.find((x) => x.userData.p.name === name);
+    if (m) {
+      const v = centreOn(m);
+      for (const k of ['depth', 'x', 'y']) target[k] = now[k] = v[k];
+      sessionStorage.setItem('gallery-view', JSON.stringify(target));
+    }
   } catch (e) { /* no storage: start at the beginning */ }
   let saveTimer = 0;
   const save = () => {
@@ -292,11 +307,7 @@ function start() {
   function bring(e) {
     const m = at(e);
     if (!m) return;
-    const u = m.userData;
-    const near = Math.max((u.h * scale) / (2 * viewTan * 0.6), 1.5);
-    target.depth = Math.min(Math.max(START - (u.z + near), 0), travel);
-    target.x = u.x;
-    target.y = u.y;
+    Object.assign(target, centreOn(m));
     if (!moved) { moved = true; stage.classList.add('moved'); }
     save();
   }

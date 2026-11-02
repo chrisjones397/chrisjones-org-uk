@@ -480,6 +480,7 @@ def build_page(p, prev, nxt, head_bits, style, header):
     </article>
   </main>
 {footer_html()}
+  <script>try {{ sessionStorage.setItem('gallery-focus', '{p["name"]}'); }} catch (e) {{}}</script>   <!-- the floating gallery opens on this painting -->
 
 </body>
 </html>
