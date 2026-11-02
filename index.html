@@ -281,6 +281,66 @@
     .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
     .contact-line svg { width: 0.95em; height: 0.95em; }
 
+    /* The gallery's invitation: a full window, with five paintings hung loosely around the words. Each moves
+       at its own pace as the page scrolls (motion.js), so they seem to hang at different depths. */
+    .invite {
+      position: relative;
+      overflow: hidden;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .invite-wall { position: absolute; inset: 0; }
+    .invite-pic {
+      position: absolute;
+      display: block;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      transition: opacity 0.3s;
+    }
+    .invite-pic img { display: block; width: 100%; height: auto; }
+    .invite-pic:nth-child(1) { width: 17vw; left: 7vw;  top: 14%; }
+    .invite-pic:nth-child(2) { width: 24vw; left: 68vw; top: 15%; }
+    .invite-pic:nth-child(3) { width: 19vw; left: 12vw; top: 58%; }
+    .invite-pic:nth-child(4) { width: 11vw; left: 80vw; top: 52%; }
+    .invite-pic:nth-child(5) { width: 15vw; left: 41vw; top: 74%; }
+    .invite-words {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 1.5em 2em;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    }
+    .invite-title {
+      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.7em;
+    }
+    .invite-button {
+      display: inline-block;
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      font-weight: 300;
+      padding: 0.65em 1.6em;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      text-shadow: none;
+      transition: background 0.3s, color 0.3s;
+    }
+    .invite-button:hover, .invite-button:focus { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
+    .invite-alt { margin-top: 1.1em; font-size: clamp(0.95rem, 1.3vw, 1.1rem); font-weight: 300; }
+    .invite-alt a { opacity: 0.85; text-decoration: underline; text-underline-offset: 0.2em; }
+    @media (max-width: 700px) {        /* phones: three paintings, larger, above and below the words */
+      .invite-pic:nth-child(1) { width: 34vw; left: 6vw;  top: 8%; }
+      .invite-pic:nth-child(2) { width: 46vw; left: 48vw; top: 13%; }
+      .invite-pic:nth-child(3) { width: 40vw; left: 30vw; top: 67%; }
+      .invite-pic:nth-child(n+4) { display: none; }
+    }
+
     /* iPhones held sideways: the page now runs right across the screen, under the rounded corners and
        beside the camera cut-out (viewport-fit=cover, above), so backgrounds such as the header's bar reach
        the edges; the words and buttons are kept clear of them (env(safe-area-inset-...) is 0 elsewhere) */
@@ -289,7 +349,7 @@
       padding-right: env(safe-area-inset-right, 0px);
     }
     @media (orientation: landscape) and (max-height: 540px) {
-      html .gallery-block, html .painting-page, html .site-footer, html .float-text, html .contact-words {
+      html .gallery-block, html .painting-page, html .site-footer, html .float-text, html .contact-words, html .invite-words {
         padding-left: max(20px, env(safe-area-inset-left, 0px));
         padding-right: max(20px, env(safe-area-inset-right, 0px));
       }
@@ -468,6 +528,70 @@
       </div>
     </section>
 
+    <!-- The gallery: an invitation, with a few paintings hung around it -->
+    <section id="paintings" class="invite">
+      <div class="invite-wall" aria-hidden="true">
+        <!-- gallery invitation: start (built by tools/build_site.py from gallery_invitation: in paintings.yaml) -->
+        <a class="invite-pic" href="paintings/apple-2/" tabindex="-1">
+          <img src="img/apple-2-480.webp"
+               srcset="img/apple-2-300.webp 300w,
+                  img/apple-2-480.webp 480w,
+                  img/apple-2-768.webp 768w,
+                  img/apple-2-1024.webp 1024w,
+                  img/apple-2-1536.webp 1536w,
+                  img/apple-2-2560.webp 2560w,
+                  img/apple-2-2560.webp 2560w"
+               sizes="(max-width: 700px) 40vw, 24vw"
+               width="3523" height="2340" alt="Apple #2" loading="lazy">
+        </a>
+        <a class="invite-pic" href="paintings/green-background-with-seven-figures/" tabindex="-1">
+          <img src="img/green-background-with-seven-figures-480.webp"
+               srcset="img/green-background-with-seven-figures-300.webp 300w,
+                  img/green-background-with-seven-figures-480.webp 480w,
+                  img/green-background-with-seven-figures-768.webp 768w,
+                  img/green-background-with-seven-figures-1024.webp 1024w,
+                  img/green-background-with-seven-figures-1536.webp 1536w"
+               sizes="(max-width: 700px) 40vw, 24vw"
+               width="1536" height="1024" alt="Green Background with Seven Figures" loading="lazy">
+        </a>
+        <a class="invite-pic" href="paintings/collaboration-with-teo-1/" tabindex="-1">
+          <img src="img/collaboration-with-teo-1-480.webp"
+               srcset="img/collaboration-with-teo-1-300.webp 300w,
+                  img/collaboration-with-teo-1-480.webp 480w,
+                  img/collaboration-with-teo-1-768.webp 768w,
+                  img/collaboration-with-teo-1-1024.webp 1024w,
+                  img/collaboration-with-teo-1-1536.webp 1536w"
+               sizes="(max-width: 700px) 40vw, 24vw"
+               width="1536" height="1152" alt="Collaboration with Teo #1" loading="lazy">
+        </a>
+        <a class="invite-pic" href="paintings/nighttime-brussels/" tabindex="-1">
+          <img src="img/nighttime-brussels-480.webp"
+               srcset="img/nighttime-brussels-300.webp 300w,
+                  img/nighttime-brussels-480.webp 480w,
+                  img/nighttime-brussels-768.webp 768w,
+                  img/nighttime-brussels-1024.webp 1024w"
+               sizes="(max-width: 700px) 40vw, 24vw"
+               width="1024" height="1536" alt="Nighttime, Brussels" loading="lazy">
+        </a>
+        <a class="invite-pic" href="paintings/seascape-1/" tabindex="-1">
+          <img src="img/seascape-1-480.webp"
+               srcset="img/seascape-1-300.webp 300w,
+                  img/seascape-1-480.webp 480w,
+                  img/seascape-1-768.webp 768w,
+                  img/seascape-1-1024.webp 1024w,
+                  img/seascape-1-1536.webp 1536w"
+               sizes="(max-width: 700px) 40vw, 24vw"
+               width="1536" height="1024" alt="Seascape #1" loading="lazy">
+        </a>
+        <!-- gallery invitation: end -->
+      </div>
+      <div class="invite-words">
+        <h2 class="invite-title">Paintings</h2>
+        <a class="invite-button" href="gallery/">Enter the gallery<span aria-hidden="true"> &rarr;</span></a>
+        <p class="invite-alt"><a href="gallery/list/">or see them as a list</a></p>
+      </div>
+    </section>
+
     <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
     <section id="contact" class="contact parallax">
       <!-- contact picture: start (built by tools/build_site.py from contact_picture: in paintings.yaml) -->
@@ -511,7 +635,7 @@
   <script type="module" src="face/face.js?v=6eef979d"></script>
   <script src="header.js?v=c32feae5"></script>
   <script src="glass.js?v=cdee3f3d"></script>
-  <script src="motion.js?v=0f4a2483"></script>
+  <script src="motion.js?v=b780fc41"></script>
 
   </body>
 </html>

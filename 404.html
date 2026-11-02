@@ -257,6 +257,66 @@
     .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
     .contact-line svg { width: 0.95em; height: 0.95em; }
 
+    /* The gallery's invitation: a full window, with five paintings hung loosely around the words. Each moves
+       at its own pace as the page scrolls (motion.js), so they seem to hang at different depths. */
+    .invite {
+      position: relative;
+      overflow: hidden;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .invite-wall { position: absolute; inset: 0; }
+    .invite-pic {
+      position: absolute;
+      display: block;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      transition: opacity 0.3s;
+    }
+    .invite-pic img { display: block; width: 100%; height: auto; }
+    .invite-pic:nth-child(1) { width: 17vw; left: 7vw;  top: 14%; }
+    .invite-pic:nth-child(2) { width: 24vw; left: 68vw; top: 15%; }
+    .invite-pic:nth-child(3) { width: 19vw; left: 12vw; top: 58%; }
+    .invite-pic:nth-child(4) { width: 11vw; left: 80vw; top: 52%; }
+    .invite-pic:nth-child(5) { width: 15vw; left: 41vw; top: 74%; }
+    .invite-words {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 1.5em 2em;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    }
+    .invite-title {
+      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.7em;
+    }
+    .invite-button {
+      display: inline-block;
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      font-weight: 300;
+      padding: 0.65em 1.6em;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      text-shadow: none;
+      transition: background 0.3s, color 0.3s;
+    }
+    .invite-button:hover, .invite-button:focus { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
+    .invite-alt { margin-top: 1.1em; font-size: clamp(0.95rem, 1.3vw, 1.1rem); font-weight: 300; }
+    .invite-alt a { opacity: 0.85; text-decoration: underline; text-underline-offset: 0.2em; }
+    @media (max-width: 700px) {        /* phones: three paintings, larger, above and below the words */
+      .invite-pic:nth-child(1) { width: 34vw; left: 6vw;  top: 8%; }
+      .invite-pic:nth-child(2) { width: 46vw; left: 48vw; top: 13%; }
+      .invite-pic:nth-child(3) { width: 40vw; left: 30vw; top: 67%; }
+      .invite-pic:nth-child(n+4) { display: none; }
+    }
+
     /* iPhones held sideways: the page now runs right across the screen, under the rounded corners and
        beside the camera cut-out (viewport-fit=cover, above), so backgrounds such as the header's bar reach
        the edges; the words and buttons are kept clear of them (env(safe-area-inset-...) is 0 elsewhere) */
@@ -265,7 +325,7 @@
       padding-right: env(safe-area-inset-right, 0px);
     }
     @media (orientation: landscape) and (max-height: 540px) {
-      html .gallery-block, html .painting-page, html .site-footer, html .float-text, html .contact-words {
+      html .gallery-block, html .painting-page, html .site-footer, html .float-text, html .contact-words, html .invite-words {
         padding-left: max(20px, env(safe-area-inset-left, 0px));
         padding-right: max(20px, env(safe-area-inset-right, 0px));
       }

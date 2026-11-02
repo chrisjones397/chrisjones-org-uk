@@ -331,6 +331,32 @@ def contact_picture(site, source, force, dry):
     return tag, set(files)
 
 
+INVITE_START = "<!-- gallery invitation: start (built by tools/build_site.py from gallery_invitation: in paintings.yaml) -->"
+INVITE_END = "<!-- gallery invitation: end -->"
+INVITE_COUNT = 5
+
+
+def invite_html(site, paintings):
+    """The home page's invitation to the gallery: a few paintings hung around the words, each linking to its
+    page. They're the titles listed under gallery_invitation: in paintings.yaml, or the first five paintings."""
+    with open(os.path.join(site, "paintings.yaml"), encoding="utf-8") as f:
+        wanted = (yaml.safe_load(f) or {}).get("gallery_invitation")
+    by_title = {p["title"]: p for p in paintings}
+    if wanted:
+        missing = [t for t in wanted if str(t) not in by_title]
+        if missing:
+            fail(f"gallery_invitation: in paintings.yaml lists paintings that aren't in the list: {missing}")
+        chosen = [by_title[str(t)] for t in wanted][:INVITE_COUNT]
+    else:
+        chosen = paintings[:INVITE_COUNT]
+    ind = "          "
+    out = []
+    for k, p in enumerate(chosen):
+        out.append(f'\n        <a class="invite-pic" href="{PAGES_DIR}/{p["name"]}/" tabindex="-1">'
+                   f'\n{ind}{img_tag(p, "", "(max-width: 700px) 40vw, 24vw", True, ind)}\n        </a>')
+    return "".join(out) + "\n        "
+
+
 # ---------------------------------------------------------------------------
 # HTML
 # ---------------------------------------------------------------------------
@@ -768,6 +794,9 @@ def main():
         if tag is not None:
             i, j = s.index(CONTACT_START) + len(CONTACT_START), s.index(CONTACT_END)
             s = s[:i] + "\n      " + tag + "\n      " + s[j:]
+    if INVITE_START in s and INVITE_END in s:
+        i, j = s.index(INVITE_START) + len(INVITE_START), s.index(INVITE_END)
+        s = s[:i] + invite_html(site, paintings) + s[j:]
     s = EXTRAS_RE.sub("", s).replace("</head>", f"  {EXTRAS_START}\n  {EXTRAS_HEAD}\n  {EXTRAS_END}\n</head>", 1)
     write(index_path, s, "index.html", dry)
 

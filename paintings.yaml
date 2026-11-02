@@ -22,6 +22,15 @@
 # landscape, ideally 2560 to 3840 pixels wide). The build makes the sizes the page uses from it.
 contact_picture: med/jpg/paint-palette.jpg
 
+# The home page's invitation to the gallery: up to five paintings hung around the words "Enter the gallery".
+# Leave this out to use the first five in the list.
+gallery_invitation:
+  - "Apple #2"
+  - Green Background with Seven Figures
+  - "Collaboration with Teo #1"
+  - "Nighttime, Brussels"
+  - "Seascape #1"
+
 # How the floating gallery feels. The paintings' places are worked out from these, so adding a painting
 # never means placing it by hand. Leave a line out to use its default.
 gallery:

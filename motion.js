@@ -76,7 +76,6 @@
   const items = [...document.querySelectorAll('.hero, .parallax')]
     .map((sec) => ({ sec, pic: sec.querySelector(':scope > video, :scope > img, :scope > picture') }))
     .filter((i) => i.pic);
-  if (!items.length) return;
   let queued = false;
   function update() {
     queued = false;
@@ -86,22 +85,33 @@
       pic.style.transform = `translate3d(0, ${(-r.top * PARALLAX).toFixed(1)}px, 0)`;
     }
   }
-  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
-  addEventListener('resize', update);
-  update();
+  // The gallery invitation's paintings each drift at their own pace, as if hung at different depths.
+  const DEPTHS = [0.25, -0.18, 0.12, 0.35, -0.08];
+  const wall = document.querySelector('.invite');
+  const hung = wall ? [...wall.querySelectorAll('.invite-pic')] : [];
+  function updateWall() {
+    const r = wall.getBoundingClientRect();
+    if (r.bottom < -50 || r.top > innerHeight + 50) return;
+    hung.forEach((el, k) => { el.style.transform = `translate3d(0, ${(-r.top * DEPTHS[k % DEPTHS.length]).toFixed(1)}px, 0)`; });
+  }
+  const all = () => { update(); if (hung.length) updateWall(); };
+  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(all); } }, { passive: true });
+  addEventListener('resize', all);
+  all();
 })();
 
 /* Snapping, with the visitor rather than against them. Once a scroll comes to rest, the page glides on to the
    next resting place in the direction it was going, never back to where it came from:
      the opening      scrolling down: on to the start of the profile;   up: back to the top of the page
      the profile      free: its animation is never taken over
-     after it         scrolling down: on to the contact section;        up: back to the end of the profile
+     after it         scrolling down: on to the next full-window section (the gallery's invitation, then
+                      contact); up: back to the one before, or the end of the profile
      below contact    scrolling up: back to the contact section (which hides the footer's copyright line)
    Any wheel, touch or key during a glide hands control straight back to the visitor. */
 (function () {
   const face = document.querySelector('.face-section');
-  const contact = document.querySelector('.contact');
-  if (!face || !contact) return;
+  const panels = [...document.querySelectorAll('.invite, .contact')];
+  if (!face || !panels.length) return;
   const REST = 160;          // milliseconds without scrolling before the page counts as at rest
   const MIN = 0.45, MAX = 1.1;   // glide time in seconds, for the shortest and a full window's distance
   const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -109,14 +119,18 @@
   let lastY = scrollY, restY = scrollY, dir = 0, timer = 0, gliding = 0, active = false, touching = false;
 
   function target(y, d) {
-    const f0 = top(face), f1 = f0 + face.offsetHeight - innerHeight;
-    const c = Math.min(top(contact), document.documentElement.scrollHeight - innerHeight);
-    // A scroll that runs past the contact section by less than half a window comes back to it, so a flick
-    // up from the footer, or down from the profile, settles on contact rather than carrying on.
-    if ((restY - c) * (y - c) < 0 && Math.abs(y - c) < innerHeight / 2) return c;
+    const f0 = top(face), end = document.documentElement.scrollHeight - innerHeight;
+    // after the profile: its end, then each full-window section (the gallery's invitation, contact)
+    const stops = [f0 + face.offsetHeight - innerHeight, ...panels.map((el) => Math.min(top(el), end))];
+    // A scroll that runs past one of those sections by less than half a window comes back to it, so a flick
+    // up from the footer settles on contact, rather than carrying on.
+    for (const p of panels.map((el) => Math.min(top(el), end)))
+      if ((restY - p) * (y - p) < 0 && Math.abs(y - p) < innerHeight / 2) return p;
     if (y > 0 && y < f0) return d > 0 ? f0 : 0;
-    if (y > f1 && y < c) return d > 0 ? c : f1;
-    if (y > c && d < 0) return c;
+    for (let k = 0; k + 1 < stops.length; k++)
+      if (y > stops[k] && y < stops[k + 1]) return d > 0 ? stops[k + 1] : stops[k];
+    const last = stops[stops.length - 1];
+    if (y > last && d < 0) return last;
     return null;                                   // in the profile, or already in place
   }
   // Eases in and out (smootherstep), so the glide starts and lands gently rather than all at once.
