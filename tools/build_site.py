@@ -18,6 +18,8 @@ What it makes, all from paintings.yaml and masters/:
   * The gallery on the home page: everything between the "gallery" markers in index.html.
   * paintings/<name>/index.html: each painting's own page, with the home page's header,
     the painting large (click for full size), its caption, Previous / Next and the footer.
+  * gallery/index.html: the floating gallery (its movement is in gallery/gallery.js, written by hand),
+    with the plain grid inside it for anyone the floating version doesn't suit.
   * 404.html: the "page not found" page, with the same header and footer (Cloudflare shows it
     for any address that doesn't exist; see wrangler.jsonc).
 
@@ -285,7 +287,7 @@ def img_tag(p, prefix, sizes, lazy, indent):
             + (' loading="lazy"' if lazy else "") + ">")
 
 
-def gallery_html(sections):
+def gallery_html(sections, prefix=""):
     out = []
     for s in sections:
         out.append(f'\n          <div class="entire"><h3 id="{s["id"]}">{shown(s["title"])}</h3></div>\n')
@@ -294,8 +296,8 @@ def gallery_html(sections):
             ind = "              "
             details = f'\n            <p>{shown(p["details"])}</p>' if p["details"] else ""
             out.append(f"""          <div class="{kind}">
-            <a href="{PAGES_DIR}/{p["name"]}/">
-              {img_tag(p, "", SIZES_WIDE if p["wide"] else SIZES_GRID, True, ind)}
+            <a href="{prefix}{PAGES_DIR}/{p["name"]}/">
+              {img_tag(p, prefix, SIZES_WIDE if p["wide"] else SIZES_GRID, True, ind)}
             </a>
             <p>{shown(p["title"])}</p>{details}
           </div>
@@ -321,7 +323,8 @@ def footer_html():
 
 def page_header(header, up="../../"):
     """The home page's header, with its links pointing back to the home page (up: the way there)."""
-    h = header.replace('href="#"', f'href="{up}"')
+    h = re.sub(r'href="(?!https?:|/|#|\.\./|mailto:)([^"]+)"', rf'href="{up}\1"', header)   # e.g. gallery/
+    h = h.replace('href="#"', f'href="{up}"')
     h = re.sub(r'href="#([^"]+)"', rf'href="{up}#\1"', h)
     h = re.sub(r'src="(?!https?:|/|\.\./)([^"]+)"', rf'src="{up}\1"', h)
     return h
@@ -430,6 +433,132 @@ def build_404(head_bits, style, header):
 """
 
 
+GALLERY_CSS = """
+    /* The floating gallery (gallery/gallery.js). Until it starts, and for visitors who asked for reduced
+       motion or whose browser has no WebGL, the page is the plain grid below. */
+    .float-stage { display: none; }
+    html.float-on, html.float-on body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    .float-on .float-stage {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      touch-action: none;   /* swipes move through the gallery, not the page */
+    }
+    .float-stage canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    .float-on .float-grid, .float-on .site-footer {   /* still there for screen readers and search engines */
+      position: absolute; width: 1px; height: 1px; overflow: hidden;
+      clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+    }
+    .float-grid { padding-top: 130px; }
+    .float-grid h1 { text-align: center; font-weight: 400; margin-bottom: 1rem; }
+    .float-caption, .float-corner, .float-hint {
+      position: absolute;
+      bottom: max(24px, 5vh);
+      text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+    }
+    .float-caption {
+      left: max(20px, 4vw);
+      max-width: 60vw;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      pointer-events: none;
+    }
+    .float-caption.on { opacity: 1; transform: none; }
+    .float-caption .t { font-size: clamp(1.1rem, 2vw, 1.6rem); font-weight: 400; }
+    .float-caption .d { font-size: 0.9rem; opacity: 0.8; margin-top: 0.3em; }
+    .float-corner {
+      right: max(20px, 4vw);
+      display: flex;
+      gap: 1.2em;
+      align-items: baseline;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.8);
+    }
+    .float-corner a { text-decoration: underline; text-underline-offset: 0.2em; }
+    .float-hint {
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.85rem;
+      opacity: 0.85;
+      transition: opacity 0.8s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .float-stage.moved .float-hint { opacity: 0; }
+    .float-hint .touch { display: none; }
+    @media (pointer: coarse) { .float-hint .touch { display: inline; } .float-hint .mouse { display: none; } }
+    @media (max-width: 720px) {
+      .float-corner { left: 20px; right: 20px; justify-content: space-between; bottom: 20px; }
+      .float-caption { bottom: 64px; max-width: none; right: 20px; }
+      .float-hint { bottom: 130px; }
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; overflow: hidden;
+      clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+    }
+"""
+
+
+def build_gallery_page(paintings, sections, head_bits, style, header):
+    """gallery/index.html: the floating gallery, with the plain grid inside it for everyone it doesn't suit."""
+    import json
+    first = paintings[0]
+    items = [dict(name=p["name"], title=p["title"], details=p["details"], wide=p["wide"],
+                  w=p["w"], h=p["h"], widths=p["widths"]) for p in paintings]
+    data = json.dumps(items, ensure_ascii=False).replace("</", "<\\/")
+    pw, ph = first["preview_size"]
+    return f"""<!DOCTYPE html>
+{MARKER}
+<html lang="en">
+<head>
+{head_bits}
+  <title>Gallery - Christopher Jones - Fine Art</title>
+  <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
+  <link rel="canonical" href="{SITE_URL}/gallery/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Christopher Jones - Fine Art">
+  <meta property="og:title" content="Gallery - Christopher Jones">
+  <meta property="og:description" content="Paintings in oil, watercolour, and pastel">
+  <meta property="og:url" content="{SITE_URL}/gallery/">
+  <meta property="og:image" content="{SITE_URL}/{first["preview"]}">
+  <meta property="og:image:width" content="{pw}">
+  <meta property="og:image:height" content="{ph}">
+  <meta name="twitter:card" content="summary_large_image">
+  <style>{style}{PAGE_CSS}{GALLERY_CSS}  </style>
+  {EXTRAS_START}
+  {EXTRAS_HEAD}
+  {EXTRAS_END}
+</head>
+<body>
+
+{header}
+
+  <main id="main-content">
+    <div id="float-stage" class="float-stage">
+      <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
+      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll to move through the paintings</span><span class="touch">Swipe up to move through the paintings</span></p>
+      <p class="float-corner"><span id="float-count" aria-hidden="true"></span><a href="../#gallery">See them as a list</a></p>
+    </div>
+    <section class="float-grid">
+      <div class="gallery-block">
+        <h1>Gallery</h1>
+        <div class="wrapper">
+{gallery_html(sections, "../")}
+        </div>
+      </div>
+    </section>
+  </main>
+{footer_html()}
+
+  <script type="application/json" id="gallery-data">{data}</script>
+  <script type="module" src="gallery.js"></script>
+</body>
+</html>
+"""
+
+
 def build_redirect(new):
     url = f"{SITE_URL}/{PAGES_DIR}/{new}/"
     return f"""<!DOCTYPE html>
@@ -511,6 +640,9 @@ def main():
               f"{PAGES_DIR}/{p['name']}/", dry)
     write(os.path.join(site, "404.html"),
           build_404(head_bits_from(s, "/"), style.group(1), page_header(header.group(1), "/")), "404.html", dry)
+    write(os.path.join(site, "gallery", "index.html"),
+          build_gallery_page(paintings, sections, head_bits_from(s, "../"), style.group(1),
+                             page_header(header.group(1), "../")), "gallery/index.html", dry)
     wanted = {p["name"] for p in paintings}
     for old, new in sorted(REDIRECTS.items()):
         if old in wanted or new not in wanted:
