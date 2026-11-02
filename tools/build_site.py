@@ -23,8 +23,8 @@ What it makes, all from paintings.yaml and masters/:
     paintings.yaml (a photo kept in med/jpg/, as it isn't a painting).
   * Every local script a page loads gets a fingerprint of its contents in its address (?v=...), so
     browsers always fetch the latest version.
-  * gallery/index.html: the floating gallery (its movement is in gallery/gallery.js, written by hand),
-    with the plain grid inside it for anyone the floating version doesn't suit.
+  * gallery/index.html: forwards old links to the floating gallery, now a section of the home page
+    (built into index.html; its movement is in gallery/gallery.js, written by hand).
   * 404.html: the "page not found" page, with the same header and footer (Cloudflare shows it
     for any address that doesn't exist; see wrangler.jsonc).
 
@@ -535,29 +535,6 @@ def build_404(head_bits, style, header):
 """
 
 
-GALLERY_CSS = """
-    /* The floating gallery (gallery/gallery.js). Until it starts, and for visitors who asked for reduced
-       motion or whose browser has no WebGL, the page is the plain grid below. */
-    .float-stage { display: none; }
-    html.float-on { scrollbar-gutter: auto; }      /* nothing scrolls, so no room kept for a scroll bar */
-    html.float-on, html.float-on body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-    .float-on .float-stage {
-      display: block;
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      touch-action: none;   /* swipes move through the gallery, not the page */
-    }
-    .float-stage canvas { display: block; width: 100%; height: 100%; cursor: grab; }
-    .float-on .float-grid, .float-on .site-footer {   /* still there for screen readers and search engines */
-      position: absolute; width: 1px; height: 1px; overflow: hidden;
-      clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
-    }
-    .float-on .float-grid img { display: none; }    /* its captions and links stay for screen readers; no downloads */
-    .float-grid { padding-top: 130px; }
-    .float-grid h1 { text-align: center; font-weight: 500; font-size: 1.5rem; margin-bottom: 1rem; }
-"""
-
 # The caption, hint and links over the floating gallery: on its own page and in the home page's section
 FLOAT_UI_CSS = """
     /* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right
@@ -618,73 +595,20 @@ FLOAT_UI_CSS = """
 """
 
 
-def build_gallery_page(paintings, sections, settings, head_bits, style, header):
-    """gallery/index.html: the floating gallery, with the plain grid inside it for everyone it doesn't suit."""
-    import json
-    first = paintings[0]
-    items = [dict(name=p["name"], title=p["title"], details=p["details"], wide=p["wide"],
-                  w=p["w"], h=p["h"], widths=p["widths"], cm=p["cm"]) for p in paintings]
-    data = json.dumps(dict(settings=settings, paintings=items), ensure_ascii=False).replace("</", "<\\/")
-    pw, ph = first["preview_size"]
+def build_gallery_redirect():
+    """gallery/index.html: the floating gallery is now a section of the home page; old links go there."""
     return f"""<!DOCTYPE html>
-{MARKER}
+{REDIRECT_MARKER}
 <html lang="en">
 <head>
-{head_bits}
+  <meta charset="UTF-8">
   <title>Gallery - Christopher Jones - Fine Art</title>
-  <script>
-    /* Decide straight away whether the floating gallery will run, so the plain list never flashes up first.
-       (gallery.js decides the same way; if it hasn't started within a few seconds, the list comes back.) */
-    (function () {{
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      try {{ var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return; }}
-      catch (e) {{ return; }}
-      var h = document.documentElement; h.classList.add('float-on');
-      setTimeout(function () {{ if (!document.querySelector('#float-stage canvas')) h.classList.remove('float-on'); }}, 6000);
-    }})();
-  </script>
-  <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
-  <link rel="canonical" href="{SITE_URL}/gallery/">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Christopher Jones - Fine Art">
-  <meta property="og:title" content="Gallery - Christopher Jones">
-  <meta property="og:description" content="Paintings in oil, watercolour, and pastel">
-  <meta property="og:url" content="{SITE_URL}/gallery/">
-  <meta property="og:image" content="{SITE_URL}/{first["preview"]}">
-  <meta property="og:image:width" content="{pw}">
-  <meta property="og:image:height" content="{ph}">
-  <meta name="twitter:card" content="summary_large_image">
-  <style>{style}{PAGE_CSS}{GALLERY_CSS}{FLOAT_UI_CSS}  </style>
-  {EXTRAS_START}
-  {EXTRAS_HEAD}
-  {EXTRAS_END}
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="{SITE_URL}/#paintings">
+  <meta http-equiv="refresh" content="0; url=../#paintings">
 </head>
 <body>
-
-{header}
-
-  <main id="main-content">
-    <div id="float-stage" class="float-stage">
-      <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through; click a painting to bring it close</span><span class="touch">Swipe to look around; pinch to move through; tap a painting to bring it close</span></p>
-      <div class="float-text">
-        <div id="float-caption" class="float-caption"><a class="t" href="list/" title="Open this painting's page"></a><p class="d"></p></div>
-        <a class="float-list" href="list/">View as a list</a>
-      </div>
-    </div>
-    <section class="float-grid">
-      <div class="gallery-block">
-        <h1>Gallery</h1>
-        <div class="wrapper">
-{gallery_html(sections, "../")}
-        </div>
-      </div>
-    </section>
-  </main>
-{footer_html()}
-
-  <script type="application/json" id="gallery-data">{data}</script>
-  <script src="../glass.js?v=3"></script>
-  <script type="module" src="gallery.js?v=3"></script>
+  <p>The gallery is now on the <a href="../#paintings">home page</a>.</p>
 </body>
 </html>
 """
@@ -718,7 +642,7 @@ def build_list_page(sections, head_bits, style, header):
   <main id="main-content" class="list-page">
     <div class="gallery-block">
       <h1>Gallery</h1>
-      <p class="float-link"><a href="../">View the floating gallery</a></p>
+      <p class="float-link"><a href="../../#paintings">View the floating gallery</a></p>
       <div class="wrapper">
 {gallery_html(sections, "../../")}
       </div>
@@ -837,9 +761,7 @@ def main():
               f"{PAGES_DIR}/{p['name']}/", dry)
     write(os.path.join(site, "404.html"),
           build_404(head_bits_from(s, "/"), style.group(1), page_header(header.group(1), "/")), "404.html", dry)
-    write(os.path.join(site, "gallery", "index.html"),
-          build_gallery_page(paintings, sections, settings, head_bits_from(s, "../"), style.group(1),
-                             page_header(header.group(1), "../")), "gallery/index.html", dry)
+    write(os.path.join(site, "gallery", "index.html"), build_gallery_redirect(), "gallery/index.html (forwards to the home page's gallery)", dry)
     write(os.path.join(site, "gallery", "list", "index.html"),
           build_list_page(sections, head_bits_from(s, "../../"), style.group(1), page_header(header.group(1), "../../")),
           "gallery/list/index.html", dry)

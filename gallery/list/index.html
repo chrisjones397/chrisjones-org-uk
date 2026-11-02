@@ -34,7 +34,7 @@
     html.smooth { scroll-behavior: smooth; }
     /* Snapping is done by motion.js, in the direction the visitor is scrolling. The contact link still needs
        to land with the section filling the window: */
-    #contact { scroll-margin-top: calc(3rem - var(--header-height)); }   /* cancels the page's room for the header */
+    #contact, #paintings { scroll-margin-top: calc(3rem - var(--header-height)); }   /* cancels the page's room for the header */
     @media screen and (prefers-reduced-motion: reduce) {
       html.smooth {
         scroll-behavior: auto;
@@ -542,7 +542,7 @@
       <a href="../../" class="site-title"><span class="site-name">Christopher Jones</span> <span class="site-tag">Fine Art</span></a>
       <nav class="nav">
         <ul class="nav-list">
-          <li><a href="../../gallery/" class="nav-link">Gallery</a></li>
+          <li><a href="../../#paintings" class="nav-link">Gallery</a></li>
           <li><a href="../../#contact" class="nav-link">Contact</a></li>
           <li><a href="../../#profile" class="nav-link">Profile</a></li>
           <li class="nav-icons">
@@ -558,7 +558,7 @@
   <main id="main-content" class="list-page">
     <div class="gallery-block">
       <h1>Gallery</h1>
-      <p class="float-link"><a href="../">View the floating gallery</a></p>
+      <p class="float-link"><a href="../../#paintings">View the floating gallery</a></p>
       <div class="wrapper">
 
           <div class="entire"><h3 id="featured">Featured</h3></div>

@@ -50,7 +50,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 ## How the site is made
 
 - **tools/build_site.py** reads paintings.yaml and masters/ and writes: every image size in img/ (WebP), each
-  painting's page in paintings/<name>/, gallery/ (floating gallery page), gallery/list/, 404.html, and the
+  painting's page in paintings/<name>/, gallery/ (now only forwards to the home page's gallery section), gallery/list/, 404.html, and the
   built blocks inside index.html (between `<!-- ... start/end -->` markers: contact picture, gallery
   section). It copies index.html's `<style>` and header into every other page, so shared styles live in
   index.html. It fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
@@ -63,11 +63,10 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
   glide on to the next resting place in the direction of travel, never back; free inside the profile; any
   wheel/touch/key cancels). Christopher's principle: work with the visitor, never against them.
-- **gallery/gallery.js** (Three.js, vendored in face/vendor/): the floating gallery. Full-window on its own page;
-  on the home page a section (data-mode="section") that hangs still until "Enter Gallery", then fills the
+- **gallery/gallery.js** (Three.js, vendored in face/vendor/): the floating gallery, a home page section (data-mode="section") that hangs still until "Enter Gallery", then fills the
   window until "Exit Gallery" / Escape. The view is remembered for the visit (sessionStorage).
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
-- **glass.js**: the header's thick-glass look over the opening video or the gallery page's canvas.
+- **glass.js**: the header's thick-glass look over the opening video. The header's Gallery link goes to #paintings.
 
 ## Testing
 
