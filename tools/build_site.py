@@ -402,19 +402,9 @@ def gallery_html(sections, prefix=""):
 
 
 def footer_html():
-    lines = []
-    if EMAIL_USER and EMAIL_DOMAIN:
-        parts = list(reversed([EMAIL_USER, "@", EMAIL_DOMAIN]))   # never whole in the file, for spam robots
-        js_parts = ", ".join("'" + p + "'" for p in parts)
-        lines.append('<p class="footer-email" id="footer-email"></p>\n'
-                     '    <script>(function(){var p=[' + js_parts + '];'
-                     'document.getElementById("footer-email").textContent=p.reverse().join("");})();</script>')
-    if INSTAGRAM:
-        lines.append(f'<p><a href="https://www.instagram.com/{INSTAGRAM}/" '
-                     f'aria-label="Instagram: {INSTAGRAM}" title="Instagram" target="_blank" rel="noopener">{INSTAGRAM_ICON}</a></p>')
-    if COPYRIGHT:
-        lines.append(f"<p>{COPYRIGHT}</p>")
-    return '\n  <footer class="site-footer">\n    ' + "\n    ".join(lines) + "\n  </footer>" if lines else ""
+    """Every page's footer: only the copyright line, as on the home page (the email address and Instagram
+    are in the home page's contact section, and the header's icons)."""
+    return f'\n  <footer class="site-footer">\n    <p>{COPYRIGHT}</p>\n  </footer>' if COPYRIGHT else ""
 
 
 def page_header(header, up="../../"):

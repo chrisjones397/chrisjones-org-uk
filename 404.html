@@ -279,7 +279,7 @@
       justify-content: center;
     }
     .invite-wall { position: absolute; inset: 0; transition: opacity 1s; }
-    .gallery-live .invite-wall { opacity: 0; pointer-events: none; }   /* the floating gallery has taken their place */
+    .gallery-3d .invite-wall, .gallery-live .invite-wall { opacity: 0; pointer-events: none; }   /* the floating gallery takes their place */
     /* The floating gallery in the page (gallery/gallery.js): it fades in once its paintings have loaded, hangs
        still while the page scrolls past, and fills the window while flying */
     .float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; touch-action: pan-y; }
@@ -555,9 +555,6 @@
   </main>
 
   <footer class="site-footer">
-    <p class="footer-email" id="footer-email"></p>
-    <script>(function(){var p=['chrisjones.org.uk', '@', 'hello'];document.getElementById("footer-email").textContent=p.reverse().join("");})();</script>
-    <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
     <p>&copy;2026 Christopher Jones</p>
   </footer>
 
