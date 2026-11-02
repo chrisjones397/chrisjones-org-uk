@@ -101,17 +101,15 @@
 })();
 
 /* Snapping, with the visitor rather than against them. Once a scroll comes to rest, the page glides on to the
-   next resting place in the direction it was going, never back to where it came from:
-     the opening      scrolling down: on to the start of the profile;   up: back to the top of the page
-     the profile      free: its animation is never taken over
-     after it         scrolling down: on to the next full-window section (the gallery's invitation, then
-                      contact); up: back to the one before, or the end of the profile
-     below contact    scrolling up: back to the contact section (which hides the footer's copyright line)
+   next resting place in the direction it was going, never back to where it came from. The resting places are
+   the top of each full-window section (the opening, the gallery's invitation, contact). The profile is
+   taller than the window: going down, the page settles at its start, going up at its end, and within it
+   scrolling is free, so its animation is never taken over, and leaving it is never pulled back.
+   A scroll that runs past a full-window section by less than half a window comes back to it.
    Any wheel, touch or key during a glide hands control straight back to the visitor. */
 (function () {
-  const face = document.querySelector('.face-section');
-  const panels = [...document.querySelectorAll('.invite, .contact')];
-  if (!face || !panels.length) return;
+  const sections = [...document.querySelectorAll('.hero, .invite, .contact, .face-section')];
+  if (!sections.length) return;
   const REST = 160;          // milliseconds without scrolling before the page counts as at rest
   const MIN = 0.45, MAX = 1.1;   // glide time in seconds, for the shortest and a full window's distance
   const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -119,19 +117,23 @@
   let lastY = scrollY, restY = scrollY, dir = 0, timer = 0, gliding = 0, active = false, touching = false;
 
   function target(y, d) {
-    const f0 = top(face), end = document.documentElement.scrollHeight - innerHeight;
-    // after the profile: its end, then each full-window section (the gallery's invitation, contact)
-    const stops = [f0 + face.offsetHeight - innerHeight, ...panels.map((el) => Math.min(top(el), end))];
-    // A scroll that runs past one of those sections by less than half a window comes back to it, so a flick
-    // up from the footer settles on contact, rather than carrying on.
-    for (const p of panels.map((el) => Math.min(top(el), end)))
-      if ((restY - p) * (y - p) < 0 && Math.abs(y - p) < innerHeight / 2) return p;
-    if (y > 0 && y < f0) return d > 0 ? f0 : 0;
-    for (let k = 0; k + 1 < stops.length; k++)
-      if (y > stops[k] && y < stops[k + 1]) return d > 0 ? stops[k + 1] : stops[k];
-    const last = stops[stops.length - 1];
-    if (y > last && d < 0) return last;
-    return null;                                   // in the profile, or already in place
+    const end = document.documentElement.scrollHeight - innerHeight;
+    const stops = [], free = [];          // stops: [position, which way it's arrived at (0: either)]
+    for (const el of sections) {
+      const t = Math.min(top(el), end);
+      if (el.offsetHeight > innerHeight * 1.5) {
+        const e = Math.min(t + el.offsetHeight - innerHeight, end);
+        stops.push([t, 1], [e, -1]); free.push([t, e]);
+      } else stops.push([t, 0]);
+    }
+    for (const [p, way] of stops)
+      if (!way && (restY - p) * (y - p) < 0 && Math.abs(y - p) < innerHeight / 2) return p;
+    if (stops.some(([p]) => Math.abs(p - y) < 2)) return null;       // already in place
+    if (free.some(([t, e]) => y >= t && y <= e)) return null;     // in the profile: free
+    const ahead = stops.filter(([p]) => (d > 0 ? p > y : p < y)).sort((a, b) => d * (a[0] - b[0]));
+    if (!ahead.length) return null;
+    const [p, way] = ahead[0];
+    return !way || way === d ? p : null;
   }
   // Eases in and out (smootherstep), so the glide starts and lands gently rather than all at once.
   const ease = (t) => t * t * t * (t * (t * 6 - 15) + 10);

@@ -519,6 +519,8 @@ function scrollTime() {
   return clamp01(clamp01(-r.top / travel) / PLAY) * T_DONE;
 }
 function tick(now) {
+  const r = section.getBoundingClientRect();
+  if (tShown >= 0 && (r.bottom < 0 || r.top > innerHeight)) { requestAnimationFrame(tick); return; }   // off screen: nothing to draw
   const target = scrollTime();
   const next = tShown < 0 ? target : tShown + (target - tShown) * 0.12;
   const seaMoving = next < T_ARRIVE;                                   // the waves keep moving while the sea shows
