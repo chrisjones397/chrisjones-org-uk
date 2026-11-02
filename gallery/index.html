@@ -52,6 +52,17 @@
     /* Menu links within the page glide there; but arriving from another page (e.g. the gallery's Contact
        link) jumps straight to the place, so smooth scrolling is only switched on once the page has loaded */
     html.smooth { scroll-behavior: smooth; }
+    /* Snapping: gentle ("proximity"), so it only acts when a scroll ends close to the start of the profile or
+       of the contact section, and never pulls the visitor back from where they were heading. The contact
+       section snaps to fill the window, which keeps the footer's copyright line out of the way. The opening
+       isn't a snap point, so a small scroll away from the top is never undone, and the profile is taller than
+       the window, so its animation scrolls freely. (Strict "mandatory" snapping fought the visitor, and on
+       iPhone loses Safari's momentum inside tall sections: WebKit bug 253195.) */
+    html.snaps { scroll-snap-type: y proximity; }
+    .face-section, .contact {
+      scroll-snap-align: start;
+      scroll-margin-top: calc(3rem - var(--header-height));   /* cancels the page's room for the header */
+    }
     @media screen and (prefers-reduced-motion: reduce) {
       html.smooth {
         scroll-behavior: auto;
@@ -237,7 +248,6 @@
       align-items: center;
       justify-content: center;
     }
-    #contact { scroll-margin-top: calc(3rem - var(--header-height)); }   /* the menu link lands with the picture filling the window */
     .contact-pic {
       position: absolute;
       left: 0;
