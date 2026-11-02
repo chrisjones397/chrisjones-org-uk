@@ -17,7 +17,10 @@
 #
 # Masters can be PNG, WebP, JPEG or TIFF, ideally at least 2560 pixels wide.
 # Portrait or landscape is worked out from the master.
-# The home page's contact section uses masters/contact-background (PNG, JPEG or WebP; ideally 3840 wide).
+
+# The home page's contact section: its full-window picture (a photo, not a painting, so it's kept in med/jpg/;
+# landscape, ideally 2560 to 3840 pixels wide). The build makes the sizes the page uses from it.
+contact_picture: med/jpg/paint-palette.jpg
 
 # How the floating gallery feels. The paintings' places are worked out from these, so adding a painting
 # never means placing it by hand. Leave a line out to use its default.

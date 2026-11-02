@@ -19,7 +19,10 @@ What it makes, all from paintings.yaml and masters/:
   * paintings/<name>/index.html: each painting's own page, with the home page's header,
     the painting large (click for full size), its caption, Previous / Next and the footer.
   * gallery/list/index.html: the same paintings as a plain grid.
-  * med/contact-<width>.webp: the home page's contact picture, from masters/contact-background.*
+  * med/contact-<width>.webp: the home page's contact picture, from the file named by contact_picture: in
+    paintings.yaml (a photo kept in med/jpg/, as it isn't a painting).
+  * Every local script a page loads gets a fingerprint of its contents in its address (?v=...), so
+    browsers always fetch the latest version.
   * gallery/index.html: the floating gallery (its movement is in gallery/gallery.js, written by hand),
     with the plain grid inside it for anyone the floating version doesn't suit.
   * 404.html: the "page not found" page, with the same header and footer (Cloudflare shows it
@@ -287,17 +290,19 @@ def remove_old_images(site, keep, dry):
                 os.remove(os.path.join(d, f))
 
 
-CONTACT_START = "<!-- contact picture: start (built by tools/build_site.py from masters/contact-background.*) -->"
+CONTACT_START = "<!-- contact picture: start (built by tools/build_site.py from contact_picture: in paintings.yaml) -->"
 CONTACT_END = "<!-- contact picture: end -->"
 CONTACT_WIDTHS = [1024, 1536, 2560, 3840]
 
 
-def contact_picture(site, force, dry):
-    """The contact section's full-window picture: med/contact-<width>.webp from masters/contact-background.*"""
-    master = next((os.path.join(site, MASTERS_DIR, "contact-background" + ext) for ext in MASTER_TYPES
-                   if os.path.isfile(os.path.join(site, MASTERS_DIR, "contact-background" + ext))), None)
-    if not master:
-        fail(f"no picture for the contact section: expected {MASTERS_DIR}/contact-background.png (or .jpg, .webp)")
+def contact_picture(site, source, force, dry):
+    """The contact section's full-window picture: med/contact-<width>.webp, made from the picture named by
+    contact_picture: in paintings.yaml. Returns None (leaving the page as it is) if that file isn't there."""
+    master = os.path.join(site, source)
+    if not os.path.isfile(master):
+        print(f"  WARNING: the contact picture {source} (contact_picture: in paintings.yaml) isn't there; "
+              f"the contact section keeps its current picture")
+        return None, set()
     with Image.open(master) as im:
         mw, mh = im.size
     widths = [w for w in CONTACT_WIDTHS if w < mw] + [min(mw, CONTACT_WIDTHS[-1])]
@@ -682,7 +687,23 @@ def build_redirect(new):
 """
 
 
+SCRIPT_RE = re.compile(r'(src="(?!https?:|//)([^"?#]+\.js))(\?v=[^"]*)?"')
+
+
+def stamp(text, page_path):
+    """Give each local script's address a fingerprint of its contents (gallery.js?v=1a2b3c4d), so a browser
+    fetches it again whenever it changes, rather than running a copy it saved earlier."""
+    import hashlib
+    def one(m):
+        f = os.path.normpath(os.path.join(os.path.dirname(page_path), m.group(2)))
+        if not os.path.isfile(f):
+            return m.group(0)
+        return f'{m.group(1)}?v={hashlib.sha1(open(f, "rb").read()).hexdigest()[:8]}"'
+    return SCRIPT_RE.sub(one, text)
+
+
 def write(path, text, label, dry):
+    text = stamp(text, path)
     old = open(path, encoding="utf-8").read() if os.path.isfile(path) else None
     status = "new" if old is None else ("unchanged" if old == text else "updated")
     if status != "unchanged":
@@ -727,9 +748,12 @@ def main():
         i, j = s.index(GALLERY_START) + len(GALLERY_START), s.index(GALLERY_END)
         s = s[:i] + gallery_html(sections) + "          " + s[j:]
     if CONTACT_START in s and CONTACT_END in s:
-        tag, _ = contact_picture(site, a.force, dry)
-        i, j = s.index(CONTACT_START) + len(CONTACT_START), s.index(CONTACT_END)
-        s = s[:i] + "\n      " + tag + "\n      " + s[j:]
+        with open(os.path.join(site, "paintings.yaml"), encoding="utf-8") as f:
+            source = (yaml.safe_load(f) or {}).get("contact_picture") or "med/jpg/paint-palette.jpg"
+        tag, _ = contact_picture(site, source, a.force, dry)
+        if tag is not None:
+            i, j = s.index(CONTACT_START) + len(CONTACT_START), s.index(CONTACT_END)
+            s = s[:i] + "\n      " + tag + "\n      " + s[j:]
     s = EXTRAS_RE.sub("", s).replace("</head>", f"  {EXTRAS_START}\n  {EXTRAS_HEAD}\n  {EXTRAS_END}\n</head>", 1)
     write(index_path, s, "index.html", dry)
 
