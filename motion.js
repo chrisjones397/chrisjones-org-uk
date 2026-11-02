@@ -106,11 +106,14 @@
   const MIN = 0.45, MAX = 1.1;   // glide time in seconds, for the shortest and a full window's distance
   const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const top = (el) => el.getBoundingClientRect().top + scrollY;
-  let lastY = scrollY, dir = 0, timer = 0, gliding = 0, active = false, touching = false;
+  let lastY = scrollY, restY = scrollY, dir = 0, timer = 0, gliding = 0, active = false, touching = false;
 
   function target(y, d) {
     const f0 = top(face), f1 = f0 + face.offsetHeight - innerHeight;
     const c = Math.min(top(contact), document.documentElement.scrollHeight - innerHeight);
+    // A scroll that runs past the contact section by less than half a window comes back to it, so a flick
+    // up from the footer, or down from the profile, settles on contact rather than carrying on.
+    if ((restY - c) * (y - c) < 0 && Math.abs(y - c) < innerHeight / 2) return c;
     if (y > 0 && y < f0) return d > 0 ? f0 : 0;
     if (y > f1 && y < c) return d > 0 ? c : f1;
     if (y > c && d < 0) return c;
@@ -130,14 +133,14 @@
       const t = Math.min(1, (now - t0) / dur);
       scrollTo({ top: from + dist * ease(t), behavior: 'instant' });
       lastY = scrollY;
-      if (t < 1) requestAnimationFrame(step); else { gliding++; active = false; }
+      if (t < 1) requestAnimationFrame(step); else { gliding++; active = false; restY = scrollY; }
     })(t0);
   }
-  function stop() { gliding++; active = false; }                   // ends any glide in progress
+  function stop() { if (active) restY = scrollY; gliding++; active = false; }                   // ends any glide in progress
   function settle() {
     if (touching || active || !dir) return;
     const to = target(scrollY, dir);
-    if (to !== null) glide(to);
+    if (to !== null) glide(to); else restY = scrollY;
   }
   addEventListener('scroll', () => {
     const y = scrollY;
