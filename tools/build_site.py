@@ -597,7 +597,7 @@ def build_gallery_page(paintings, sections, settings, head_bits, style, header):
 
   <main id="main-content">
     <div id="float-stage" class="float-stage">
-      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll or drag to look around; pinch, or press + and &minus;, to move through</span><span class="touch">Swipe to look around; pinch to move through</span></p>
+      <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through</span><span class="touch">Swipe to look around; pinch to move through</span></p>
       <div class="float-text">
         <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
         <a class="float-list" href="list/">View as a list</a>

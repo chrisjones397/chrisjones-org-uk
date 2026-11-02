@@ -22,8 +22,8 @@
 # How the floating gallery feels. The paintings' places are worked out from these, so adding a painting
 # never means placing it by hand. Leave a line out to use its default.
 gallery:
-  spacing: 6       # distance in depth from one painting to the next (default 6)
-  spread: 1        # how widely they're scattered side to side and up and down (default 1)
+  spacing: 4       # distance in depth from one painting to the next (default 6)
+  spread: 0.75     # how widely they're scattered side to side and up and down (default 1)
   glide: 0.075     # how quickly movement settles: lower glides for longer (default 0.075)
 
 sections:

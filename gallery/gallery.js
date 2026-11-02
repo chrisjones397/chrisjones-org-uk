@@ -2,8 +2,8 @@
    and in depth, each at a size that follows (softly) its real size. The space has edges, so you can't get
    lost, and each painting appears once, roughly in the order of paintings.yaml from front to back.
 
-   Looking around (panning): scroll or swipe in any direction, drag with the mouse, or the arrow keys.
-   Moving through (depth): pinch (trackpad or touch screen), Ctrl and the scroll wheel, or + and - (also W and S).
+   Looking around (panning): drag (mouse or finger), scroll on a trackpad, or the arrow keys.
+   Moving through (depth): a mouse's scroll wheel, pinching (trackpad or touch screen), or + and - (also W and S).
    The paintings drift gently, always square to you; the view shifts a little with the pointer; distant ones
    fade into the grey. Clicking a painting opens its page.
 
@@ -22,6 +22,7 @@ const SIZE = 3.6;           // a 60 x 90 cm painting is about 2.9 high; smaller 
 const START = 12;           // how far in front of the first painting the visitor starts
 const STOP = 5;             // how far in front of the last painting the journey ends
 const PINCH = 0.15;         // depth per unit of trackpad pinch (and Ctrl + scroll wheel)
+const WHEEL = 0.02;         // depth per unit of a mouse's scroll wheel (one notch is usually 100: 2 units)
 const PINCH_TOUCH = 0.06;   // depth per pixel of pinch on a touch screen
 const BG = 0x646464;        // the page colour, rgb(100, 100, 100)
 
@@ -131,11 +132,27 @@ function start() {
   }
   const perPixel = () => 12 / stage.clientHeight;             // a movement across the screen ~ the view's width
 
+  // A trackpad and a mouse's scroll wheel both send "wheel" events, and browsers don't say which. They differ
+  // in how they report it, though: a scroll wheel moves in lines (Firefox), or its old-style wheelDelta isn't
+  // exactly -3 times its delta (Chrome, Safari, Edge), as a trackpad's always is. One gesture keeps the kind
+  // it started with, so a trackpad's long glide after a flick isn't mistaken halfway through.
+  let wheelKind = null, wheelAt = 0;
+  function kindOf(e) {
+    const t = performance.now();
+    if (wheelKind && t - wheelAt < 300) { wheelAt = t; return wheelKind; }
+    if (e.deltaMode !== 0) wheelKind = 'mouse';
+    else if (e.wheelDeltaY) wheelKind = Math.abs(e.wheelDeltaY + 3 * e.deltaY) < 1.5 ? 'trackpad' : 'mouse';
+    else if (e.wheelDeltaX) wheelKind = Math.abs(e.wheelDeltaX + 3 * e.deltaX) < 1.5 ? 'trackpad' : 'mouse';
+    else wheelKind = 'trackpad';
+    wheelAt = t;
+    return wheelKind;
+  }
   stage.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const k = e.deltaMode === 1 ? 16 : 1;
-    if (e.ctrlKey) go(-e.deltaY * k * PINCH);                  // a trackpad pinch (or Ctrl + scroll wheel)
-    else go(0, e.deltaX * k * perPixel(), -e.deltaY * k * perPixel());   // scrolling pans, like a page
+    const k = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1;   // lines or pages, in pixels
+    if (e.ctrlKey) go(-e.deltaY * k * PINCH);                   // a trackpad pinch (or Ctrl + scroll wheel)
+    else if (kindOf(e) === 'mouse') go(e.deltaY * k * WHEEL);    // a scroll wheel moves through: rolling down goes forward
+    else go(0, e.deltaX * k * perPixel(), -e.deltaY * k * perPixel());   // a trackpad pans, like a page
   }, { passive: false });
 
   // Safari reports a trackpad pinch as a gesture rather than a Ctrl scroll
