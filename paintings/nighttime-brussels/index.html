@@ -214,6 +214,51 @@
       margin-top: 0.9em;
     }
 
+    /* Contact: a full-window picture with the details over it, styled like the opening title */
+    .contact {
+      position: relative;
+      overflow: hidden;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #contact { scroll-margin-top: calc(3rem - var(--header-height)); }   /* the menu link lands with the picture filling the window */
+    .contact-pic {
+      position: absolute;
+      left: 0;
+      top: -10%;            /* taller than the section, so the parallax never shows an edge */
+      width: 100%;
+      height: 150%;
+      object-fit: cover;
+    }
+    .contact::after {       /* a light shade over the picture, so the words always read */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .contact-words {
+      position: relative;
+      z-index: 1;
+      padding: 0 5vw;
+      text-align: center;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    }
+    .contact-title {
+      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.6em;
+    }
+    .contact-line {
+      font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+      font-weight: 300;
+      margin-top: 0.4em;
+    }
+    .contact-line a, #footer-email { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+
     /* Footer, as on the painting pages */
     .site-footer {
       max-width: 1200px;
@@ -381,8 +426,8 @@
       <nav class="nav">
         <ul class="nav-list">
           <li><a href="../../#profile" class="nav-link">Profile</a></li>
-          <li><a href="../../gallery/" class="nav-link">Gallery</a></li>
           <li><a href="../../#contact" class="nav-link">Contact</a></li>
+          <li><a href="../../gallery/" class="nav-link">Gallery</a></li>
           <li class="nav-icons">
             <a href="../../#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
             <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
@@ -405,7 +450,7 @@
              width="1024" height="1536" alt="Nighttime, Brussels">
       </a>
       <h1>Nighttime, Brussels</h1>
-      <p class="details">Oil on Canvas, 21 x 15 cm, 2013</p>
+      <p class="details">Oil on canvas, 21 x 15 cm, 2013</p>
       <nav class="painting-links" aria-label="Previous and next paintings">
         <a href="../ponte-alda-merini-milan/" rel="prev">&larr; Previous</a>
         <a href="../apple-1/" rel="next">Next &rarr;</a>

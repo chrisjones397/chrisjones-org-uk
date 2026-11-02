@@ -214,6 +214,51 @@
       margin-top: 0.9em;
     }
 
+    /* Contact: a full-window picture with the details over it, styled like the opening title */
+    .contact {
+      position: relative;
+      overflow: hidden;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #contact { scroll-margin-top: calc(3rem - var(--header-height)); }   /* the menu link lands with the picture filling the window */
+    .contact-pic {
+      position: absolute;
+      left: 0;
+      top: -10%;            /* taller than the section, so the parallax never shows an edge */
+      width: 100%;
+      height: 150%;
+      object-fit: cover;
+    }
+    .contact::after {       /* a light shade over the picture, so the words always read */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .contact-words {
+      position: relative;
+      z-index: 1;
+      padding: 0 5vw;
+      text-align: center;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    }
+    .contact-title {
+      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.6em;
+    }
+    .contact-line {
+      font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+      font-weight: 300;
+      margin-top: 0.4em;
+    }
+    .contact-line a, #footer-email { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+
     /* Footer, as on the painting pages */
     .site-footer {
       max-width: 1200px;
@@ -454,8 +499,8 @@
       <nav class="nav">
         <ul class="nav-list">
           <li><a href="../#profile" class="nav-link">Profile</a></li>
-          <li><a href="../gallery/" class="nav-link">Gallery</a></li>
           <li><a href="../#contact" class="nav-link">Contact</a></li>
+          <li><a href="../gallery/" class="nav-link">Gallery</a></li>
           <li class="nav-icons">
             <a href="../#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
             <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
@@ -468,10 +513,10 @@
 
   <main id="main-content">
     <div id="float-stage" class="float-stage">
-      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll to move through the paintings, and drag to look around</span><span class="touch">Swipe up to move through the paintings, and sideways to look around</span></p>
+      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll or drag to look around; pinch, or press + and &minus;, to move through</span><span class="touch">Swipe to look around; pinch to move through</span></p>
       <div class="float-text">
         <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
-        <a class="float-list" href="../#gallery">View as a list</a>
+        <a class="float-list" href="list/">View as a list</a>
       </div>
     </div>
     <section class="float-grid">
@@ -492,7 +537,7 @@
                    width="1536" height="1024" alt="Green Background with Seven Figures" loading="lazy">
             </a>
             <p>Green Background with Seven Figures</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2023</p>
+            <p>Oil on canvas, 60 x 90 cm, 2023</p>
           </div>
 
           <div class="entire"><h3 id="abstracts">Abstracts</h3></div>
@@ -508,7 +553,7 @@
                    width="1536" height="1024" alt="Composition in Blue with Border" loading="lazy">
             </a>
             <p>Composition in Blue with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
+            <p>Oil on canvas, 60 x 90 cm, 2020</p>
           </div>
           <div class="landscape">
             <a href="../paintings/composition-in-red-with-border/">
@@ -522,7 +567,7 @@
                    width="1536" height="1024" alt="Composition in Red with Border" loading="lazy">
             </a>
             <p>Composition in Red with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
+            <p>Oil on canvas, 60 x 90 cm, 2020</p>
           </div>
           <div class="landscape">
             <a href="../paintings/composition-in-green-with-border/">
@@ -536,7 +581,7 @@
                    width="1536" height="1024" alt="Composition in Green with Border" loading="lazy">
             </a>
             <p>Composition in Green with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
+            <p>Oil on canvas, 60 x 90 cm, 2020</p>
           </div>
           <div class="landscape">
             <a href="../paintings/composition-in-yellow-with-border/">
@@ -550,7 +595,7 @@
                    width="1536" height="1024" alt="Composition in Yellow with Border" loading="lazy">
             </a>
             <p>Composition in Yellow with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
+            <p>Oil on canvas, 60 x 90 cm, 2020</p>
           </div>
           <div class="landscape">
             <a href="../paintings/collaboration-with-teo-1/">
@@ -564,7 +609,7 @@
                    width="1536" height="1152" alt="Collaboration with Teo #1" loading="lazy">
             </a>
             <p>Collaboration with Teo #1</p>
-            <p>Soft Pastel on Paper, 30 x 42 cm, 2025</p>
+            <p>Soft pastel on paper, 30 x 42 cm, 2025</p>
           </div>
           <div class="landscape">
             <a href="../paintings/collaboration-with-teo-2/">
@@ -578,7 +623,7 @@
                    width="1536" height="1152" alt="Collaboration with Teo #2" loading="lazy">
             </a>
             <p>Collaboration with Teo #2</p>
-            <p>Soft Pastel on Paper, 30 x 42 cm, 2025</p>
+            <p>Soft pastel on paper, 30 x 42 cm, 2025</p>
           </div>
           <div class="landscape">
             <a href="../paintings/collaboration-with-teo-3/">
@@ -592,7 +637,7 @@
                    width="1536" height="1152" alt="Collaboration with Teo #3" loading="lazy">
             </a>
             <p>Collaboration with Teo #3</p>
-            <p>Watercolour on Cotton Paper, 30 x 42 cm, 2026</p>
+            <p>Watercolour on cotton paper, 30 x 42 cm, 2026</p>
           </div>
 
           <div class="entire"><h3 id="plein-air">Plein Air</h3></div>
@@ -608,7 +653,7 @@
                    width="1536" height="1024" alt="Seascape #1" loading="lazy">
             </a>
             <p>Seascape #1</p>
-            <p>Oil on Board, 15 x 21 cm, 2024</p>
+            <p>Oil on board, 15 x 21 cm, 2024</p>
           </div>
           <div class="landscape">
             <a href="../paintings/mont-sainte-victoire-after-cezanne/">
@@ -622,7 +667,7 @@
                    width="1536" height="1024" alt="Mont Sainte-Victoire, after Cézanne" loading="lazy">
             </a>
             <p>Mont Sainte&#8209;Victoire, after Cézanne</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
+            <p>Oil on canvas, 60 x 90 cm, 2020</p>
           </div>
           <div class="portrait">
             <a href="../paintings/cjon-de-las-tomasas-albaicin-granada/">
@@ -635,7 +680,7 @@
                    width="1024" height="1536" alt="Cjón. de las Tomasas, Albaicín, Granada" loading="lazy">
             </a>
             <p>Cjón. de las Tomasas, Albaicín, Granada</p>
-            <p>Oil on Canvas, 21 x 15 cm, 2002</p>
+            <p>Oil on canvas, 21 x 15 cm, 2002</p>
           </div>
           <div class="portrait">
             <a href="../paintings/ponte-alda-merini-milan/">
@@ -648,7 +693,7 @@
                    width="1024" height="1536" alt="Ponte Alda Merini, Milan" loading="lazy">
             </a>
             <p>Ponte Alda Merini, Milan</p>
-            <p>Oil on Canvas, 21 x 15 cm, 2004</p>
+            <p>Oil on canvas, 21 x 15 cm, 2004</p>
           </div>
           <div class="portrait">
             <a href="../paintings/nighttime-brussels/">
@@ -661,7 +706,7 @@
                    width="1024" height="1536" alt="Nighttime, Brussels" loading="lazy">
             </a>
             <p>Nighttime, Brussels</p>
-            <p>Oil on Canvas, 21 x 15 cm, 2013</p>
+            <p>Oil on canvas, 21 x 15 cm, 2013</p>
           </div>
 
           <div class="entire"><h3 id="still-life">Still Life</h3></div>
@@ -678,7 +723,7 @@
                    width="1734" height="1186" alt="Apple #1" loading="lazy">
             </a>
             <p>Apple #1</p>
-            <p>Oil on Canvas Paper, 15 x 21 cm, 2023</p>
+            <p>Oil on canvas paper, 15 x 21 cm, 2023</p>
           </div>
           <div class="landscape">
             <a href="../paintings/apple-2/">
@@ -694,7 +739,7 @@
                    width="3523" height="2340" alt="Apple #2" loading="lazy">
             </a>
             <p>Apple #2</p>
-            <p>Oil on Canvas Paper, 15 x 21 cm, 2023</p>
+            <p>Oil on canvas paper, 15 x 21 cm, 2023</p>
           </div>
 
         </div>
@@ -709,7 +754,8 @@
     <p>&copy;2026 Christopher Jones</p>
   </footer>
 
-  <script type="application/json" id="gallery-data">[{"name": "green-background-with-seven-figures", "title": "Green Background with Seven Figures", "details": "Oil on Canvas, 60 x 90 cm, 2023", "wide": true, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "composition-in-blue-with-border", "title": "Composition in Blue with Border", "details": "Oil on Canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "composition-in-red-with-border", "title": "Composition in Red with Border", "details": "Oil on Canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "composition-in-green-with-border", "title": "Composition in Green with Border", "details": "Oil on Canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "composition-in-yellow-with-border", "title": "Composition in Yellow with Border", "details": "Oil on Canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "collaboration-with-teo-1", "title": "Collaboration with Teo #1", "details": "Soft Pastel on Paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536]}, {"name": "collaboration-with-teo-2", "title": "Collaboration with Teo #2", "details": "Soft Pastel on Paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536]}, {"name": "collaboration-with-teo-3", "title": "Collaboration with Teo #3", "details": "Watercolour on Cotton Paper, 30 x 42 cm, 2026", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536]}, {"name": "seascape-1", "title": "Seascape #1", "details": "Oil on Board, 15 x 21 cm, 2024", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "mont-sainte-victoire-after-cezanne", "title": "Mont Sainte-Victoire, after Cézanne", "details": "Oil on Canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536]}, {"name": "cjon-de-las-tomasas-albaicin-granada", "title": "Cjón. de las Tomasas, Albaicín, Granada", "details": "Oil on Canvas, 21 x 15 cm, 2002", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024]}, {"name": "ponte-alda-merini-milan", "title": "Ponte Alda Merini, Milan", "details": "Oil on Canvas, 21 x 15 cm, 2004", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024]}, {"name": "nighttime-brussels", "title": "Nighttime, Brussels", "details": "Oil on Canvas, 21 x 15 cm, 2013", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024]}, {"name": "apple-1", "title": "Apple #1", "details": "Oil on Canvas Paper, 15 x 21 cm, 2023", "wide": false, "w": 1734, "h": 1186, "widths": [300, 480, 768, 1024, 1536, 1734]}, {"name": "apple-2", "title": "Apple #2", "details": "Oil on Canvas Paper, 15 x 21 cm, 2023", "wide": false, "w": 3523, "h": 2340, "widths": [300, 480, 768, 1024, 1536, 2560, 2560]}]</script>
-  <script type="module" src="gallery.js"></script>
+  <script type="application/json" id="gallery-data">{"settings": {"spacing": 6, "spread": 1, "glide": 0.075}, "paintings": [{"name": "green-background-with-seven-figures", "title": "Green Background with Seven Figures", "details": "Oil on canvas, 60 x 90 cm, 2023", "wide": true, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-blue-with-border", "title": "Composition in Blue with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-red-with-border", "title": "Composition in Red with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-green-with-border", "title": "Composition in Green with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-yellow-with-border", "title": "Composition in Yellow with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "collaboration-with-teo-1", "title": "Collaboration with Teo #1", "details": "Soft pastel on paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "collaboration-with-teo-2", "title": "Collaboration with Teo #2", "details": "Soft pastel on paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "collaboration-with-teo-3", "title": "Collaboration with Teo #3", "details": "Watercolour on cotton paper, 30 x 42 cm, 2026", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "seascape-1", "title": "Seascape #1", "details": "Oil on board, 15 x 21 cm, 2024", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [15.0, 21.0]}, {"name": "mont-sainte-victoire-after-cezanne", "title": "Mont Sainte-Victoire, after Cézanne", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "cjon-de-las-tomasas-albaicin-granada", "title": "Cjón. de las Tomasas, Albaicín, Granada", "details": "Oil on canvas, 21 x 15 cm, 2002", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "ponte-alda-merini-milan", "title": "Ponte Alda Merini, Milan", "details": "Oil on canvas, 21 x 15 cm, 2004", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "nighttime-brussels", "title": "Nighttime, Brussels", "details": "Oil on canvas, 21 x 15 cm, 2013", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "apple-1", "title": "Apple #1", "details": "Oil on canvas paper, 15 x 21 cm, 2023", "wide": false, "w": 1734, "h": 1186, "widths": [300, 480, 768, 1024, 1536, 1734], "cm": [15.0, 21.0]}, {"name": "apple-2", "title": "Apple #2", "details": "Oil on canvas paper, 15 x 21 cm, 2023", "wide": false, "w": 3523, "h": 2340, "widths": [300, 480, 768, 1024, 1536, 2560, 2560], "cm": [15.0, 21.0]}]}</script>
+  <script src="../glass.js?v=3"></script>
+  <script type="module" src="gallery.js?v=3"></script>
 </body>
 </html>

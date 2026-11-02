@@ -1,4 +1,5 @@
-/* Thick-glass header over the opening image (a picture, or the painting video).
+/* Thick-glass header over the opening image (a picture, or the painting video), or over the floating
+   gallery's canvas (which announces itself with a "glass-source" event and a "glass-frame" after each frame).
    While the header sits over the forest, it draws that part of the picture itself: frosted exactly
    like the normal header (saturate 140%, blur 10px, 40% white), plus a rounded glass edge along the
    bottom that bends the picture. As the picture scrolls away the bending eases off and the drawing
@@ -11,9 +12,13 @@
   const EASE = 160;        // CSS pixels of scrolling over which the bending eases off
 
   const header = document.querySelector('.header');
-  const hero = document.querySelector('.hero video, .hero img');
-  if (!header || !hero) return;
-  const isVideo = hero.tagName === 'VIDEO';
+  if (!header) return;
+  const first = document.querySelector('.hero video, .hero img');
+  if (first) init(first);
+  else addEventListener('glass-source', (e) => init(e.detail), { once: true });
+
+  function init(hero) {
+  const isVideo = hero.tagName === 'VIDEO', isCanvas = hero.tagName === 'CANVAS';
 
   const canvas = document.createElement('canvas');
   canvas.className = 'glass-canvas';
@@ -111,7 +116,18 @@
     im.src = url;
   }
   const underHeader = () => hero.getBoundingClientRect().bottom > header.getBoundingClientRect().top;
-  if (!isVideo) {
+  if (isCanvas) {
+    // the gallery's canvas: after each frame it draws, copy a shrunken version (the glass only shows it blurred)
+    const small = document.createElement('canvas'), sctx = small.getContext('2d');
+    addEventListener('glass-frame', () => {
+      const vw = hero.width, vh = hero.height;
+      if (!vw || !vh) return;
+      const sw = Math.min(vw, Math.max(256, Math.ceil(hero.getBoundingClientRect().width / 2))), sh_ = Math.round(vh * sw / vw);
+      if (small.width !== sw || small.height !== sh_) { small.width = sw; small.height = sh_; }
+      sctx.drawImage(hero, 0, 0, sw, sh_);
+      upload(small, vw, vh, sw);
+    });
+  } else if (!isVideo) {
     if (hero.complete && hero.naturalWidth) loadPicture(hero.currentSrc || hero.src);
     else hero.addEventListener('load', () => loadPicture(hero.currentSrc || hero.src), { once: true });
   } else {
@@ -176,4 +192,5 @@
   addEventListener('scroll', request, { passive: true });
   addEventListener('resize', request);
   new ResizeObserver(request).observe(header);
+  }
 })();

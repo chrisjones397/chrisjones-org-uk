@@ -18,6 +18,8 @@ What it makes, all from paintings.yaml and masters/:
   * The gallery on the home page: everything between the "gallery" markers in index.html.
   * paintings/<name>/index.html: each painting's own page, with the home page's header,
     the painting large (click for full size), its caption, Previous / Next and the footer.
+  * gallery/list/index.html: the same paintings as a plain grid.
+  * med/contact-<width>.webp: the home page's contact picture, from masters/contact-background.*
   * gallery/index.html: the floating gallery (its movement is in gallery/gallery.js, written by hand),
     with the plain grid inside it for anyone the floating version doesn't suit.
   * 404.html: the "page not found" page, with the same header and footer (Cloudflare shows it
@@ -170,6 +172,10 @@ def shown(text):
 # ---------------------------------------------------------------------------
 # The list
 # ---------------------------------------------------------------------------
+SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[x\u00d7]\s*(\d+(?:\.\d+)?)\s*cm")   # height x width
+GALLERY_SETTINGS = ("spacing", "spread", "glide")                             # see paintings.yaml
+
+
 def read_list(site):
     path = os.path.join(site, "paintings.yaml")
     if not os.path.isfile(path):
@@ -202,7 +208,14 @@ def read_list(site):
     dupes = sorted({n for n in names if names.count(n) > 1})
     if dupes:
         fail(f"two paintings would get the same name: {', '.join(dupes)}")
-    return sections, paintings
+    for p in paintings:
+        m = SIZE_RE.search(p["details"])
+        p["cm"] = [float(m.group(1)), float(m.group(2))] if m else None
+    settings = data.get("gallery") or {}
+    unknown = sorted(set(settings) - set(GALLERY_SETTINGS))
+    if unknown:
+        fail(f"paintings.yaml: unknown gallery settings {', '.join(unknown)} (known: {', '.join(GALLERY_SETTINGS)})")
+    return sections, paintings, settings
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +285,45 @@ def remove_old_images(site, keep, dry):
             print(f"  {'would remove' if dry else 'removed':10s} {rel}")
             if not dry:
                 os.remove(os.path.join(d, f))
+
+
+CONTACT_START = "<!-- contact picture: start (built by tools/build_site.py from masters/contact-background.*) -->"
+CONTACT_END = "<!-- contact picture: end -->"
+CONTACT_WIDTHS = [1024, 1536, 2560, 3840]
+
+
+def contact_picture(site, force, dry):
+    """The contact section's full-window picture: med/contact-<width>.webp from masters/contact-background.*"""
+    master = next((os.path.join(site, MASTERS_DIR, "contact-background" + ext) for ext in MASTER_TYPES
+                   if os.path.isfile(os.path.join(site, MASTERS_DIR, "contact-background" + ext))), None)
+    if not master:
+        fail(f"no picture for the contact section: expected {MASTERS_DIR}/contact-background.png (or .jpg, .webp)")
+    with Image.open(master) as im:
+        mw, mh = im.size
+    widths = [w for w in CONTACT_WIDTHS if w < mw] + [min(mw, CONTACT_WIDTHS[-1])]
+    files = {f"med/contact-{w}.webp": w for w in widths}
+    mtime = os.path.getmtime(master)
+    stale = [f for f in files if force or not os.path.isfile(os.path.join(site, f))
+             or os.path.getmtime(os.path.join(site, f)) < mtime]
+    if stale and not dry:
+        im = load_srgb(master)
+        for f in stale:
+            w = files[f]
+            out = im if w == mw else im.resize((w, round(mh * w / mw)), Image.LANCZOS)
+            out.save(os.path.join(site, f), "WEBP", quality=WEBP_QUALITY, method=6)
+            os.chmod(os.path.join(site, f), 0o644)
+    if stale:
+        print(f"  {'would make' if dry else 'made':10s} {len(stale)} image files for the contact section")
+    for f in os.listdir(os.path.join(site, "med")):                      # sizes no longer needed
+        if re.fullmatch(r"contact-\d+\.webp", f) and f"med/{f}" not in files:
+            print(f"  {'would remove' if dry else 'removed':10s} med/{f}")
+            if not dry:
+                os.remove(os.path.join(site, "med", f))
+    srcset = ", ".join(f"med/contact-{w}.webp {w}w" for w in widths)
+    src_w = next((w for w in widths if w >= 1536), widths[-1])
+    tag = (f'<img class="contact-pic" src="med/contact-{src_w}.webp" srcset="{srcset}" sizes="100vw" '
+           f'width="{mw}" height="{mh}" alt="" loading="lazy">')
+    return tag, set(files)
 
 
 # ---------------------------------------------------------------------------
@@ -509,13 +561,13 @@ GALLERY_CSS = """
 """
 
 
-def build_gallery_page(paintings, sections, head_bits, style, header):
+def build_gallery_page(paintings, sections, settings, head_bits, style, header):
     """gallery/index.html: the floating gallery, with the plain grid inside it for everyone it doesn't suit."""
     import json
     first = paintings[0]
     items = [dict(name=p["name"], title=p["title"], details=p["details"], wide=p["wide"],
-                  w=p["w"], h=p["h"], widths=p["widths"]) for p in paintings]
-    data = json.dumps(items, ensure_ascii=False).replace("</", "<\\/")
+                  w=p["w"], h=p["h"], widths=p["widths"], cm=p["cm"]) for p in paintings]
+    data = json.dumps(dict(settings=settings, paintings=items), ensure_ascii=False).replace("</", "<\\/")
     pw, ph = first["preview_size"]
     return f"""<!DOCTYPE html>
 {MARKER}
@@ -545,10 +597,10 @@ def build_gallery_page(paintings, sections, head_bits, style, header):
 
   <main id="main-content">
     <div id="float-stage" class="float-stage">
-      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll to move through the paintings, and drag to look around</span><span class="touch">Swipe up to move through the paintings, and sideways to look around</span></p>
+      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll or drag to look around; pinch, or press + and &minus;, to move through</span><span class="touch">Swipe to look around; pinch to move through</span></p>
       <div class="float-text">
         <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
-        <a class="float-list" href="../#gallery">View as a list</a>
+        <a class="float-list" href="list/">View as a list</a>
       </div>
     </div>
     <section class="float-grid">
@@ -563,7 +615,49 @@ def build_gallery_page(paintings, sections, head_bits, style, header):
 {footer_html()}
 
   <script type="application/json" id="gallery-data">{data}</script>
-  <script type="module" src="gallery.js"></script>
+  <script src="../glass.js?v=3"></script>
+  <script type="module" src="gallery.js?v=3"></script>
+</body>
+</html>
+"""
+
+
+def build_list_page(sections, head_bits, style, header):
+    """gallery/list/index.html: every painting as a plain grid, for anyone who'd rather not float."""
+    return f"""<!DOCTYPE html>
+{MARKER}
+<html lang="en">
+<head>
+{head_bits}
+  <title>Gallery, as a list - Christopher Jones - Fine Art</title>
+  <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
+  <link rel="canonical" href="{SITE_URL}/gallery/list/">
+  <style>{style}{PAGE_CSS}
+    .list-page {{ padding-top: 130px; }}
+    .list-page h1 {{ text-align: center; font-size: 1.5rem; font-weight: 500; }}
+    .list-page .float-link {{ text-align: center; margin: 0.6rem 0 1.5rem; font-size: 0.95rem; }}
+    .list-page .float-link a {{ color: rgba(255,255,255,0.7); transition: 0.3s; }}
+    .list-page .float-link a:hover, .list-page .float-link a:focus {{ color: rgba(255,255,255,1); }}
+  </style>
+  {EXTRAS_START}
+  {EXTRAS_HEAD}
+  {EXTRAS_END}
+</head>
+<body>
+
+{header}
+
+  <main id="main-content" class="list-page">
+    <div class="gallery-block">
+      <h1>Gallery</h1>
+      <p class="float-link"><a href="../">View the floating gallery</a></p>
+      <div class="wrapper">
+{gallery_html(sections, "../../")}
+      </div>
+    </div>
+  </main>
+{footer_html()}
+
 </body>
 </html>
 """
@@ -616,10 +710,8 @@ def main():
         fail(f"no index.html in {site}")
     with open(index_path, encoding="utf-8") as f:
         index_html = f.read()
-    if GALLERY_START not in index_html or GALLERY_END not in index_html:
-        fail("index.html has no gallery markers; put them inside <div class=\"wrapper\">")
 
-    sections, paintings = read_list(site)
+    sections, paintings, settings = read_list(site)
     print(f"{len(paintings)} paintings in {len(sections)} sections")
 
     # Images
@@ -629,12 +721,17 @@ def main():
         keep |= make_images(site, p, a.force, dry)
     remove_old_images(site, keep, dry)
 
-    # The gallery on the home page, and the extras block
+    # The home page: the gallery grid (if it has one), the contact section's picture, and the extras block
     s = index_html
-    i, j = s.index(GALLERY_START) + len(GALLERY_START), s.index(GALLERY_END)
-    s = s[:i] + gallery_html(sections) + "          " + s[j:]
+    if GALLERY_START in s and GALLERY_END in s:
+        i, j = s.index(GALLERY_START) + len(GALLERY_START), s.index(GALLERY_END)
+        s = s[:i] + gallery_html(sections) + "          " + s[j:]
+    if CONTACT_START in s and CONTACT_END in s:
+        tag, _ = contact_picture(site, a.force, dry)
+        i, j = s.index(CONTACT_START) + len(CONTACT_START), s.index(CONTACT_END)
+        s = s[:i] + "\n      " + tag + "\n      " + s[j:]
     s = EXTRAS_RE.sub("", s).replace("</head>", f"  {EXTRAS_START}\n  {EXTRAS_HEAD}\n  {EXTRAS_END}\n</head>", 1)
-    write(index_path, s, "index.html (the gallery)", dry)
+    write(index_path, s, "index.html", dry)
 
     # Each painting's page
     style = re.search(r"<style>(.*?)</style>", s, re.S)
@@ -651,8 +748,11 @@ def main():
     write(os.path.join(site, "404.html"),
           build_404(head_bits_from(s, "/"), style.group(1), page_header(header.group(1), "/")), "404.html", dry)
     write(os.path.join(site, "gallery", "index.html"),
-          build_gallery_page(paintings, sections, head_bits_from(s, "../"), style.group(1),
+          build_gallery_page(paintings, sections, settings, head_bits_from(s, "../"), style.group(1),
                              page_header(header.group(1), "../")), "gallery/index.html", dry)
+    write(os.path.join(site, "gallery", "list", "index.html"),
+          build_list_page(sections, head_bits_from(s, "../../"), style.group(1), page_header(header.group(1), "../../")),
+          "gallery/list/index.html", dry)
     wanted = {p["name"] for p in paintings}
     for old, new in sorted(REDIRECTS.items()):
         if old in wanted or new not in wanted:

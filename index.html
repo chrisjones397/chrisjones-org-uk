@@ -225,6 +225,51 @@
       margin-top: 0.9em;
     }
 
+    /* Contact: a full-window picture with the details over it, styled like the opening title */
+    .contact {
+      position: relative;
+      overflow: hidden;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #contact { scroll-margin-top: calc(3rem - var(--header-height)); }   /* the menu link lands with the picture filling the window */
+    .contact-pic {
+      position: absolute;
+      left: 0;
+      top: -10%;            /* taller than the section, so the parallax never shows an edge */
+      width: 100%;
+      height: 150%;
+      object-fit: cover;
+    }
+    .contact::after {       /* a light shade over the picture, so the words always read */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .contact-words {
+      position: relative;
+      z-index: 1;
+      padding: 0 5vw;
+      text-align: center;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    }
+    .contact-title {
+      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.6em;
+    }
+    .contact-line {
+      font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+      font-weight: 300;
+      margin-top: 0.4em;
+    }
+    .contact-line a, #footer-email { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+
     /* Footer, as on the painting pages */
     .site-footer {
       max-width: 1200px;
@@ -338,8 +383,8 @@
       <nav class="nav">
         <ul class="nav-list">
           <li><a href="#profile" class="nav-link">Profile</a></li>
-          <li><a href="gallery/" class="nav-link">Gallery</a></li>
           <li><a href="#contact" class="nav-link">Contact</a></li>
+          <li><a href="gallery/" class="nav-link">Gallery</a></li>
           <li class="nav-icons">
             <a href="#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
             <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
@@ -398,243 +443,27 @@
       </div>
     </section>
 
-    <!-- Gallery -->
-    <section id="gallery">
-      <div class="gallery-block">
-        <div class="wrapper">
-          <!-- gallery: start (built by tools/build_site.py from paintings.yaml; edit that, not this) -->
-          <div class="entire"><h3 id="featured">Featured</h3></div>
-          <div class="entire">
-            <a href="paintings/green-background-with-seven-figures/">
-              <img src="img/green-background-with-seven-figures-480.webp"
-                   srcset="img/green-background-with-seven-figures-300.webp 300w,
-                      img/green-background-with-seven-figures-480.webp 480w,
-                      img/green-background-with-seven-figures-768.webp 768w,
-                      img/green-background-with-seven-figures-1024.webp 1024w,
-                      img/green-background-with-seven-figures-1536.webp 1536w"
-                   sizes="(max-width: 1200px) 100vw, 1200px"
-                   width="1536" height="1024" alt="Green Background with Seven Figures" loading="lazy">
-            </a>
-            <p>Green Background with Seven Figures</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2023</p>
-          </div>
-
-          <div class="entire"><h3 id="abstracts">Abstracts</h3></div>
-          <div class="landscape">
-            <a href="paintings/composition-in-blue-with-border/">
-              <img src="img/composition-in-blue-with-border-480.webp"
-                   srcset="img/composition-in-blue-with-border-300.webp 300w,
-                      img/composition-in-blue-with-border-480.webp 480w,
-                      img/composition-in-blue-with-border-768.webp 768w,
-                      img/composition-in-blue-with-border-1024.webp 1024w,
-                      img/composition-in-blue-with-border-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1024" alt="Composition in Blue with Border" loading="lazy">
-            </a>
-            <p>Composition in Blue with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/composition-in-red-with-border/">
-              <img src="img/composition-in-red-with-border-480.webp"
-                   srcset="img/composition-in-red-with-border-300.webp 300w,
-                      img/composition-in-red-with-border-480.webp 480w,
-                      img/composition-in-red-with-border-768.webp 768w,
-                      img/composition-in-red-with-border-1024.webp 1024w,
-                      img/composition-in-red-with-border-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1024" alt="Composition in Red with Border" loading="lazy">
-            </a>
-            <p>Composition in Red with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/composition-in-green-with-border/">
-              <img src="img/composition-in-green-with-border-480.webp"
-                   srcset="img/composition-in-green-with-border-300.webp 300w,
-                      img/composition-in-green-with-border-480.webp 480w,
-                      img/composition-in-green-with-border-768.webp 768w,
-                      img/composition-in-green-with-border-1024.webp 1024w,
-                      img/composition-in-green-with-border-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1024" alt="Composition in Green with Border" loading="lazy">
-            </a>
-            <p>Composition in Green with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/composition-in-yellow-with-border/">
-              <img src="img/composition-in-yellow-with-border-480.webp"
-                   srcset="img/composition-in-yellow-with-border-300.webp 300w,
-                      img/composition-in-yellow-with-border-480.webp 480w,
-                      img/composition-in-yellow-with-border-768.webp 768w,
-                      img/composition-in-yellow-with-border-1024.webp 1024w,
-                      img/composition-in-yellow-with-border-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1024" alt="Composition in Yellow with Border" loading="lazy">
-            </a>
-            <p>Composition in Yellow with Border</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/collaboration-with-teo-1/">
-              <img src="img/collaboration-with-teo-1-480.webp"
-                   srcset="img/collaboration-with-teo-1-300.webp 300w,
-                      img/collaboration-with-teo-1-480.webp 480w,
-                      img/collaboration-with-teo-1-768.webp 768w,
-                      img/collaboration-with-teo-1-1024.webp 1024w,
-                      img/collaboration-with-teo-1-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1152" alt="Collaboration with Teo #1" loading="lazy">
-            </a>
-            <p>Collaboration with Teo #1</p>
-            <p>Soft Pastel on Paper, 30 x 42 cm, 2025</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/collaboration-with-teo-2/">
-              <img src="img/collaboration-with-teo-2-480.webp"
-                   srcset="img/collaboration-with-teo-2-300.webp 300w,
-                      img/collaboration-with-teo-2-480.webp 480w,
-                      img/collaboration-with-teo-2-768.webp 768w,
-                      img/collaboration-with-teo-2-1024.webp 1024w,
-                      img/collaboration-with-teo-2-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1152" alt="Collaboration with Teo #2" loading="lazy">
-            </a>
-            <p>Collaboration with Teo #2</p>
-            <p>Soft Pastel on Paper, 30 x 42 cm, 2025</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/collaboration-with-teo-3/">
-              <img src="img/collaboration-with-teo-3-480.webp"
-                   srcset="img/collaboration-with-teo-3-300.webp 300w,
-                      img/collaboration-with-teo-3-480.webp 480w,
-                      img/collaboration-with-teo-3-768.webp 768w,
-                      img/collaboration-with-teo-3-1024.webp 1024w,
-                      img/collaboration-with-teo-3-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1152" alt="Collaboration with Teo #3" loading="lazy">
-            </a>
-            <p>Collaboration with Teo #3</p>
-            <p>Watercolour on Cotton Paper, 30 x 42 cm, 2026</p>
-          </div>
-
-          <div class="entire"><h3 id="plein-air">Plein Air</h3></div>
-          <div class="landscape">
-            <a href="paintings/seascape-1/">
-              <img src="img/seascape-1-480.webp"
-                   srcset="img/seascape-1-300.webp 300w,
-                      img/seascape-1-480.webp 480w,
-                      img/seascape-1-768.webp 768w,
-                      img/seascape-1-1024.webp 1024w,
-                      img/seascape-1-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1024" alt="Seascape #1" loading="lazy">
-            </a>
-            <p>Seascape #1</p>
-            <p>Oil on Board, 15 x 21 cm, 2024</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/mont-sainte-victoire-after-cezanne/">
-              <img src="img/mont-sainte-victoire-after-cezanne-480.webp"
-                   srcset="img/mont-sainte-victoire-after-cezanne-300.webp 300w,
-                      img/mont-sainte-victoire-after-cezanne-480.webp 480w,
-                      img/mont-sainte-victoire-after-cezanne-768.webp 768w,
-                      img/mont-sainte-victoire-after-cezanne-1024.webp 1024w,
-                      img/mont-sainte-victoire-after-cezanne-1536.webp 1536w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1536" height="1024" alt="Mont Sainte-Victoire, after Cézanne" loading="lazy">
-            </a>
-            <p>Mont Sainte&#8209;Victoire, after Cézanne</p>
-            <p>Oil on Canvas, 60 x 90 cm, 2020</p>
-          </div>
-          <div class="portrait">
-            <a href="paintings/cjon-de-las-tomasas-albaicin-granada/">
-              <img src="img/cjon-de-las-tomasas-albaicin-granada-480.webp"
-                   srcset="img/cjon-de-las-tomasas-albaicin-granada-300.webp 300w,
-                      img/cjon-de-las-tomasas-albaicin-granada-480.webp 480w,
-                      img/cjon-de-las-tomasas-albaicin-granada-768.webp 768w,
-                      img/cjon-de-las-tomasas-albaicin-granada-1024.webp 1024w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1024" height="1536" alt="Cjón. de las Tomasas, Albaicín, Granada" loading="lazy">
-            </a>
-            <p>Cjón. de las Tomasas, Albaicín, Granada</p>
-            <p>Oil on Canvas, 21 x 15 cm, 2002</p>
-          </div>
-          <div class="portrait">
-            <a href="paintings/ponte-alda-merini-milan/">
-              <img src="img/ponte-alda-merini-milan-480.webp"
-                   srcset="img/ponte-alda-merini-milan-300.webp 300w,
-                      img/ponte-alda-merini-milan-480.webp 480w,
-                      img/ponte-alda-merini-milan-768.webp 768w,
-                      img/ponte-alda-merini-milan-1024.webp 1024w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1024" height="1536" alt="Ponte Alda Merini, Milan" loading="lazy">
-            </a>
-            <p>Ponte Alda Merini, Milan</p>
-            <p>Oil on Canvas, 21 x 15 cm, 2004</p>
-          </div>
-          <div class="portrait">
-            <a href="paintings/nighttime-brussels/">
-              <img src="img/nighttime-brussels-480.webp"
-                   srcset="img/nighttime-brussels-300.webp 300w,
-                      img/nighttime-brussels-480.webp 480w,
-                      img/nighttime-brussels-768.webp 768w,
-                      img/nighttime-brussels-1024.webp 1024w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1024" height="1536" alt="Nighttime, Brussels" loading="lazy">
-            </a>
-            <p>Nighttime, Brussels</p>
-            <p>Oil on Canvas, 21 x 15 cm, 2013</p>
-          </div>
-
-          <div class="entire"><h3 id="still-life">Still Life</h3></div>
-          <div class="landscape">
-            <a href="paintings/apple-1/">
-              <img src="img/apple-1-480.webp"
-                   srcset="img/apple-1-300.webp 300w,
-                      img/apple-1-480.webp 480w,
-                      img/apple-1-768.webp 768w,
-                      img/apple-1-1024.webp 1024w,
-                      img/apple-1-1536.webp 1536w,
-                      img/apple-1-1734.webp 1734w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="1734" height="1186" alt="Apple #1" loading="lazy">
-            </a>
-            <p>Apple #1</p>
-            <p>Oil on Canvas Paper, 15 x 21 cm, 2023</p>
-          </div>
-          <div class="landscape">
-            <a href="paintings/apple-2/">
-              <img src="img/apple-2-480.webp"
-                   srcset="img/apple-2-300.webp 300w,
-                      img/apple-2-480.webp 480w,
-                      img/apple-2-768.webp 768w,
-                      img/apple-2-1024.webp 1024w,
-                      img/apple-2-1536.webp 1536w,
-                      img/apple-2-2560.webp 2560w,
-                      img/apple-2-2560.webp 2560w"
-                   sizes="(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-                   width="3523" height="2340" alt="Apple #2" loading="lazy">
-            </a>
-            <p>Apple #2</p>
-            <p>Oil on Canvas Paper, 15 x 21 cm, 2023</p>
-          </div>
-          <!-- gallery: end -->
-        </div>
+    <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
+    <section id="contact" class="contact parallax">
+      <!-- contact picture: start (built by tools/build_site.py from masters/contact-background.*) -->
+      <img class="contact-pic" src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w" sizes="100vw" width="1536" height="1152" alt="" loading="lazy">
+      <!-- contact picture: end -->
+      <div class="contact-words">
+        <h2 class="contact-title">Get in touch</h2>
+        <p class="footer-email contact-line"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
+        <p class="contact-line"><a href="https://www.instagram.com/only1jones2/">Instagram: only1jones2</a></p>
       </div>
     </section>
 
   </main>
 
-  <footer id="contact" class="site-footer">
-    <p class="footer-email"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
+  <footer class="site-footer">
     <script>
       (function () {
         var addr = ['chrisjones.org.uk', '@', 'hello'].reverse().join('');   // put together here, so spam robots never find the address in the page
         var footer = document.getElementById('footer-email');
         footer.textContent = addr;
-        /* the header's email button and the footer's address both copy the address, and say so for a moment */
+        /* the header's email button and the address in the contact section both copy it, and say so for a moment */
         function copy(tip) {
           function shown() { tip.classList.add('show'); clearTimeout(tip.timer); tip.timer = setTimeout(function () { tip.classList.remove('show'); }, 2200); }
           function fallback() {
@@ -651,14 +480,13 @@
         footer.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copy(document.getElementById('footer-copied')); } });
       })();
     </script>
-    <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
     <p>&copy;2026 Christopher Jones</p>
   </footer>
       
   <script type="module" src="face/face.js"></script>
   <script src="header.js"></script>
-  <script src="glass.js?v=2"></script>
-  <script src="motion.js"></script>
+  <script src="glass.js?v=3"></script>
+  <script src="motion.js?v=2"></script>
 
   </body>
 </html>

@@ -68,20 +68,25 @@
   wake();
 })();
 
-/* Parallax: the opening picture moves up more slowly than the page as you scroll, as if it were further away.
-   Nothing moves for visitors who have asked their device to reduce motion. */
+/* Parallax: the opening picture, and the contact section's picture, move more slowly than the page as you
+   scroll, as if they were further away. Nothing moves for visitors who have asked their device to reduce motion. */
 (function () {
   const PARALLAX = 0.4;     // 0: scrolls with the page; 1: stays still in the window
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const hero = document.querySelector('.hero'), pic = document.querySelector('.hero video, .hero img');
-  if (!hero || !pic) return;
+  const items = [...document.querySelectorAll('.hero, .parallax')]
+    .map((sec) => ({ sec, pic: sec.querySelector(':scope > video, :scope > img, :scope > picture') }))
+    .filter((i) => i.pic);
+  if (!items.length) return;
   let queued = false;
   function update() {
     queued = false;
-    const y = Math.max(-hero.getBoundingClientRect().top, 0);
-    if (y > hero.offsetHeight + 50) return;                     // scrolled well past: nothing to see
-    pic.style.transform = `translate3d(0, ${(y * PARALLAX).toFixed(1)}px, 0)`;
+    for (const { sec, pic } of items) {
+      const r = sec.getBoundingClientRect();
+      if (r.bottom < -50 || r.top > innerHeight + 50) continue;   // off screen: nothing to see
+      pic.style.transform = `translate3d(0, ${(-r.top * PARALLAX).toFixed(1)}px, 0)`;
+    }
   }
   addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+  addEventListener('resize', update);
   update();
 })();
