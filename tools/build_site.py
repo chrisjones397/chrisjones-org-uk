@@ -363,7 +363,7 @@ def invite_html(site, paintings, settings):
       <div class="invite-wall" aria-hidden="true">{pics}
       </div>
       <div id="float-stage" class="float-stage float-section" data-mode="section" data-base="">
-        <button class="float-exit" type="button">Back to the page</button>
+        <button class="float-exit" type="button">Exit Gallery</button>
         <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through; click a painting to bring it close</span><span class="touch">Swipe to look around; pinch to move through; tap a painting to bring it close</span></p>
         <div class="float-text">
           <div id="float-caption" class="float-caption"><a class="t" href="gallery/list/" title="Open this painting's page"></a><p class="d"></p></div>
