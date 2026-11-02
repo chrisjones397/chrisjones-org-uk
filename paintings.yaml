@@ -27,22 +27,36 @@ sections:
   - title: Abstracts
     paintings:
       - title: Composition in Blue with Border
+        details: Oil on Canvas, 2020
       - title: Composition in Red with Border
+        details: Oil on Canvas, 2020
       - title: Composition in Green with Border
+        details: Oil on Canvas, 2020
       - title: Composition in Yellow with Border
+        details: Oil on Canvas, 2020
       - title: "Collaboration with Teo #1"
+        details: Soft Pastel on Paper, 2025
       - title: "Collaboration with Teo #2"
+        details: Soft Pastel on Paper, 2025
       - title: "Collaboration with Teo #3"
+        details: Watercolor on Cotton Paper, 2026
 
   - title: Plein Air
     paintings:
-      - title: Seascape, 2018
-      - title: Mont Sainte-Victoire, after Cézanne
-      - title: Cjón. de las Tomasas, Albaicín, Granada
-      - title: Ponte Alda Merini, Milan
-      - title: Nighttime, Brussels, 2013
+      - title: "Seascape #1"
+        details: Oil on Canvas, 2024
+      - title: "Mont Sainte-Victoire, after Cézanne"
+        details: Oil on Canvas, 2020
+      - title: "Cjón. de las Tomasas, Albaicín, Granada"
+        details: Oil on Canvas, 2002
+      - title: "Ponte Alda Merini, Milan"
+        details: Oil on Canvas, 2004
+      - title: "Nighttime, Brussels"
+        details: Oil on Canvas, 2013
 
   - title: Still Life
     paintings:
       - title: "Apple #1"
+        details: Oil on Canvas, 2023
       - title: "Apple #2"
+        details: Oil on Canvas, 2023
