@@ -90,3 +90,66 @@
   addEventListener('resize', update);
   update();
 })();
+
+/* Snapping: the full-window sections settle into place. Where you stop scrolling between the opening picture
+   and the start of the profile, the page carries on in the direction you were scrolling (so one notch of a
+   mouse wheel is enough to move on, and one back returns); likewise between the finished profile and the
+   contact section. A tiny movement just settles back. Inside the profile animation (where scrolling is what turns the head and brings in
+   the words) nothing snaps, so you can stop anywhere in it. Nothing snaps for visitors who have asked their
+   device to reduce motion. */
+(function () {
+  const DURATION = 700;                         // milliseconds for the page to settle
+  const ease = (t) => 1 - Math.pow(1 - t, 4);   // quick to start, gentle to finish
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const hero = document.querySelector('.hero'), face = document.querySelector('.face-section');
+  const contact = document.getElementById('contact');
+  if (!hero || !face || !contact) return;
+
+  const top = (el) => el.getBoundingClientRect().top + scrollY;
+  const NUDGE = 24;                              // pixels: less than this from where you started just settles back
+  let restY = scrollY;                           // where the page last came to rest
+  // where to go from y, or null to stay put
+  function snapFor(y) {
+    const faceStart = top(face);                                   // the profile animation's first moment
+    const faceEnd = faceStart + face.offsetHeight - innerHeight;   // ...and its last (the finished head and words)
+    const contactTop = top(contact);
+    const moved = y - restY;
+    const between = (a, b) => {
+      if (!(y > a + 1 && y < b - 1)) return null;
+      if (moved > NUDGE) return b;                                 // scrolling down: on to the next
+      if (moved < -NUDGE) return a;                                // scrolling up: back to the previous
+      return y - a < (b - a) / 2 ? a : b;                          // barely moved: whichever is nearer
+    };
+    if (y < faceStart) return between(0, faceStart);
+    if (y > faceEnd && y < contactTop) return between(faceEnd, contactTop);
+    return null;                                                   // inside the animation, or below the contact
+  }
+
+  let animating = null, touching = false, timer = 0;
+  function settleTo(target) {
+    const from = scrollY, t0 = performance.now();
+    const run = (now) => {
+      if (animating !== run) return;                               // cancelled by the visitor
+      const k = Math.min((now - t0) / DURATION, 1);
+      scrollTo({ top: from + (target - from) * ease(k), behavior: 'instant' });
+      if (k < 1) requestAnimationFrame(run); else { animating = null; restY = target; }
+    };
+    animating = run;
+    requestAnimationFrame(run);
+  }
+  function stopped() {
+    if (animating || touching) return;
+    const target = snapFor(scrollY);
+    if (target !== null && Math.abs(target - scrollY) > 2) settleTo(target);
+    else restY = scrollY;
+  }
+  // any new input from the visitor takes over at once
+  const cancel = () => { animating = null; };
+  addEventListener('wheel', cancel, { passive: true });
+  addEventListener('keydown', cancel);
+  addEventListener('touchstart', () => { touching = true; cancel(); }, { passive: true });
+  addEventListener('touchend', () => { touching = false; clearTimeout(timer); timer = setTimeout(stopped, 180); }, { passive: true });
+  // "scrolling has stopped": the browser's scrollend where it has one, otherwise a short pause in scrolling
+  if ('onscrollend' in window) addEventListener('scrollend', () => { clearTimeout(timer); timer = setTimeout(stopped, 60); });
+  else addEventListener('scroll', () => { if (!animating) { clearTimeout(timer); timer = setTimeout(stopped, 180); } }, { passive: true });
+})();
