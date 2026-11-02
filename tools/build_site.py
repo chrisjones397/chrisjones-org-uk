@@ -437,6 +437,7 @@ GALLERY_CSS = """
     /* The floating gallery (gallery/gallery.js). Until it starts, and for visitors who asked for reduced
        motion or whose browser has no WebGL, the page is the plain grid below. */
     .float-stage { display: none; }
+    html.float-on { scrollbar-gutter: auto; }      /* nothing scrolls, so no room kept for a scroll bar */
     html.float-on, html.float-on body { height: 100%; overflow: hidden; overscroll-behavior: none; }
     .float-on .float-stage {
       display: block;
@@ -451,52 +452,59 @@ GALLERY_CSS = """
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
     .float-grid { padding-top: 130px; }
-    .float-grid h1 { text-align: center; font-weight: 400; margin-bottom: 1rem; }
-    .float-caption, .float-corner, .float-hint {
+    .float-grid h1 { text-align: center; font-weight: 500; font-size: 1.5rem; margin-bottom: 1rem; }
+    /* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right
+       edges line up with the name and the menu above */
+    .float-text {
       position: absolute;
+      left: 0;
+      right: 0;
       bottom: max(24px, 5vh);
-      text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 2rem;
+      pointer-events: none;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.25);
     }
+    .float-text a { pointer-events: auto; }
     .float-caption {
-      left: max(20px, 4vw);
-      max-width: 60vw;
       opacity: 0;
       transform: translateY(6px);
       transition: opacity 0.5s ease, transform 0.5s ease;
-      pointer-events: none;
     }
     .float-caption.on { opacity: 1; transform: none; }
-    .float-caption .t { font-size: clamp(1.1rem, 2vw, 1.6rem); font-weight: 400; }
-    .float-caption .d { font-size: 0.9rem; opacity: 0.8; margin-top: 0.3em; }
-    .float-corner {
-      right: max(20px, 4vw);
-      display: flex;
-      gap: 1.2em;
-      align-items: baseline;
-      font-size: 0.85rem;
-      color: rgba(255,255,255,0.8);
+    .float-caption .t { font-size: 1.5rem; font-weight: 500; }            /* as a painting page's title */
+    .float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
+    .float-list {
+      font-size: 0.95rem;                                                    /* as Previous / Next */
+      color: rgba(255,255,255,0.7);
+      transition: 0.3s;
+      white-space: nowrap;
     }
-    .float-corner a { text-decoration: underline; text-underline-offset: 0.2em; }
+    .float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
     .float-hint {
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.85rem;
-      opacity: 0.85;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: calc(max(24px, 5vh) + 4.5rem);
+      text-align: center;
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.85);
+      text-shadow: 0 1px 6px rgba(0,0,0,0.25);
       transition: opacity 0.8s ease;
       pointer-events: none;
-      white-space: nowrap;
     }
     .float-stage.moved .float-hint { opacity: 0; }
     .float-hint .touch { display: none; }
     @media (pointer: coarse) { .float-hint .touch { display: inline; } .float-hint .mouse { display: none; } }
     @media (max-width: 720px) {
-      .float-corner { left: 20px; right: 20px; justify-content: space-between; bottom: 20px; }
-      .float-caption { bottom: 64px; max-width: none; right: 20px; }
-      .float-hint { bottom: 130px; }
-    }
-    .sr-only {
-      position: absolute; width: 1px; height: 1px; overflow: hidden;
-      clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+      .float-text { flex-direction: column; align-items: flex-start; gap: 0.9rem; bottom: 20px; }
+      .float-caption .t { font-size: 1.25rem; }
+      .float-hint { bottom: 11rem; }
     }
 """
 
@@ -537,9 +545,11 @@ def build_gallery_page(paintings, sections, head_bits, style, header):
 
   <main id="main-content">
     <div id="float-stage" class="float-stage">
-      <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
-      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll to move through the paintings</span><span class="touch">Swipe up to move through the paintings</span></p>
-      <p class="float-corner"><span id="float-count" aria-hidden="true"></span><a href="../#gallery">See them as a list</a></p>
+      <p class="float-hint" aria-hidden="true"><span class="mouse">Scroll to move through the paintings, and drag to look around</span><span class="touch">Swipe up to move through the paintings, and sideways to look around</span></p>
+      <div class="float-text">
+        <div id="float-caption" class="float-caption" aria-hidden="true"><p class="t"></p><p class="d"></p></div>
+        <a class="float-list" href="../#gallery">View as a list</a>
+      </div>
     </div>
     <section class="float-grid">
       <div class="gallery-block">
