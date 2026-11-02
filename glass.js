@@ -22,6 +22,7 @@
 
   const canvas = document.createElement('canvas');
   canvas.className = 'glass-canvas';
+  canvas.style.opacity = '0';                        // invisible until it has drawn something
   canvas.setAttribute('aria-hidden', 'true');
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
   if (!gl) return;                                   // no WebGL 2: keep the CSS frost

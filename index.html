@@ -34,6 +34,9 @@
       }
       set(); addEventListener('resize', set);
     })();
+    addEventListener('load', function () {
+      setTimeout(function () { document.documentElement.classList.add('smooth'); }, 300);
+    });
   </script>
   <style>
     /* Fundamentals */
@@ -46,12 +49,14 @@
       --header-height: 180px; /* room kept above a section when a menu link jumps to it (see scroll-padding-top) */
     }
     html {
-      scroll-behavior: smooth;
       scrollbar-gutter: stable;
       scroll-padding-top: calc(var(--header-height) - 3rem);
     }
+    /* Menu links within the page glide there; but arriving from another page (e.g. the gallery's Contact
+       link) jumps straight to the place, so smooth scrolling is only switched on once the page has loaded */
+    html.smooth { scroll-behavior: smooth; }
     @media screen and (prefers-reduced-motion: reduce) {
-      html {
+      html.smooth {
         scroll-behavior: auto;
       }
     }
@@ -489,7 +494,7 @@
       
   <script type="module" src="face/face.js?v=6eef979d"></script>
   <script src="header.js?v=c32feae5"></script>
-  <script src="glass.js?v=66d6d3d3"></script>
+  <script src="glass.js?v=cdee3f3d"></script>
   <script src="motion.js?v=393f9d19"></script>
 
   </body>

@@ -583,6 +583,17 @@ def build_gallery_page(paintings, sections, settings, head_bits, style, header):
 <head>
 {head_bits}
   <title>Gallery - Christopher Jones - Fine Art</title>
+  <script>
+    /* Decide straight away whether the floating gallery will run, so the plain list never flashes up first.
+       (gallery.js decides the same way; if it hasn't started within a few seconds, the list comes back.) */
+    (function () {{
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      try {{ var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return; }}
+      catch (e) {{ return; }}
+      var h = document.documentElement; h.classList.add('float-on');
+      setTimeout(function () {{ if (!document.querySelector('#float-stage canvas')) h.classList.remove('float-on'); }}, 6000);
+    }})();
+  </script>
   <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
   <link rel="canonical" href="{SITE_URL}/gallery/">
   <meta property="og:type" content="website">

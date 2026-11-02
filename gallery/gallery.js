@@ -73,7 +73,7 @@ function start() {
   const geometry = new THREE.PlaneGeometry(1, 1);
   const planes = data.map((p, i) => {
     const h = heightOf(p);
-    const material = new THREE.MeshBasicMaterial({ color: 0x7a7a7a, transparent: true, opacity: 0, fog: true });
+    const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
     const angle = 2.6 + i * 2.39996 + (rand() - 0.5) * 0.5;
     const reach = 0.6 + 0.4 * ((i * 0.618034) % 1);
@@ -121,7 +121,7 @@ function start() {
     tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     const old = m.material.map;
     m.material.map = tex;
-    m.material.color.set(0xffffff);
+    m.userData.ready = true;                      // from now on it may be seen (fading in)
     m.material.needsUpdate = true;
     if (old) old.dispose();
     if (then) then();
@@ -310,7 +310,7 @@ function start() {
       // Fully solid until you're right up against it (it fills the view several times over), then a quick
       // eased fade over the last stretch, so you can look closely at the brushwork before it slips past
       const k = Math.min(Math.max((d - FADE_GONE) / (FADE_START - FADE_GONE), 0), 1);
-      const o = k * k * (3 - 2 * k);
+      const o = u.ready ? k * k * (3 - 2 * k) : 0;
       if (m.material.map) sharpen(m, (u.h * scale) / (2 * viewTan * Math.max(d, 0.01)));
       m.material.opacity += (o - m.material.opacity) * 0.2;
       m.visible = m.material.opacity > 0.01;

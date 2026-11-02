@@ -25,12 +25,14 @@
       --header-height: 180px; /* room kept above a section when a menu link jumps to it (see scroll-padding-top) */
     }
     html {
-      scroll-behavior: smooth;
       scrollbar-gutter: stable;
       scroll-padding-top: calc(var(--header-height) - 3rem);
     }
+    /* Menu links within the page glide there; but arriving from another page (e.g. the gallery's Contact
+       link) jumps straight to the place, so smooth scrolling is only switched on once the page has loaded */
+    html.smooth { scroll-behavior: smooth; }
     @media screen and (prefers-reduced-motion: reduce) {
-      html {
+      html.smooth {
         scroll-behavior: auto;
       }
     }
