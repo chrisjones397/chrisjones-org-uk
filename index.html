@@ -239,16 +239,17 @@
     .contact-pic {
       position: absolute;
       left: 0;
-      top: -10%;            /* taller than the section, so the parallax never shows an edge */
+      top: -10%;            /* a little taller than the section, so the parallax never shows an edge */
       width: 100%;
-      height: 150%;
+      height: 120%;
       object-fit: cover;
+      object-position: 85% 100%;   /* the palette and brush are low and to the right: keep them in view */
     }
     .contact::after {       /* a light shade over the picture, so the words always read */
       content: "";
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.28);
+      background: rgba(0, 0, 0, 0.12);
     }
     .contact-words {
       position: relative;
@@ -449,7 +450,7 @@
     <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
     <section id="contact" class="contact parallax">
       <!-- contact picture: start (built by tools/build_site.py from contact_picture: in paintings.yaml) -->
-      <img class="contact-pic" src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w" sizes="100vw" width="1536" height="1152" alt="" loading="lazy">
+      <img class="contact-pic" src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w, med/contact-2560.webp 2560w, med/contact-3840.webp 3840w" sizes="100vw" width="3840" height="2560" alt="" loading="lazy">
       <!-- contact picture: end -->
       <div class="contact-words">
         <h2 class="contact-title">Get in touch</h2>
