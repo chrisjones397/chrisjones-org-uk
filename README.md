@@ -23,6 +23,24 @@ The script makes every size in `img/`, the gallery on the home page (between the
 markers in index.html) and each painting's page in `paintings/`. Don't edit those by hand:
 the next run replaces them.
 
+## Putting dev live
+
+Live is whatever is on main, so going live means moving main up to match dev. On the Mac, in the site folder:
+
+    git checkout dev
+    git pull --rebase           # make sure dev is the latest from GitHub
+    git checkout main
+    git pull                    # and main
+    git merge --ff-only dev     # main moves forward to match dev exactly
+    git push                    # Cloudflare builds and publishes main
+    git checkout dev            # back to working on dev
+
+`--ff-only` refuses (and changes nothing) if main has anything dev doesn't, so it can never mix in
+something unexpected. If it refuses, stop and look before going further.
+
+The other way, on GitHub (works from a phone): Pull requests, New pull request, base: main, compare: dev,
+Create pull request, then Merge.
+
 ## How Cloudflare publishes it
 
 `wrangler.jsonc` holds the settings. Two Workers build from this repository: the live one builds main
