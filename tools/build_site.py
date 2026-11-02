@@ -18,6 +18,8 @@ What it makes, all from paintings.yaml and masters/:
   * The gallery on the home page: everything between the "gallery" markers in index.html.
   * paintings/<name>/index.html: each painting's own page, with the home page's header,
     the painting large (click for full size), its caption, Previous / Next and the footer.
+  * 404.html: the "page not found" page, with the same header and footer (Cloudflare shows it
+    for any address that doesn't exist; see wrangler.jsonc).
 
 Images are only remade when the master is newer than them (or with --force), so a run
 after a caption change is quick. Files it made earlier for paintings no longer in the
@@ -317,15 +319,15 @@ def footer_html():
     return '\n  <footer class="site-footer">\n    ' + "\n    ".join(lines) + "\n  </footer>" if lines else ""
 
 
-def page_header(header):
-    """The home page's header, with its links pointing back to the home page."""
-    h = header.replace('href="#"', 'href="../../"')
-    h = re.sub(r'href="#([^"]+)"', r'href="../../#\1"', h)
-    h = re.sub(r'src="(?!https?:|/|\.\./)([^"]+)"', r'src="../../\1"', h)
+def page_header(header, up="../../"):
+    """The home page's header, with its links pointing back to the home page (up: the way there)."""
+    h = header.replace('href="#"', f'href="{up}"')
+    h = re.sub(r'href="#([^"]+)"', rf'href="{up}#\1"', h)
+    h = re.sub(r'src="(?!https?:|/|\.\./)([^"]+)"', rf'src="{up}\1"', h)
     return h
 
 
-def head_bits_from(index_html):
+def head_bits_from(index_html, up="../../"):
     """Charset, viewport, icons and fonts from the home page's <head>."""
     head = re.search(r"<head>(.*?)</head>", index_html, re.S)
     if not head:
@@ -336,7 +338,7 @@ def head_bits_from(index_html):
         if s.startswith("<meta charset") or s.startswith('<meta name="viewport"'):
             keep.append(line)
         elif s.startswith("<link") and 'rel="preload"' not in s:
-            keep.append(re.sub(r'href="(?!https?:|/|\.\./)([^"]+)"', r'href="../../\1"', line))
+            keep.append(re.sub(r'href="(?!https?:|/|\.\./)([^"]+)"', rf'href="{up}\1"', line))
     return "\n".join(keep)
 
 
@@ -386,6 +388,39 @@ def build_page(p, prev, nxt, head_bits, style, header):
         {prev_html}
         {next_html}
       </nav>
+    </article>
+  </main>
+{footer_html()}
+
+</body>
+</html>
+"""
+
+
+def build_404(head_bits, style, header):
+    """The page Cloudflare shows for an address that doesn't exist. It can be shown at any depth
+    (/paintings/no-such-thing/), so every link in it starts from the top of the site: /..."""
+    return f"""<!DOCTYPE html>
+{MARKER}
+<html lang="en">
+<head>
+{head_bits}
+  <title>Page not found - Christopher Jones - Fine Art</title>
+  <meta name="robots" content="noindex">
+  <style>{style}{PAGE_CSS}
+    .painting-page {{ min-height: 60vh; justify-content: center; text-align: center; }}
+    .painting-page p a {{ text-decoration: underline; text-underline-offset: 0.2em; }}
+  </style>
+</head>
+<body>
+
+{header}
+
+  <main id="main-content">
+    <article class="painting-page">
+      <h1>Page not found</h1>
+      <p>There's nothing at this address. It may have moved, or there may be a typing mistake.</p>
+      <p><a href="/#gallery">See the paintings</a></p>
     </article>
   </main>
 {footer_html()}
@@ -474,6 +509,8 @@ def main():
         nxt = paintings[k + 1] if k + 1 < len(paintings) else None
         write(os.path.join(root, p["name"], "index.html"), build_page(p, prev, nxt, head_bits, style.group(1), hdr),
               f"{PAGES_DIR}/{p['name']}/", dry)
+    write(os.path.join(site, "404.html"),
+          build_404(head_bits_from(s, "/"), style.group(1), page_header(header.group(1), "/")), "404.html", dry)
     wanted = {p["name"] for p in paintings}
     for old, new in sorted(REDIRECTS.items()):
         if old in wanted or new not in wanted:

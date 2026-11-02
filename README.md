@@ -23,6 +23,13 @@ The script makes every size in `img/`, the gallery on the home page (between the
 markers in index.html) and each painting's page in `paintings/`. Don't edit those by hand:
 the next run replaces them.
 
+## How Cloudflare publishes it
+
+`wrangler.jsonc` holds the settings. Two Workers build from this repository: the live one builds main
+with the deploy command `npx wrangler deploy`; the dev one builds dev with `npx wrangler deploy --env dev`.
+The dev Worker must keep `--env dev`, or it would deploy under the live Worker's name.
+Unknown addresses get `404.html` (made by the build script).
+
 ## What isn't published
 
-`.assetsignore` lists what Cloudflare leaves out: the masters, the tools, paintings.yaml and this README.
+`.assetsignore` lists what Cloudflare leaves out: the masters, the tools, paintings.yaml, wrangler.jsonc and this README.

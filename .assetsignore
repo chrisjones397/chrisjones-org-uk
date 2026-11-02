@@ -4,6 +4,7 @@ masters/
 tools/
 paintings.yaml
 README.md
+wrangler.jsonc
 .github/
 .gitignore
 .DS_Store
