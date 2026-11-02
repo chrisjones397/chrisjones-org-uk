@@ -1,0 +1,48 @@
+# The gallery: every painting on the site, in the order shown.
+#
+# After any change here, or to a master image, run from the site folder:
+#     python3 tools/build_site.py
+# It makes the image sizes, the gallery on the home page and each painting's own page.
+#
+# Each painting needs:
+#   title:    the caption. Its master image and page address come from it, by a fixed rule:
+#             "Collaboration with Teo #1" -> masters/collaboration-with-teo-1.png
+#                                           and the page paintings/collaboration-with-teo-1/
+#             (python3 tools/build_site.py --name "A Title" prints the name for a title)
+#             Put a title containing # in quotes: in YAML, " #" otherwise starts a comment.
+# and can have:
+#   details:  a second line under the caption, e.g. medium and year
+#   wide:     true to span the full width of the gallery
+#
+# Masters can be PNG, WebP, JPEG or TIFF, ideally at least 2560 pixels wide.
+# Portrait or landscape is worked out from the master.
+
+sections:
+  - title: Featured
+    paintings:
+      - title: Green Background with Seven Figures
+        details: Oil on Canvas, 2023
+        wide: true
+
+  - title: Abstracts
+    paintings:
+      - title: Composition in Blue with Border
+      - title: Composition in Red with Border
+      - title: Composition in Green with Border
+      - title: Composition in Yellow with Border
+      - title: "Collaboration with Teo #1"
+      - title: "Collaboration with Teo #2"
+      - title: "Collaboration with Teo #3"
+
+  - title: Plein Air
+    paintings:
+      - title: Seascape, 2018
+      - title: Mont Sainte-Victoire, after Cézanne
+      - title: Cjón. de las Tomasas, Albaicín, Granada
+      - title: Ponte Alda Merini, Milan
+      - title: Nighttime, Brussels, 2013
+
+  - title: Still Life
+    paintings:
+      - title: "Apple #1"
+      - title: "Apple #2"
