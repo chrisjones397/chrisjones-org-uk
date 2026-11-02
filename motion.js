@@ -90,3 +90,62 @@
   addEventListener('resize', update);
   update();
 })();
+
+/* Snapping, with the visitor rather than against them. Once a scroll comes to rest, the page glides on to the
+   next resting place in the direction it was going, never back to where it came from:
+     the opening      scrolling down: on to the start of the profile;   up: back to the top of the page
+     the profile      free: its animation is never taken over
+     after it         scrolling down: on to the contact section;        up: back to the end of the profile
+     below contact    scrolling up: back to the contact section (which hides the footer's copyright line)
+   Any wheel, touch or key during a glide hands control straight back to the visitor. */
+(function () {
+  const face = document.querySelector('.face-section');
+  const contact = document.querySelector('.contact');
+  if (!face || !contact) return;
+  const REST = 160;          // milliseconds without scrolling before the page counts as at rest
+  const MIN = 0.45, MAX = 1.1;   // glide time in seconds, for the shortest and a full window's distance
+  const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const top = (el) => el.getBoundingClientRect().top + scrollY;
+  let lastY = scrollY, dir = 0, timer = 0, gliding = 0, active = false, touching = false;
+
+  function target(y, d) {
+    const f0 = top(face), f1 = f0 + face.offsetHeight - innerHeight;
+    const c = Math.min(top(contact), document.documentElement.scrollHeight - innerHeight);
+    if (y > 0 && y < f0) return d > 0 ? f0 : 0;
+    if (y > f1 && y < c) return d > 0 ? c : f1;
+    if (y > c && d < 0) return c;
+    return null;                                   // in the profile, or already in place
+  }
+  // Eases in and out (smootherstep), so the glide starts and lands gently rather than all at once.
+  const ease = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  function glide(to) {
+    const from = scrollY, dist = to - from;
+    if (Math.abs(dist) < 2) return;
+    if (instant) { scrollTo({ top: to, behavior: 'instant' }); return; }
+    const dur = 1000 * (MIN + (MAX - MIN) * Math.min(1, Math.abs(dist) / innerHeight));
+    const t0 = performance.now(), id = ++gliding;
+    active = true;
+    (function step(now) {
+      if (id !== gliding) return;                  // the visitor took over (stop() has cleared active)
+      const t = Math.min(1, (now - t0) / dur);
+      scrollTo({ top: from + dist * ease(t), behavior: 'instant' });
+      lastY = scrollY;
+      if (t < 1) requestAnimationFrame(step); else { gliding++; active = false; }
+    })(t0);
+  }
+  function stop() { gliding++; active = false; }                   // ends any glide in progress
+  function settle() {
+    if (touching || active || !dir) return;
+    const to = target(scrollY, dir);
+    if (to !== null) glide(to);
+  }
+  addEventListener('scroll', () => {
+    const y = scrollY;
+    if (y !== lastY) { dir = Math.sign(y - lastY); lastY = y; }
+    clearTimeout(timer); timer = setTimeout(settle, REST);
+  }, { passive: true });
+  for (const ev of ['wheel', 'keydown', 'mousedown']) addEventListener(ev, stop, { passive: true });
+  addEventListener('touchstart', () => { touching = true; stop(); }, { passive: true });
+  addEventListener('touchend', () => { touching = false; clearTimeout(timer); timer = setTimeout(settle, REST); }, { passive: true });
+  addEventListener('touchcancel', () => { touching = false; }, { passive: true });
+})();

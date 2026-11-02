@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="snaps">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -55,17 +55,9 @@
     /* Menu links within the page glide there; but arriving from another page (e.g. the gallery's Contact
        link) jumps straight to the place, so smooth scrolling is only switched on once the page has loaded */
     html.smooth { scroll-behavior: smooth; }
-    /* Snapping: gentle ("proximity"), so it only acts when a scroll ends close to the start of the profile or
-       of the contact section, and never pulls the visitor back from where they were heading. The contact
-       section snaps to fill the window, which keeps the footer's copyright line out of the way. The opening
-       isn't a snap point, so a small scroll away from the top is never undone, and the profile is taller than
-       the window, so its animation scrolls freely. (Strict "mandatory" snapping fought the visitor, and on
-       iPhone loses Safari's momentum inside tall sections: WebKit bug 253195.) */
-    html.snaps { scroll-snap-type: y proximity; }
-    .face-section, .contact {
-      scroll-snap-align: start;
-      scroll-margin-top: calc(3rem - var(--header-height));   /* cancels the page's room for the header */
-    }
+    /* Snapping is done by motion.js, in the direction the visitor is scrolling. The contact link still needs
+       to land with the section filling the window: */
+    #contact { scroll-margin-top: calc(3rem - var(--header-height)); }   /* cancels the page's room for the header */
     @media screen and (prefers-reduced-motion: reduce) {
       html.smooth {
         scroll-behavior: auto;
@@ -519,7 +511,7 @@
   <script type="module" src="face/face.js?v=6eef979d"></script>
   <script src="header.js?v=c32feae5"></script>
   <script src="glass.js?v=cdee3f3d"></script>
-  <script src="motion.js?v=393f9d19"></script>
+  <script src="motion.js?v=51d37b09"></script>
 
   </body>
 </html>
