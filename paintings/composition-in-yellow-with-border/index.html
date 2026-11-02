@@ -148,14 +148,25 @@
     }
     .nav-link {
       font-size: 16px;
-      color: rgba(255,255,255,0.85);
       text-shadow: 0 1px 6px rgba(0,0,0,0.25);
-      transition: 0.4s;
     }
-    .nav-link:hover,
-    .nav-link:focus {
-      color: rgba(255,255,255,1);
+
+    /* Text links, the same everywhere on the site: a little dimmed, then bright white with a soft glow when
+       pointed at (or reached with the keyboard). Icons follow, as they're drawn in the text's colour. */
+    .nav-link, .contact-line a, .contact-line #footer-email, .invite-alt a, .site-footer a, .float-caption .t, .float-list,
+    .painting-links a, .float-link a {
+      color: rgba(255,255,255,0.75);
+      transition: color 0.3s, text-shadow 0.3s, filter 0.3s;
     }
+    .nav-link:hover, .nav-link:focus-visible, .contact-line a:hover, .contact-line a:focus-visible,
+    .contact-line #footer-email:hover, .contact-line #footer-email:focus-visible, .invite-alt a:hover, .invite-alt a:focus-visible,
+    .site-footer a:hover, .site-footer a:focus-visible, .float-caption .t:hover, .float-caption .t:focus-visible,
+    .float-list:hover, .float-list:focus-visible, .painting-links a:hover, .painting-links a:focus-visible,
+    .float-link a:hover, .float-link a:focus-visible {
+      color: #fff;
+      text-shadow: 0 0 12px rgba(255,255,255,0.75), 0 1px 6px rgba(0,0,0,0.25);
+    }
+    a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
 
     /* Thick-glass header over the opening image (drawn by glass.js) */
     .glass-canvas {
@@ -263,8 +274,7 @@
       margin-top: 0.4em;
     }
     #footer-email { cursor: pointer; }                                     /* clicking the address copies it */
-    .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; transition: opacity 0.3s; }
-    .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
+    .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; }
     .contact-line svg { width: 0.95em; height: 0.95em; }
 
     /* The gallery's invitation: a full window, with five paintings hung loosely around the words. Each moves
@@ -356,8 +366,6 @@
     }
     .invite-button:hover, .invite-button:focus { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
     .invite-alt { margin-top: 1.1em; font-size: clamp(0.95rem, 1.3vw, 1.1rem); font-weight: 300; }
-    .invite-alt a { opacity: 0.85; transition: opacity 0.3s; }
-    .invite-alt a:hover, .invite-alt a:focus { opacity: 1; }
     @media (max-width: 700px) {        /* phones: three paintings, larger, above and below the words */
       .invite-pic:nth-child(1) { width: 34vw; left: 6vw;  top: 8%; }
       .invite-pic:nth-child(2) { width: 46vw; left: 48vw; top: 13%; }
@@ -392,8 +400,7 @@
       font-size: 0.85rem;
       color: rgba(255,255,255,0.75);
     }
-    .site-footer a { display: inline-flex; color: rgba(255,255,255,0.75); transition: 0.3s; }
-    .site-footer a:hover, .site-footer a:focus { color: rgba(255,255,255,1); }
+    .site-footer a { display: inline-flex; }
 
     /* Gallery */
     section#gallery {
@@ -509,12 +516,7 @@
       max-width: 520px;
       font-size: 0.95rem;
     }
-    .painting-links a, .painting-links span {
-      color: rgba(255,255,255,0.7);
-      transition: 0.3s;
-      padding: 0.25rem 0;
-    }
-    .painting-links a:hover, .painting-links a:focus { color: rgba(255,255,255,1); }
+    .painting-links a, .painting-links span { padding: 0.25rem 0; }
     .painting-links span[aria-disabled] { color: rgba(255,255,255,0.3); cursor: default; }
     .site-footer {
       max-width: 1200px;
@@ -528,8 +530,7 @@
       font-size: 0.85rem;
       color: rgba(255,255,255,0.75);
     }
-    .site-footer a { display: inline-flex; color: rgba(255,255,255,0.75); transition: 0.3s; }
-    .site-footer a:hover, .site-footer a:focus { color: rgba(255,255,255,1); }
+    .site-footer a { display: inline-flex; }
   </style>
   <!-- make_pages.py extras: start (rebuilt on every run; edit the script, not this block) -->
   <style>
@@ -550,7 +551,7 @@
           <li><a href="../../#profile" class="nav-link">Profile</a></li>
           <li class="nav-icons">
             <a href="../../#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
-            <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
+            <a href="https://www.instagram.com/only1jones2/" target="_blank" rel="noopener" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
           </li>
         </ul>
       </nav>
@@ -582,7 +583,7 @@
   <footer class="site-footer">
     <p class="footer-email" id="footer-email"></p>
     <script>(function(){var p=['chrisjones.org.uk', '@', 'hello'];document.getElementById("footer-email").textContent=p.reverse().join("");})();</script>
-    <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
+    <p><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2" title="Instagram" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a></p>
     <p>&copy;2026 Christopher Jones</p>
   </footer>
 

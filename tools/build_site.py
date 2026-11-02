@@ -130,12 +130,7 @@ PAGE_CSS = """
       max-width: 520px;
       font-size: 0.95rem;
     }
-    .painting-links a, .painting-links span {
-      color: rgba(255,255,255,0.7);
-      transition: 0.3s;
-      padding: 0.25rem 0;
-    }
-    .painting-links a:hover, .painting-links a:focus { color: rgba(255,255,255,1); }
+    .painting-links a, .painting-links span { padding: 0.25rem 0; }
     .painting-links span[aria-disabled] { color: rgba(255,255,255,0.3); cursor: default; }
     .site-footer {
       max-width: 1200px;
@@ -149,8 +144,7 @@ PAGE_CSS = """
       font-size: 0.85rem;
       color: rgba(255,255,255,0.75);
     }
-    .site-footer a { display: inline-flex; color: rgba(255,255,255,0.75); transition: 0.3s; }
-    .site-footer a:hover, .site-footer a:focus { color: rgba(255,255,255,1); }
+    .site-footer a { display: inline-flex; }
 """
 
 
@@ -417,7 +411,7 @@ def footer_html():
                      'document.getElementById("footer-email").textContent=p.reverse().join("");})();</script>')
     if INSTAGRAM:
         lines.append(f'<p><a href="https://www.instagram.com/{INSTAGRAM}/" '
-                     f'aria-label="Instagram: {INSTAGRAM}" title="Instagram">{INSTAGRAM_ICON}</a></p>')
+                     f'aria-label="Instagram: {INSTAGRAM}" title="Instagram" target="_blank" rel="noopener">{INSTAGRAM_ICON}</a></p>')
     if COPYRIGHT:
         lines.append(f"<p>{COPYRIGHT}</p>")
     return '\n  <footer class="site-footer">\n    ' + "\n    ".join(lines) + "\n  </footer>" if lines else ""
@@ -561,14 +555,11 @@ FLOAT_UI_CSS = """
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     .float-caption.on { opacity: 1; transform: none; }
-    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 500; transition: opacity 0.3s; }   /* as a painting page's title */
-    .float-caption .t:hover, .float-caption .t:focus { opacity: 0.8; }
+    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 500; }   /* as a painting page's title */
     .float-caption:not(.on) a { pointer-events: none; }
     .float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
     .float-list {
       font-size: 0.95rem;                                                    /* as Previous / Next */
-      color: rgba(255,255,255,0.7);
-      transition: 0.3s;
       white-space: nowrap;
     }
     .float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
@@ -628,8 +619,6 @@ def build_list_page(sections, head_bits, style, header):
     .list-page {{ padding-top: 130px; }}
     .list-page h1 {{ text-align: center; font-size: 1.5rem; font-weight: 500; }}
     .list-page .float-link {{ text-align: center; margin: 0.6rem 0 1.5rem; font-size: 0.95rem; }}
-    .list-page .float-link a {{ color: rgba(255,255,255,0.7); transition: 0.3s; }}
-    .list-page .float-link a:hover, .list-page .float-link a:focus {{ color: rgba(255,255,255,1); }}
   </style>
   {EXTRAS_START}
   {EXTRAS_HEAD}

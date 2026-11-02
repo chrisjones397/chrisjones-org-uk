@@ -162,14 +162,25 @@
     }
     .nav-link {
       font-size: 16px;
-      color: rgba(255,255,255,0.85);
       text-shadow: 0 1px 6px rgba(0,0,0,0.25);
-      transition: 0.4s;
     }
-    .nav-link:hover,
-    .nav-link:focus {
-      color: rgba(255,255,255,1);
+
+    /* Text links, the same everywhere on the site: a little dimmed, then bright white with a soft glow when
+       pointed at (or reached with the keyboard). Icons follow, as they're drawn in the text's colour. */
+    .nav-link, .contact-line a, .contact-line #footer-email, .invite-alt a, .site-footer a, .float-caption .t, .float-list,
+    .painting-links a, .float-link a {
+      color: rgba(255,255,255,0.75);
+      transition: color 0.3s, text-shadow 0.3s, filter 0.3s;
     }
+    .nav-link:hover, .nav-link:focus-visible, .contact-line a:hover, .contact-line a:focus-visible,
+    .contact-line #footer-email:hover, .contact-line #footer-email:focus-visible, .invite-alt a:hover, .invite-alt a:focus-visible,
+    .site-footer a:hover, .site-footer a:focus-visible, .float-caption .t:hover, .float-caption .t:focus-visible,
+    .float-list:hover, .float-list:focus-visible, .painting-links a:hover, .painting-links a:focus-visible,
+    .float-link a:hover, .float-link a:focus-visible {
+      color: #fff;
+      text-shadow: 0 0 12px rgba(255,255,255,0.75), 0 1px 6px rgba(0,0,0,0.25);
+    }
+    a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
 
     /* Thick-glass header over the opening image (drawn by glass.js) */
     .glass-canvas {
@@ -277,8 +288,7 @@
       margin-top: 0.4em;
     }
     #footer-email { cursor: pointer; }                                     /* clicking the address copies it */
-    .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; transition: opacity 0.3s; }
-    .contact-line a:hover, .contact-line a:focus, #footer-email:hover { opacity: 0.8; }
+    .contact-line a { display: inline-flex; align-items: center; gap: 0.35em; }
     .contact-line svg { width: 0.95em; height: 0.95em; }
 
     /* The gallery's invitation: a full window, with five paintings hung loosely around the words. Each moves
@@ -370,8 +380,6 @@
     }
     .invite-button:hover, .invite-button:focus { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
     .invite-alt { margin-top: 1.1em; font-size: clamp(0.95rem, 1.3vw, 1.1rem); font-weight: 300; }
-    .invite-alt a { opacity: 0.85; transition: opacity 0.3s; }
-    .invite-alt a:hover, .invite-alt a:focus { opacity: 1; }
     @media (max-width: 700px) {        /* phones: three paintings, larger, above and below the words */
       .invite-pic:nth-child(1) { width: 34vw; left: 6vw;  top: 8%; }
       .invite-pic:nth-child(2) { width: 46vw; left: 48vw; top: 13%; }
@@ -406,8 +414,7 @@
       font-size: 0.85rem;
       color: rgba(255,255,255,0.75);
     }
-    .site-footer a { display: inline-flex; color: rgba(255,255,255,0.75); transition: 0.3s; }
-    .site-footer a:hover, .site-footer a:focus { color: rgba(255,255,255,1); }
+    .site-footer a { display: inline-flex; }
 
     /* Gallery */
     section#gallery {
@@ -510,7 +517,7 @@
           <li><a href="#profile" class="nav-link">Profile</a></li>
           <li class="nav-icons">
             <a href="#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></a>
-            <a href="https://www.instagram.com/only1jones2/" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
+            <a href="https://www.instagram.com/only1jones2/" target="_blank" rel="noopener" class="nav-link nav-icon" aria-label="Instagram: only1jones2" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg></a>
           </li>
         </ul>
       </nav>
@@ -635,14 +642,11 @@
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     .float-caption.on { opacity: 1; transform: none; }
-    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 500; transition: opacity 0.3s; }   /* as a painting page's title */
-    .float-caption .t:hover, .float-caption .t:focus { opacity: 0.8; }
+    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 500; }   /* as a painting page's title */
     .float-caption:not(.on) a { pointer-events: none; }
     .float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
     .float-list {
       font-size: 0.95rem;                                                    /* as Previous / Next */
-      color: rgba(255,255,255,0.7);
-      transition: 0.3s;
       white-space: nowrap;
     }
     .float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
@@ -685,7 +689,7 @@
       <div class="contact-words">
         <h2 class="contact-title">Get in touch</h2>
         <p class="footer-email contact-line"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
-        <p class="contact-line"><a href="https://www.instagram.com/only1jones2/" aria-label="Instagram: only1jones2"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/></svg>@only1jones2</a></p>
+        <p class="contact-line"><a href="https://www.instagram.com/only1jones2/" target="_blank" rel="noopener" aria-label="Instagram: only1jones2"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/></svg>@only1jones2</a></p>
       </div>
     </section>
 
