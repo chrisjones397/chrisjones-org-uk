@@ -224,6 +224,19 @@
       height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
       object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
     }
+    /* The opening video is a backdrop, not something to operate. Firefox on iPhone shows the
+       player's controls over it uninvited (Safari doesn't), so taps pass straight through it
+       and WebKit's controls are hidden. */
+    .hero video {
+      pointer-events: none;
+    }
+    .hero video::-webkit-media-controls,
+    .hero video::-webkit-media-controls-panel,
+    .hero video::-webkit-media-controls-overlay-play-button,
+    .hero video::-webkit-media-controls-start-playback-button {
+      display: none !important;
+      -webkit-appearance: none;
+    }
     .hero-title {
       position: absolute;
       left: 0;
@@ -543,6 +556,7 @@
     <section class="hero">
       <video poster="med/jpg/forest-1536.jpg"
              autoplay muted playsinline preload="auto"
+             disablepictureinpicture disableremoteplayback x-webkit-airplay="deny"
              role="img" aria-label="Woodland with bracken, being painted over in oils">
         <!-- the browser takes the first that matches: the size the screen can actually show (window width x pixel density) -->
         <source src="med/painted-forest-v8-3840.mp4" type="video/mp4"

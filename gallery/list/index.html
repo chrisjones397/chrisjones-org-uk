@@ -189,6 +189,19 @@
       height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
       object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
     }
+    /* The opening video is a backdrop, not something to operate. Firefox on iPhone shows the
+       player's controls over it uninvited (Safari doesn't), so taps pass straight through it
+       and WebKit's controls are hidden. */
+    .hero video {
+      pointer-events: none;
+    }
+    .hero video::-webkit-media-controls,
+    .hero video::-webkit-media-controls-panel,
+    .hero video::-webkit-media-controls-overlay-play-button,
+    .hero video::-webkit-media-controls-start-playback-button {
+      display: none !important;
+      -webkit-appearance: none;
+    }
     .hero-title {
       position: absolute;
       left: 0;
