@@ -574,6 +574,14 @@
             v.poster = 'med/jpg/painted-forest-v8-end.jpg';
             v.querySelectorAll('source').forEach(function (s) { s.remove(); }); v.load();
           }
+          /* Firefox on iPhone switches the player's controls on by itself as the video starts;
+             switch them straight back off whenever that happens */
+          if (v) {
+            var noControls = function () { if (v.controls || v.hasAttribute('controls')) { v.controls = false; v.removeAttribute('controls'); } };
+            noControls();
+            new MutationObserver(noControls).observe(v, { attributes: true, attributeFilter: ['controls'] });
+            ['loadedmetadata', 'canplay', 'play', 'playing'].forEach(function (e) { v.addEventListener(e, noControls); });
+          }
         })();
       </script>
       <h1 class="hero-title">Fine art in oil, watercolour, and pastel</h1>
