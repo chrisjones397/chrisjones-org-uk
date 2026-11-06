@@ -366,6 +366,7 @@ function start() {
     }, 180);
   }
 
+  const glassHeader = document.querySelector('.header');
   const clock = new THREE.Clock();
   let first = true, lastT = 0;
   const ease = (k) => k * k * (3 - 2 * k);
@@ -402,6 +403,9 @@ function start() {
     cover(pointed);
     caption(camY);
     renderer.render(scene, camera);
+    // the header's thick glass (glass.js) shows whatever passes under it: hand it this frame while it's there
+    // (straight after drawing, while the frame can still be copied)
+    if (glassHeader && r.top < glassHeader.getBoundingClientRect().bottom) dispatchEvent(new CustomEvent('glass-frame', { detail: renderer.domElement }));
     // the gallery shows as soon as the paintings in view have arrived (or after a moment, whatever has); the
     // rest fade in as they come
     if (first && (t > 1.5 || planes.every((m) => m.userData.ready || Math.abs(m.userData.cy - camY) > D0 * viewTan * 2))) {

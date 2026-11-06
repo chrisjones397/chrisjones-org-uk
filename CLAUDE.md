@@ -76,7 +76,10 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   spacing, spread, depth, nearness, drift, seed); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit
   Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
-- **glass.js**: the header's thick-glass look over the opening video. The header's Gallery link goes to #paintings.
+- **glass.js**: the header's thick glass (frost plus a bent bottom edge) over every picture that passes under it:
+  the opening video, the floating gallery (gallery.js sends a `glass-frame` event after each frame drawn under the
+  header) and the contact photo; not the head animation (by choice); plain CSS frost elsewhere. The header's
+  Gallery link goes to #paintings.
 - **worker.js** (the only server code; wrangler.jsonc sends only /paintings/* to it): a painting's address is the
   home page with that painting brought forward, one version of the truth however you arrive. It serves index.html
   with that painting's title, description and og:image (from gallery/paintings.json), a canonical link, and
