@@ -16,10 +16,16 @@
 import * as THREE from '../face/vendor/three.module.min.js';
 
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
-const SPREAD = settings.spread ?? 1;     // how widely they're scattered side to side (1: across most of the view)
+// The arrangement, from paintings.yaml's gallery: settings (all 1 as first built). Adding ?tune to the page's
+// address shows sliders for trying them out live; see tuner() at the end.
+const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, drift: 1 };
+const P = { ...DEFAULTS };
+for (const k in P) if (typeof settings[k] === 'number') P[k] = settings[k];
+const TUNE = /[?&]tune\b/.test(location.search);
+if (TUNE) try { Object.assign(P, JSON.parse(localStorage.getItem('gallery-tune') || '{}')); } catch (e) {}
 const SIZE = 3.6;           // a 60 x 90 cm painting is about 2.9 high; smaller ones less, but not in proportion
 const D0 = 12;              // paintings this far away move exactly with the page
-const NEAR = 9, FAR = 17;   // the range of depths they hang at
+const MID = 13, RANGE = 8;  // they hang from 9 to 17 away (RANGE times the depth setting)
 const BG = 0x646464;        // the page colour, rgb(100, 100, 100)
 
 const stage = document.getElementById('float-stage');
@@ -70,7 +76,7 @@ function start() {
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
     const f = (0.35 + i * 0.618034 + (rand() - 0.5) * 0.15) % 1;
-    mesh.userData = { p, h, w: h * p.w / p.h, d: NEAR + (FAR - NEAR) * f, side: i % 2 ? 1 : -1,
+    mesh.userData = { p, h, w: h * p.w / p.h, f, side: i % 2 ? 1 : -1,
                       reach: 0.35 + 0.65 * rand(), phase: rand() * 6.28 };
     scene.add(mesh);
     return mesh;
@@ -89,19 +95,20 @@ function start() {
     const viewH0 = 2 * D0 * viewTan;                           // the view's height at the middle depth
     perPx = viewH0 / H;                                         // ...so one pixel of scrolling is this far
     const narrow = camera.aspect < 0.9;
-    scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4);
+    scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4) * P.size;
     let y = -(narrow ? 0.62 : 0.3) * viewH0, lastH = 0;          // the first starts below the heading
     planes.forEach((m, i) => {
       const u = m.userData;
+      u.d = Math.max(MID + (u.f - 0.5) * RANGE * P.depth, 4);
       const sw = u.w * scale, sh = u.h * scale;
       m.scale.set(sw, sh, 1);
       const seen = sh * D0 / u.d;                               // its height as it looks, at the middle depth
-      if (i) y -= (narrow ? 1.25 : 0.9) * (lastH + seen) / 2;
+      if (i) y -= (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2;
       lastH = seen;
       u.y = u.cy = y;                   // the view is level with it (it's in the middle) when the page is here
       const halfW = u.d * viewTan * camera.aspect;              // half the view's width at its depth
       const room = Math.max(halfW * 0.94 - sw / 2, 0);
-      u.x = u.side * room * u.reach * (narrow ? 0.45 : 1) * SPREAD;
+      u.x = u.side * Math.min(room * u.reach * (narrow ? 0.45 : 1) * P.spread, Math.max(halfW - sw / 2, 0));
     });
     const end = planes[planes.length - 1].userData.cy;
     travelPx = Math.ceil(-end / perPx);                         // until the last painting is in the middle
@@ -199,7 +206,7 @@ function start() {
     camera.position.set(px * 0.35 * scale, camY, 0);
     for (const m of planes) {
       const u = m.userData;
-      m.position.set(u.x, u.y + Math.sin(t * 0.45 + u.phase) * 0.06 * scale, -u.d);   // drifting, never turning
+      m.position.set(u.x, u.y + Math.sin(t * 0.45 + u.phase) * 0.06 * scale * P.drift, -u.d);   // drifting, never turning
       const o = u.ready ? 1 : 0;
       m.material.opacity += (o - m.material.opacity) * 0.08;
       m.visible = m.material.opacity > 0.01;
@@ -210,4 +217,62 @@ function start() {
     renderer.render(scene, camera);
     if (first && planes.every((m) => m.userData.ready)) { first = false; section.classList.add('gallery-live'); }
   });
+
+  if (TUNE) tuner(layout);
+}
+
+// The tuning panel (only with ?tune in the address): a slider for each setting, applied as you move it. The
+// values are remembered in this browser while tuning; "Copy" puts them on the clipboard in paintings.yaml's
+// form, ready to go into its gallery: block; "Reset" goes back to what paintings.yaml says.
+function tuner(relayout) {
+  const box = document.createElement('div');
+  box.className = 'gallery-tuner';
+  box.style.cssText = 'position:fixed;z-index:2000;top:calc(var(--header-height,80px) + 12px);right:12px;width:min(300px,calc(100vw - 24px));' +
+    'padding:14px 16px;border-radius:12px;background:rgba(40,40,40,0.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
+    'color:#fff;font:14px/1.3 Inter,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.35)';
+  const labels = { size: 'Size', spacing: 'Spacing down', spread: 'Spread across', depth: 'Depth', drift: 'Drift' };
+  const ranges = { size: [0.4, 3], spacing: [0.2, 2.5], spread: [0, 2.5], depth: [0, 2.5], drift: [0, 3] };
+  const saved = { ...DEFAULTS };
+  for (const k in saved) if (typeof settings[k] === 'number') saved[k] = settings[k];
+  const rows = {};
+  const save = () => { try { localStorage.setItem('gallery-tune', JSON.stringify(P)); } catch (e) {} };
+  for (const k of Object.keys(labels)) {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:grid;grid-template-columns:7.5em 1fr 2.6em;align-items:center;gap:8px;margin:6px 0';
+    const name = document.createElement('span'); name.textContent = labels[k];
+    const input = document.createElement('input');
+    Object.assign(input, { type: 'range', min: ranges[k][0], max: ranges[k][1], step: 0.05, value: P[k] });
+    input.style.width = '100%';
+    const out = document.createElement('span'); out.style.textAlign = 'right';
+    const show = () => { out.textContent = (+P[k]).toFixed(2); };
+    input.addEventListener('input', () => { P[k] = +input.value; show(); relayout(); save(); });
+    show();
+    row.append(name, input, out);
+    box.append(row);
+    rows[k] = { input, show };
+  }
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;margin-top:10px';
+  const button = (text, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = text;
+    b.style.cssText = 'flex:1;font:inherit;color:#fff;padding:6px 0;border:1px solid rgba(255,255,255,0.7);border-radius:999px;background:rgba(255,255,255,0.1);cursor:pointer';
+    b.addEventListener('click', fn);
+    bar.append(b);
+    return b;
+  };
+  const copy = button('Copy', async () => {
+    const text = 'gallery:\n' + Object.keys(labels).map((k) => `  ${k}: ${+(+P[k]).toFixed(2)}`).join('\n') + '\n';
+    try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; }
+    catch (e) { prompt('Copy these settings:', text.replace(/\n/g, ' ')); }
+    setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+  });
+  button('Reset', () => {
+    Object.assign(P, saved);
+    for (const k in rows) { rows[k].input.value = P[k]; rows[k].show(); }
+    try { localStorage.removeItem('gallery-tune'); } catch (e) {}
+    relayout();
+  });
+  box.append(bar);
+  document.body.append(box);
 }
