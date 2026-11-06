@@ -112,17 +112,19 @@
   all();
 })();
 
-/* Snapping, with the visitor rather than against them. Once a scroll comes to rest, the page glides on to the
-   next resting place in the direction it was going, never back to where it came from. The resting places are
-   the top of each full-window section (the opening, the gallery's invitation, contact). The profile is
-   taller than the window: going down, the page settles at its start, going up at its end, and within it
-   scrolling is free, so its animation is never taken over, and leaving it is never pulled back.
-   A scroll that runs past a full-window section by less than half a window comes back to it.
+/* Snapping, with the visitor rather than against them. Once a scroll comes to rest, the page may glide on to
+   the next resting place in the direction it was going: never back the other way. The resting places are the
+   top of each full-window section (the opening, contact). The gallery and the profile are taller than the
+   window: going down, the page settles at their start, going up at their end, and within them scrolling is
+   free, so they're never taken over, and leaving them is never pulled back.
+   It only glides on once the visitor has scrolled at least 15% of the window into the next section (that much
+   of it is showing); short of that, the page stays where it was left.
    Any wheel, touch or key during a glide hands control straight back to the visitor. */
 (function () {
   const sections = [...document.querySelectorAll('.hero, .invite, .contact, .face-section')];
   if (!sections.length) return;
   const REST = 160;          // milliseconds without scrolling before the page counts as at rest
+  const INTO = 0.15;         // how far into the next section (a fraction of the window) before it glides on
   const MIN = 0.45, MAX = 1.1;   // glide time in seconds, for the shortest and a full window's distance
   const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const top = (el) => el.getBoundingClientRect().top + scrollY;
@@ -138,13 +140,12 @@
         stops.push([t, 1], [e, -1]); free.push([t, e]);
       } else stops.push([t, 0]);
     }
-    for (const [p, way] of stops)
-      if (!way && (restY - p) * (y - p) < 0 && Math.abs(y - p) < innerHeight / 2) return p;
     if (stops.some(([p]) => Math.abs(p - y) < 2)) return null;       // already in place
     if (free.some(([t, e]) => y >= t && y <= e)) return null;     // in the profile: free
     const ahead = stops.filter(([p]) => (d > 0 ? p > y : p < y)).sort((a, b) => d * (a[0] - b[0]));
     if (!ahead.length) return null;
     const [p, way] = ahead[0];
+    if (Math.abs(p - y) > (1 - INTO) * innerHeight) return null;    // not yet far enough into it
     return !way || way === d ? p : null;
   }
   // Eases in and out (smootherstep), so the glide starts and lands gently rather than all at once.
