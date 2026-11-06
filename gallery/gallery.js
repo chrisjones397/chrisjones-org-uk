@@ -290,7 +290,11 @@ function start() {
         x += (camera.position.x - x) * e; y += (camY - y) * e; z += (-near - z) * e;
       }
       m.position.set(x, y, z);
-      m.renderOrder = u.k ? 1 : 0;
+      // a painting brought forward is drawn over everything: on a narrow screen a wide one has to stand further
+      // back to fit across, which can be behind a small painting hanging near
+      const front = u.k > 0.02;
+      m.renderOrder = front ? 1 : 0;
+      if (m.material.depthTest === front) { m.material.depthTest = !front; m.material.needsUpdate = true; }
       const o = !u.ready ? 0 : focus && m !== focus ? 0.25 : 1;
       m.material.opacity += (o - m.material.opacity) * 0.08;
       m.visible = m.material.opacity > 0.01;
