@@ -112,14 +112,12 @@ PAGE_CSS = """
       display: block;
       max-width: 100%;
       /* fit the window, leaving room for the header, caption and links */
-      max-height: max(300px, calc(100vh - 115px - 9rem));
+      max-height: max(300px, calc(100vh - 115px - 9rem - 1.25 * clamp(1.6rem, 4.5vw, 4.2rem)));   /* room for the title */
       width: auto;
       height: auto;
     }
     .painting-page a.full-size { display: block; cursor: zoom-in; }
     .painting-page h1 {
-      font-size: 1.5rem;
-      font-weight: 500;
       text-align: center;
     }
     .painting-page .details { margin-top: -0.75rem; opacity: 0.85; }
@@ -543,7 +541,7 @@ FLOAT_UI_CSS = """
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     .float-caption.on { opacity: 1; transform: none; }
-    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 500; }   /* as a painting page's title */
+    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 300; }
     .float-caption:not(.on) a { pointer-events: none; }
     .float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
     .float-list {
@@ -589,7 +587,7 @@ def build_list_page(sections, head_bits, style, header):
   <link rel="canonical" href="{SITE_URL}/gallery/list/">
   <style>{style}{PAGE_CSS}
     .list-page {{ padding-top: 130px; }}
-    .list-page h1 {{ text-align: center; font-size: 1.5rem; font-weight: 500; }}
+    .list-page h1 {{ text-align: center; }}
     .list-page .float-link {{ text-align: center; margin: 0.6rem 0 1.5rem; font-size: 0.95rem; }}
   </style>
   {EXTRAS_START}

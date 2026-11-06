@@ -3,6 +3,9 @@
 Christopher's site: hand-written HTML, CSS and JavaScript, no framework and no build step on Cloudflare.
 The README covers the workflow for people; this file adds what a new Claude session needs.
 Always: British English; links are never underlined; give Christopher the commands so he can do things himself.
+Consistency matters to him: all text below the header shares one shadow (`--shadow` on body; the header has its
+own lighter one), links glow when pointed at, and all titles (h1, section h2) share one size and weight, set
+once at the top of index.html's styles. Section headings mirror the opening title's position (22%).
 
 ## Branches and hosting
 

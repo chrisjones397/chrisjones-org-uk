@@ -44,10 +44,16 @@
       font-family: "Inter", sans-serif;
       background-color: rgb(100, 100, 100);
     }
-    /* One soft shadow behind all the text, so it reads the same over the video, the paintings, the
-       pictures and plain grey alike. The header keeps its own lighter one. */
-    body { text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45); }
-    .header { text-shadow: none; }
+    /* Text, the same everywhere: one soft shadow behind all the text below the header, so it reads the same
+       over the video, the paintings, the pictures and plain grey alike; the header has its own lighter one.
+       Links glow on top of whichever shadow they have when pointed at (see "Text links" below). */
+    body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); }
+    .header { --shadow: 0 1px 6px rgba(0, 0, 0, 0.25); text-shadow: var(--shadow); }
+    /* Headings: one look everywhere below the header. Titles (the opening title, each section's heading, a
+       painting's name on its page, the list's) share one size and weight; the list's section names are smaller. */
+    h1, h2, h3 { font-weight: 300; letter-spacing: 0.01em; }
+    h1, h2 { font-size: clamp(1.6rem, 4.5vw, 4.2rem); }
+    h3 { font-size: clamp(1.15rem, 1.8vw, 1.4rem); }
     ul {
       list-style: none;
     }
@@ -128,7 +134,6 @@
       flex-wrap: wrap;
       color: #fff;
       line-height: 1.15;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.25);   /* stays readable over light parts of a picture */
     }
     .site-name {
       font-size: clamp(1.45rem, 2.6vw, 2.1rem);
@@ -142,7 +147,6 @@
     }
     .nav-link {
       font-size: 16px;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.25);
     }
 
     /* Text links, the same everywhere on the site: a little dimmed, then bright white with a soft glow when
@@ -156,9 +160,9 @@
     .contact-line #footer-email:hover, .contact-line #footer-email:focus-visible, .invite-alt a:hover, .invite-alt a:focus-visible,
     .site-footer a:hover, .site-footer a:focus-visible, .float-caption .t:hover, .float-caption .t:focus-visible,
     .float-list:hover, .float-list:focus-visible, .painting-links a:hover, .painting-links a:focus-visible,
-    .float-link a:hover, .float-link a:focus-visible {
+    .float-link a:hover, .float-link a:focus-visible, .site-title:hover, .site-title:focus-visible {
       color: #fff;
-      text-shadow: 0 0 12px rgba(255,255,255,0.75), 0 1px 6px rgba(0,0,0,0.25);
+      text-shadow: 0 0 12px rgba(255,255,255,0.75), var(--shadow);
     }
     a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
 
@@ -212,10 +216,6 @@
       bottom: 22%;   /* measured from the bottom, so a title that wraps onto two lines still fits */
       padding: 0 5vw;
       text-align: center;
-      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
-      font-weight: 300;
-      letter-spacing: 0.01em;
-      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
     }
 
     /* The menu's Profile link lands at the end of the profile animation, on the finished head and text
@@ -267,12 +267,8 @@
       z-index: 1;
       padding: 0 5vw;
       text-align: center;
-      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
     }
     .contact-title {
-      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
-      font-weight: 300;
-      letter-spacing: 0.01em;
       margin-bottom: 0.6em;
     }
     .contact-line {
@@ -314,21 +310,17 @@
     .gallery-live .float-section { opacity: 1; }
     .gallery-live .float-section .float-text { display: flex; }
     .gallery-3d .invite-words { position: absolute; inset: 0; padding: 0; }
-    /* The heading mirrors the opening title: that sits 22% of the window up from the bottom, this 22% down
-       from the top (less the room for its shade) */
+    /* The heading mirrors the opening title: that title's bottom is 22% of the window up from the bottom of
+       its section; this heading's top is 22% down from the top of its section */
     .gallery-3d .invite-title {
       position: absolute;
-      top: calc(var(--vh, 1svh) * 22 - 0.6em);
+      top: calc(var(--vh, 1svh) * 22);
+      margin: 0;
       left: 50%;
       transform: translateX(-50%);
       white-space: nowrap;
     }
     .gallery-3d .invite-button, .gallery-3d .invite-alt { display: none; }   /* the wall has its own list link */
-    .gallery-live .invite-title {   /* a soft shade behind the heading, so it reads over the paintings */
-      background: radial-gradient(closest-side, rgba(70, 70, 70, 0.55), rgba(70, 70, 70, 0));
-      padding: 0.6em 1.6em;
-      margin-bottom: 0;
-    }
     .invite-pic {
       position: absolute;
       display: block;
@@ -347,12 +339,8 @@
       pointer-events: none;
       text-align: center;
       padding: 1.5em 2em;
-      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
     }
     .invite-title {
-      font-size: clamp(1.6rem, 4.5vw, 4.2rem);
-      font-weight: 300;
-      letter-spacing: 0.01em;
       margin-bottom: 0.7em;
     }
     .invite-words a { pointer-events: auto; }
@@ -503,14 +491,12 @@
       display: block;
       max-width: 100%;
       /* fit the window, leaving room for the header, caption and links */
-      max-height: max(300px, calc(100vh - 115px - 9rem));
+      max-height: max(300px, calc(100vh - 115px - 9rem - 1.25 * clamp(1.6rem, 4.5vw, 4.2rem)));   /* room for the title */
       width: auto;
       height: auto;
     }
     .painting-page a.full-size { display: block; cursor: zoom-in; }
     .painting-page h1 {
-      font-size: 1.5rem;
-      font-weight: 500;
       text-align: center;
     }
     .painting-page .details { margin-top: -0.75rem; opacity: 0.85; }
