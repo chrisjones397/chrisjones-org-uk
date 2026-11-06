@@ -105,8 +105,8 @@ function start() {
       const sw = u.w * scale, sh = u.h * scale;
       m.scale.set(sw, sh, 1);
       const seen = sh * D0 / u.d;                               // its height as it looks, at the middle depth
-      // the first hangs with its top a little below the heading (36% down the view); each after it below the last
-      if (!i) y = 0.14 * viewH0 - seen / 2;
+      // the first hangs with its top just below the heading (26% down the view); each after it below the last
+      if (!i) y = 0.24 * viewH0 - seen / 2;
       else y -= (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2;
       lastH = seen;
       u.cy = i ? y : y * u.d / D0;      // where the view is when it's in the middle
