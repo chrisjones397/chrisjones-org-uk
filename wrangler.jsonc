@@ -20,6 +20,12 @@
   "env": {
     "dev": {
       "name": "chrisjones397-github-io-dev",
+      // The admin page's sign-in (Cloudflare Access application "Site admin page"; see admin.js). Not secret.
+      // The GitHub token is a secret, GITHUB_TOKEN, set in the dashboard: deploys keep it.
+      "vars": {
+        "ACCESS_TEAM": "still-mountain-1dde",
+        "ACCESS_AUD": "29d8f966822a2b0a087e6db23bc33f92a292b2946b389bd7b9f2f23816f4a628"
+      },
       "workers_dev": false,
       "preview_urls": false,
       "observability": { "enabled": true },

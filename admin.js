@@ -5,11 +5,11 @@
    each request on with a signed token (the Cf-Access-Jwt-Assertion header). This file checks that token's
    signature and audience itself as well, so even a request that somehow got past Access gets nothing.
 
-   It only works on the dev Worker, which has the settings it needs (set in the Cloudflare dashboard, under the
-   Worker's Settings, Variables and Secrets):
-     ACCESS_TEAM    the Zero Trust team name (the <team> in <team>.cloudflareaccess.com)
-     ACCESS_AUD     the Access application's audience tag
-     GITHUB_TOKEN   (a secret) a GitHub token that can write the contents of this one repository
+   It only works on the dev Worker, which has the settings it needs:
+     ACCESS_TEAM    the Zero Trust team name (the <team> in <team>.cloudflareaccess.com)    } in wrangler.jsonc,
+     ACCESS_AUD     the Access application's audience tag                                 } env.dev.vars
+     GITHUB_TOKEN   a GitHub token that can write the contents of this one repository: a secret, set in the
+                    dashboard (Worker, Settings, Variables and Secrets), which deploys keep
    Without them (as on the live Worker), every /admin address is "not found".
 
    Adding a painting makes one commit on dev with two changes: the photo as masters/<name>.<ext> and the
