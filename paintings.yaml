@@ -34,7 +34,7 @@ gallery_invitation:
 # How the floating gallery feels. The paintings' places are worked out from these, so adding a painting
 # never means placing it by hand. Leave a line out to use its default.
 gallery:          # the floating wall on the home page; try values live at dev.chrisjones.org.uk/?tune
-  size: 1          # how big the paintings are (1: as first built)
+  size: 1.5        # how big the paintings are (1: as first built)
   spacing: 1       # the room down the wall from one painting to the next
   spread: 1        # how far they're scattered side to side (1: across most of the view)
   depth: 1         # how much their depths differ: more gives more parallax

@@ -98,16 +98,19 @@ function start() {
     perPx = viewH0 / H;                                         // ...so one pixel of scrolling is this far
     const narrow = camera.aspect < 0.9;
     scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4) * P.size;
-    let y = -(narrow ? 0.38 : 0.18) * viewH0, lastH = 0;         // the first starts below the heading
+    let y = 0, lastH = 0;
     planes.forEach((m, i) => {
       const u = m.userData;
       u.d = Math.max(MID + (u.f - 0.5) * RANGE * P.depth, 4);
       const sw = u.w * scale, sh = u.h * scale;
       m.scale.set(sw, sh, 1);
       const seen = sh * D0 / u.d;                               // its height as it looks, at the middle depth
-      if (i) y -= (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2;
+      // the first hangs with its top a little below the heading (36% down the view); each after it below the last
+      if (!i) y = 0.14 * viewH0 - seen / 2;
+      else y -= (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2;
       lastH = seen;
-      u.y = u.cy = y;                   // the view is level with it (it's in the middle) when the page is here
+      u.cy = i ? y : y * u.d / D0;      // where the view is when it's in the middle
+      u.y = u.cy;
       const halfW = u.d * viewTan * camera.aspect;              // half the view's width at its depth
       const room = Math.max(halfW * 0.94 - sw / 2, 0);
       u.x = u.across * Math.min(room * (narrow ? 0.7 : 1) * P.spread, Math.max(halfW - sw / 2, 0));

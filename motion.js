@@ -1,4 +1,5 @@
-/* Eased text: the opening title drifts down a little as you scroll, and the profile text rises and
+/* Eased text: the opening title drifts down a little as you scroll, the Gallery heading settles into place
+   as its section arrives (the same movement, mirrored), and the profile text rises and
    fades into its place as its section arrives, the heading first and each paragraph a beat later.
    Each follows the scroll a moment late and settles with a slight spring. Nothing moves for
    visitors who have asked their device to reduce motion. */
@@ -8,8 +9,8 @@
   const STAGGER = 0.12;     // extra wait for each following piece of profile text
   const STIFFNESS = 120;    // higher: springier and quicker
   const DAMPING = 14;       // lower: more overshoot (22 would be none at all)
-  const TITLE_DRIFT = 0.30; // how far the title drifts, as a fraction of the picture's height scrolled past
-  const TITLE_DRIFT_TALL = 0.55;
+  const TITLE_DRIFT = 0.18; // how far the title drifts, as a fraction of the picture's height scrolled past:
+                            // at most 18% of the window, so it stays inside its section (it sits 22% up)
   const RISE = 0.35;        // the profile text starts this fraction of its section's distance below its place
   const FADE = 0.22;        // ...and is fully visible once it is within this fraction of the window height
 
@@ -22,7 +23,10 @@
   const pieces = [];
   const title = document.querySelector('.hero-title'), hero = document.querySelector('.hero');
   if (title && hero) pieces.push({ el: title, wait: 0, fade: false,
-    target: () => (isTall() ? TITLE_DRIFT_TALL : TITLE_DRIFT) * Math.max(-hero.getBoundingClientRect().top, 0) });
+    target: () => TITLE_DRIFT * Math.max(-hero.getBoundingClientRect().top, 0) });
+  const heading = document.querySelector('.gallery-3d .invite-title'), gallery = document.querySelector('.invite');
+  if (heading && gallery) pieces.push({ el: heading, wait: 0, fade: false,
+    target: () => TITLE_DRIFT * Math.min(Math.max(gallery.getBoundingClientRect().top, 0), VH) });
   const stage = document.querySelector('.face-stage'), words = document.querySelector('.face-words');
   if (stage && words) [...words.children].forEach((el, i) => pieces.push({ el, wait: STAGGER * i, fade: true,
     target: () => RISE * Math.max(stage.getBoundingClientRect().top, 0) }));
