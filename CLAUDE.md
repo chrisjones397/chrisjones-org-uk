@@ -97,6 +97,9 @@ are made and locked by the Workers' custom domains (including a wildcard), so th
 ## Testing
 
 Christopher's usage matters, and the cloud browser has no graphics card (3D and video are very slow there).
-For small changes (wording, colours, positions): build, push, and let him check on dev. Run browser tests only
+For small changes (wording, colours, positions): build, push, and let him check on dev.
+After any push (dev or main), wait for Cloudflare's build of that commit to finish successfully before telling
+him to look: the Cloudflare API connector shows it (GET /accounts/{id}/builds/workers/{worker id}/builds; live
+c288de355d24430da80566f5ec46ceec, dev 22d6bcc2561f461f876a4d479319c793). If it fails, read its logs and fix it first. Run browser tests only
 when behaviour changes (snapping, gallery switching), keep screenshots to layout questions, and say what was
 and wasn't tested.
