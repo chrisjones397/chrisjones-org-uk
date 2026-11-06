@@ -8,7 +8,8 @@
    depth move exactly with the page (on a phone, with your finger); nearer ones move a little faster and
    further ones a little slower, which is what makes them seem to hang in space. They drift gently, and the
    view shifts a little with the mouse. Pointing at a painting names it in the caption; clicking or tapping it
-   brings it forward to the middle of the view, and clicking it again opens its page. Otherwise the caption
+   brings it forward to the middle of the view, and clicking it again sends it back (its name in the caption
+   still leads to its own page). Otherwise the caption
    names the painting nearest the middle of the view.
 
    The list of paintings and the settings from paintings.yaml are written into the page by tools/build_site.py
@@ -85,9 +86,12 @@ function start() {
   // Laying out the wall for this window. Down, each painting follows the last with room for both (more room on
   // a phone, where they're one above another rather than side by side). Across, each is placed to keep the
   // wall balanced as you see it: of the places it could go, it takes the one that best evens out the weight
-  // (how big the paintings look) on the left and right of those around it, without covering its neighbours
-  // or sitting straight below the one before, so big and small ones mix on both sides rather than gathering
-  // on one. The section is then made as tall as the journey.
+  // (how big the paintings look) on the left and right of those around it, so big and small ones mix on both
+  // sides rather than gathering on one. Overlapping is welcome, but only clearly: next to a neighbour it will
+  // pass on screen, a painting either keeps a clear gap or overlaps by a good part of its width, never just
+  // grazes it, and its edges never quite line up with the neighbour's, as that looks unintended. It also
+  // avoids hiding most of a neighbour, and sitting straight below the one before. The section is then made as
+  // tall as the journey.
   let H = 0, W = 0, perPx = 0, travelPx = 0, scale = 1;
   function layout() {
     W = stage.clientWidth; H = stage.clientHeight;
@@ -118,18 +122,26 @@ function start() {
       const room = Math.max(half * 0.95 - seenW / 2, 0);
       const reach = Math.min(room * (narrow ? 0.7 : 1) * P.spread, room);
       let best = 0, bestScore = Infinity;
-      for (let c = -1; c <= 1.0001; c += 0.1) {
+      for (let c = -1; c <= 1.0001; c += 0.05) {
         const sx = c * reach;
-        let mass = seenW * seen * sx, total = seenW * seen, cover = 0;
+        let mass = seenW * seen * sx, total = seenW * seen, cover = 0, awkward = 0;
         for (const q of placed) {
           const dy = Math.abs(q.cy - y);
           if (dy < viewH0 * 0.6) { mass += q.a * q.sx; total += q.a; }
+          // neighbours that pass each other on screen (depths differ, so they slide past one another)
+          if (dy < (q.h + seen) / 2 + viewH0 * 0.3) {
+            const gap = Math.abs(q.sx - sx) - (q.w + seenW) / 2;          // across: + a gap, - an overlap
+            const narrowest = Math.min(q.w, seenW);
+            if (gap > -0.25 * narrowest && gap < 0.06 * half) awkward += 1;   // grazing, or edges meeting
+            const lefts = Math.abs((q.sx - q.w / 2) - (sx - seenW / 2)), rights = Math.abs((q.sx + q.w / 2) - (sx + seenW / 2));
+            if (gap < 0 && Math.min(lefts, rights) < 0.04 * half) awkward += 1;  // edges lined up
+          }
           const ox = Math.max(0, (q.w + seenW) / 2 - Math.abs(q.sx - sx)), oy = Math.max(0, (q.h + seen) / 2 - dy);
-          cover += (ox * oy) / Math.min(q.a, seenW * seen);
+          cover += Math.max(0, (ox * oy) / Math.min(q.a, seenW * seen) - 0.45);   // only hiding most of one counts
         }
         const prev = placed[placed.length - 1];
         const under = prev ? Math.max(0, 0.3 - Math.abs(prev.sx - sx) / (half || 1)) : 0;
-        const score = Math.abs(mass / total) / (half || 1) + 2 * cover + under + 0.08 * Math.abs(c - (u.jitter * 2 - 1));
+        const score = Math.abs(mass / total) / (half || 1) + 3 * awkward + 2 * cover + under + 0.08 * Math.abs(c - (u.jitter * 2 - 1));
         if (score < bestScore) { bestScore = score; best = sx; }
       }
       placed.push({ sx: best, cy: y, w: seenW, h: seen, a: seenW * seen });
@@ -176,8 +188,8 @@ function start() {
   } catch (e) { /* no storage: the wall opens at its start */ }
 
   // Pointing at a painting names it; clicking (or tapping) it brings it forward to the middle of the view,
-  // the others dimming behind it; clicking it again opens its page. Clicking elsewhere, pressing Escape or
-  // scrolling on sends it back to its place.
+  // the others dimming behind it. Clicking it again, clicking elsewhere, pressing Escape or scrolling on sends
+  // it back to its place.
   let focus = null, leaving = [], focusAt = 0;
   const unfocus = () => { if (focus) { leaving.push(focus); focus = null; } };
   addEventListener('keydown', (e) => { if (e.key === 'Escape') unfocus(); });
@@ -201,9 +213,9 @@ function start() {
   stage.addEventListener('click', (e) => {
     if (e.target.closest('a, button')) return;                  // the caption's links work as normal
     const m = at(e.clientX, e.clientY);
-    if (m && m === focus) { location.href = `${BASE}paintings/${m.userData.p.name}/`; return; }
+    const again = m && m === focus;
     unfocus();
-    if (m) { focus = m; m.userData.k = m.userData.k || 0; leaving = leaving.filter((x) => x !== m); focusAt = scrollY; }
+    if (m && !again) { focus = m; m.userData.k = m.userData.k || 0; leaving = leaving.filter((x) => x !== m); focusAt = scrollY; }
   });
 
   // The caption: the painting under the pointer, or else the one nearest the middle of the view
@@ -256,7 +268,7 @@ function start() {
       m.visible = m.material.opacity > 0.01;
     }
     pointed = lastPointer ? at(...lastPointer) : null;
-    renderer.domElement.style.cursor = pointed ? (pointed === focus ? 'zoom-in' : 'pointer') : '';
+    renderer.domElement.style.cursor = pointed ? (pointed === focus ? 'zoom-out' : 'zoom-in') : '';
     caption(camY);
     renderer.render(scene, camera);
     if (first && planes.every((m) => m.userData.ready)) { first = false; section.classList.add('gallery-live'); }
