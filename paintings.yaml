@@ -14,8 +14,9 @@
 #   details:  a second line under the caption: medium, size (height x width), year,
 #             e.g. Oil on canvas, 60 x 90 cm, 2020
 #   wide:     true to span the full width of the gallery
-#   white_paper: true for a drawing on white paper: the build white balances it so the paper at its outer
-#             edges comes out pure white (the master itself is left as it is). Crop the master to the paper,
+#   white_paper: true for a drawing on white paper: the build white balances it so the paper comes out
+#             pure white, reading the paper's colour all round its outer edges and following the light's
+#             fall-off across the sheet (the master itself is left as it is). Crop the master to the paper,
 #             with no table or background showing at the edges. After turning this on or off for a painting
 #             whose images already exist, run the build with --force.
 #
@@ -89,3 +90,15 @@ sections:
         details: Oil on canvas paper, 15 x 21 cm, 2023
       - title: "Apple #2"
         details: Oil on canvas paper, 15 x 21 cm, 2023
+
+  - title: Drawings
+    paintings:
+      - title: "Life Drawing #1"
+        details: Charcoal and chalk on paper, 2026
+        white_paper: true
+      - title: "Life Drawing #2"
+        details: Charcoal and chalk on paper, 2026
+        white_paper: true
+      - title: "Life Drawing #3"
+        details: Charcoal and chalk on paper, 2026
+        white_paper: true

@@ -50,7 +50,7 @@ import unicodedata
 
 try:
     import yaml
-    from PIL import Image, ImageCms
+    from PIL import Image, ImageCms, ImageMath, ImageOps
 except ImportError as e:
     sys.exit(f"ERROR: {e.name} is missing. In the venv: pip install pillow pyyaml")
 
@@ -209,6 +209,7 @@ def load_srgb(path):
     """The master as plain sRGB (converting from its colour profile, if it has one)."""
     im = Image.open(path)
     icc = im.info.get("icc_profile")
+    im = ImageOps.exif_transpose(im)                    # phone photos: stand it the way up the camera says
     if im.mode not in ("RGB", "RGBA"):
         im = im.convert("RGBA" if "A" in im.getbands() else "RGB")
     if im.mode == "RGBA":                               # paintings are opaque: flatten onto white
@@ -223,21 +224,55 @@ def load_srgb(path):
 
 
 def white_paper(im):
-    """A drawing on white paper, white balanced: the paper's colour is read from the picture's outer edges (a band
-    2% of the shorter side deep all round; the median, so smudges there don't count), and each colour channel is
-    scaled so that colour becomes pure white. That takes out the light's colour cast and greyness together."""
+    """A drawing on white paper, white balanced so the paper comes out pure white everywhere. The paper's colour
+    is read all round the outer edges (a band 2% of the shorter side deep, in 16 lengths along each side; the
+    median of each, so smudges don't count). Phone photos are lit unevenly, so the paper's colour inside is
+    filled in smoothly from the edges (a Coons patch: each point blends the four sides by how near it is to
+    them), and every pixel is divided by the paper's colour where it is. That takes out the light's colour
+    cast, its greyness and its fall-off across the sheet together."""
     w, h = im.size
-    b = max(4, round(min(w, h) * 0.02))
-    hist = [0] * 768
-    for box in ((0, 0, w, b), (0, h - b, w, h), (0, b, b, h - b), (w - b, b, w, h - b)):
-        hist = [x + y for x, y in zip(hist, im.crop(box).histogram())]
-    gains = []
-    for c in range(3):
-        counts, half, total = hist[c * 256:(c + 1) * 256], sum(hist[c * 256:(c + 1) * 256]) / 2, 0
-        paper = next(v for v in range(256) if (total := total + counts[v]) >= half)
-        gains.append(255 / max(paper, 1))
-    print(f"    paper read as RGB {tuple(round(255 / g) for g in gains)}, made white")
-    return Image.merge("RGB", [ch.point(lambda v, g=g: min(255, round(v * g))) for ch, g in zip(im.split(), gains)])
+    small = im.resize((max(1, w * 512 // max(w, h)), max(1, h * 512 // max(w, h))), Image.BOX)
+    sw, sh = small.size
+    b, n = max(3, round(min(sw, sh) * 0.02)), 16
+
+    def median(box):
+        hist, out = small.crop(box).histogram(), []
+        for c in range(3):
+            counts, total = hist[c * 256:(c + 1) * 256], 0
+            half = sum(counts) / 2
+            out.append(max(1, next(v for v in range(256) if (total := total + counts[v]) >= half)))
+        return out
+    xs = [(sw * i // n, sw * (i + 1) // n) for i in range(n)]
+    ys = [(sh * j // n, sh * (j + 1) // n) for j in range(n)]
+    top = [median((a, 0, z, b)) for a, z in xs]
+    bottom = [median((a, sh - b, z, sh)) for a, z in xs]
+    left = [median((0, a, b, z)) for a, z in ys]
+    right = [median((sw - b, a, sw, z)) for a, z in ys]
+    corner = lambda p, q: [(x + y) / 2 for x, y in zip(p, q)]
+    c00, c10, c01, c11 = corner(top[0], left[0]), corner(top[-1], right[0]), corner(bottom[0], left[-1]), corner(bottom[-1], right[-1])
+    print(f"    paper read from RGB {tuple(round(x) for x in c00)} (top left) to {tuple(round(x) for x in c11)} (bottom right), made white")
+    gains = [Image.new("F", (n, n)) for _ in range(3)]
+    for j in range(n):
+        v = (j + 0.5) / n
+        for i in range(n):
+            u = (i + 0.5) / n
+            for c in range(3):
+                paper = ((1 - v) * top[i][c] + v * bottom[i][c] + (1 - u) * left[j][c] + u * right[j][c]
+                         - ((1 - u) * (1 - v) * c00[c] + u * (1 - v) * c10[c] + (1 - u) * v * c01[c] + u * v * c11[c]))
+                gains[c].putpixel((i, j), 255 / max(paper, 1))
+    out = []
+    for ch, g in zip(im.split(), gains):
+        g = g.resize((w, h), Image.BILINEAR)
+        out.append(ImageMath.lambda_eval(lambda e: e["convert"](e["min"](e["a"] * e["g"], 255), "L"), a=ch, g=g))
+    return Image.merge("RGB", out)
+
+
+def upright_size(path):
+    """The master's width and height the way up it's shown (phone photos are often stored on their side, with
+    an EXIF tag saying which way to turn them)."""
+    with Image.open(path) as im:
+        w, h = im.size
+        return (h, w) if im.getexif().get(0x0112) in (5, 6, 7, 8) else (w, h)
 
 
 def widths_for(w):
@@ -248,8 +283,7 @@ def widths_for(w):
 
 def make_images(site, p, force, dry):
     """Make (or check) one painting's image files. Returns the files it should have."""
-    with Image.open(p["master"]) as im:
-        mw, mh = im.size
+    mw, mh = upright_size(p["master"])
     p["w"], p["h"] = mw, mh
     p["widths"] = widths_for(mw)
     outs = {f"{IMG_DIR}/{p['name']}-{w}.webp": w for w in p["widths"]}
@@ -304,8 +338,7 @@ def contact_picture(site, source, force, dry):
         print(f"  WARNING: the contact picture {source} (contact_picture: in paintings.yaml) isn't there; "
               f"the contact section keeps its current picture")
         return None, set()
-    with Image.open(master) as im:
-        mw, mh = im.size
+    mw, mh = upright_size(master)
     widths = [w for w in CONTACT_WIDTHS if w < mw] + [min(mw, CONTACT_WIDTHS[-1])]
     files = {f"med/contact-{w}.webp": w for w in widths}
     mtime = os.path.getmtime(master)
