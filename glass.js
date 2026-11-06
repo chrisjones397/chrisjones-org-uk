@@ -132,13 +132,13 @@
     im.onload = () => upload(s, im, im.naturalWidth, im.naturalHeight);
     im.src = url;
   }
-  // A moving picture's frame, shrunk first to about half its size on screen (copying a whole 4K video frame,
-  // or a full-size canvas, to the graphics card every frame made scrolling judder)
-  function frame(s, src, vw, vh) {
+  // A moving picture's frame, shrunk first (copying a whole 4K video frame, or a full-size canvas, to the
+  // graphics card every frame made scrolling judder): to half its size on screen, or to the given fraction
+  function frame(s, src, vw, vh, fraction = 0.5) {
     if (!vw || !vh) return;
     const b = s.el.getBoundingClientRect();
     const shown = Math.max(b.width / vw, b.height / vh) * vw;           // the picture's width on screen, CSS px
-    const sw = Math.min(vw, Math.max(256, Math.ceil(shown / 2))), sh_ = Math.round(vh * sw / vw);
+    const sw = Math.min(vw, Math.max(128, Math.ceil(shown * fraction))), sh_ = Math.round(vh * sw / vw);
     if (sw >= vw) { upload(s, src, vw, vh); return; }
     if (!s.small) { s.small = document.createElement('canvas'); s.sctx = s.small.getContext('2d'); }
     if (s.small.width !== sw || s.small.height !== sh_) { s.small.width = sw; s.small.height = sh_; }
@@ -169,12 +169,16 @@
     if (hero.complete && hero.naturalWidth) go(); else hero.addEventListener('load', go, { once: true });
   }
 
-  // The floating gallery: each frame gallery.js draws under the header (only once the gallery is showing)
-  let gallery = null;
+  // The floating gallery: the frames gallery.js draws under the header (only once the gallery is showing).
+  // Copying them is the costly part on phones, where it made scrolling the gallery less smooth, so only every
+  // other frame is copied, at a quarter of its size on screen: the glass only shows it blurred, so it looks
+  // the same.
+  let gallery = null, every = 0;
   addEventListener('glass-frame', (e) => {
     const c = e.detail;
     if (!gallery) gallery = source(c, c.closest('section') || c, [0.5, 0.5], 0, () => !!c.closest('.gallery-live'));
-    frame(gallery, c, c.width, c.height);
+    if (every++ % 2 && gallery.tex) return;
+    frame(gallery, c, c.width, c.height, 0.25);
   });
 
   // The Get in touch photo, with the light shade laid over it on the page
