@@ -195,25 +195,48 @@ function start() {
       if (then) then();
     });
   }
-  planes.forEach((m) => picture(m, want, () => { m.userData.ready = true; }));
+  // How far down the wall the page has scrolled, in pixels: 0 at the section's top, travelPx at its end
+  const progress = () => Math.min(Math.max(-section.getBoundingClientRect().top, 0), travelPx);
+
+  // Coming back to the page (the browser's Back, or reloading), it opens where it was left. The browser would
+  // do that itself, but it does it before this script has made the gallery its full height, so it can land in
+  // the wrong place; so the page's place is kept here instead, along with the window's width (a different
+  // width lays the wall out differently, and then it opens at the top as usual). Arriving by the menu's
+  // Gallery link from a painting's page, the wall opens with that painting in the middle.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  addEventListener('pagehide', () => {
+    try { sessionStorage.setItem('home-place', JSON.stringify({ y: scrollY, w: innerWidth })); } catch (e) {}
+  });
+  let opening = null, fromLink = false;
+  try {
+    const nav = (performance.getEntriesByType('navigation')[0] || {}).type;
+    const name = sessionStorage.getItem('gallery-focus');
+    sessionStorage.removeItem('gallery-focus');
+    const m = name && location.hash === '#paintings' && planes.find((x) => x.userData.p.name === name);
+    const kept = JSON.parse(sessionStorage.getItem('home-place') || 'null');
+    if (m) { opening = section.getBoundingClientRect().top + scrollY - m.userData.cy / perPx; fromLink = true; }
+    else if ((nav === 'back_forward' || nav === 'reload') && kept && kept.w === innerWidth) opening = kept.y;
+  } catch (e) { /* no storage: the page opens as usual */ }
+  if (opening !== null) {
+    scrollTo({ top: opening, behavior: 'instant' });
+    // once everything has loaded, again, in case anything above has changed size, or (arriving by the link)
+    // the browser has since made its own jump to the gallery's heading; unless the visitor has moved meanwhile
+    const set = scrollY, sectionTop = section.getBoundingClientRect().top + scrollY;
+    addEventListener('load', () => setTimeout(() => {
+      const moved = Math.abs(scrollY - set) > 2 && !(fromLink && Math.abs(scrollY - sectionTop) < 2);
+      if (!moved) scrollTo({ top: opening, behavior: 'instant' });
+    }, 0), { once: true });
+  }
+
+  // The pictures nearest where the page opens are fetched first, and each appears as soon as it arrives
+  const startY = -progress() * perPx;
+  [...planes].sort((a, b) => Math.abs(a.userData.cy - startY) - Math.abs(b.userData.cy - startY))
+    .forEach((m) => picture(m, want, () => { m.userData.ready = true; }));
   const sharpen = (m) => {
     const fill = Math.max(stage.clientWidth * 0.82, stage.clientHeight * 0.72 * m.userData.p.w / m.userData.p.h);
     picture(m, fill * renderer.getPixelRatio(), null);
   };
 
-  // How far down the wall the page has scrolled, in pixels: 0 at the section's top, travelPx at its end
-  const progress = () => Math.min(Math.max(-section.getBoundingClientRect().top, 0), travelPx);
-
-  // Back from a painting's own page by the menu's Gallery link: the wall opens with that painting in the middle
-  try {
-    const name = sessionStorage.getItem('gallery-focus');
-    sessionStorage.removeItem('gallery-focus');
-    const m = name && location.hash === '#paintings' && planes.find((x) => x.userData.p.name === name);
-    if (m) {
-      const go = () => scrollTo({ top: section.getBoundingClientRect().top + scrollY - m.userData.cy / perPx, behavior: 'instant' });
-      if (document.readyState === 'complete') setTimeout(go, 50); else addEventListener('load', () => setTimeout(go, 50));
-    }
-  } catch (e) { /* no storage: the wall opens at its start */ }
 
   // Pointing at a painting names it; clicking (or tapping) it brings it forward to the middle of the view,
   // the others dimming behind it. Clicking it again, clicking elsewhere, pressing Escape or scrolling on sends
@@ -303,7 +326,11 @@ function start() {
     renderer.domElement.style.cursor = pointed ? (pointed === focus ? 'zoom-out' : 'zoom-in') : '';
     caption(camY);
     renderer.render(scene, camera);
-    if (first && planes.every((m) => m.userData.ready)) { first = false; section.classList.add('gallery-live'); }
+    // the gallery shows as soon as the paintings in view have arrived (or after a moment, whatever has); the
+    // rest fade in as they come
+    if (first && (t > 1.5 || planes.every((m) => m.userData.ready || Math.abs(m.userData.cy - camY) > D0 * viewTan * 2))) {
+      first = false; section.classList.add('gallery-live');
+    }
   });
 
   if (TUNE) tuner(layout);
