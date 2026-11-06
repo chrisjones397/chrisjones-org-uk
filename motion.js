@@ -165,6 +165,8 @@
     })(t0);
   }
   function stop() { if (active) restY = scrollY; gliding++; active = false; }                   // ends any glide in progress
+  // the page putting itself somewhere (coming back to it) isn't the visitor scrolling: settle there, no glide
+  window.snapHere = () => { stop(); clearTimeout(timer); lastY = restY = scrollY; dir = 0; };
   function settle() {
     if (touching || active || !dir) return;
     const to = target(scrollY, dir);

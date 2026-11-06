@@ -207,29 +207,39 @@ function start() {
   addEventListener('pagehide', () => {
     try { sessionStorage.setItem('home-place', JSON.stringify({ y: scrollY, w: innerWidth, focus: focus && focus.userData.p.name })); } catch (e) {}
   });
-  let opening = null, fromLink = false, openWith = null;
+  let focus = null, leaving = [], focusAt = 0;     // a painting brought forward (see below)
+  let opening = null, openWith = null, settled = true;
   try {
-    const nav = (performance.getEntriesByType('navigation')[0] || {}).type;
-    const name = sessionStorage.getItem('gallery-focus');
-    sessionStorage.removeItem('gallery-focus');
-    const m = name && location.hash === '#paintings' && planes.find((x) => x.userData.p.name === name);
-    const kept = JSON.parse(sessionStorage.getItem('home-place') || 'null');
-    if (m) { opening = section.getBoundingClientRect().top + scrollY - m.userData.cy / perPx; fromLink = true; openWith = m; }
-    else if ((nav === 'back_forward' || nav === 'reload') && kept && kept.w === innerWidth) {
+    const how = window.homeOpening, kept = JSON.parse(sessionStorage.getItem('home-place') || 'null');
+    const top = section.getBoundingClientRect().top + scrollY;
+    if (how && how.how === 'link') {
+      const m = planes.find((x) => x.userData.p.name === how.name);
+      if (m) { opening = top + Math.max(-m.userData.cy / perPx, 0); openWith = m; }   // never above the gallery's top
+    } else if (how && kept && kept.w === innerWidth) {
       opening = kept.y;
-      openWith = kept.focus && planes.find((x) => x.userData.p.name === kept.focus);
+      openWith = (kept.focus && planes.find((x) => x.userData.p.name === kept.focus)) || null;
     }
   } catch (e) { /* no storage: the page opens as usual */ }
   if (opening !== null) {
-    scrollTo({ top: opening, behavior: 'instant' });
-    // once everything has loaded, again, in case anything above has changed size, or (arriving by the link)
-    // the browser has since made its own jump to the gallery's heading; unless the visitor has moved meanwhile
-    const set = scrollY, sectionTop = section.getBoundingClientRect().top + scrollY;
-    addEventListener('load', () => setTimeout(() => {
-      const moved = Math.abs(scrollY - set) > 2 && !(fromLink && Math.abs(scrollY - sectionTop) < 2);
-      if (!moved) scrollTo({ top: opening, behavior: 'instant' });
+    // Put there, and kept there while the page finishes loading (a phone's browser may move it, to the top or to
+    // the gallery's heading, as it loads), until half a second after it has loaded, or the visitor takes over
+    settled = false;
+    let touched = false, loaded = document.readyState === 'complete', after = performance.now();
+    const t0 = performance.now();
+    for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown']) addEventListener(ev, () => { touched = true; }, { once: true, passive: true });
+    addEventListener('load', () => { loaded = true; after = performance.now(); }, { once: true });
+    const place = () => {
+      if (Math.abs(scrollY - opening) > 1) scrollTo({ top: opening, behavior: 'instant' });
+      if (window.snapHere) window.snapHere();
       focusAt = scrollY;
-    }, 0), { once: true });
+    };
+    place();
+    (function keep() {
+      if (touched) { settled = true; return; }
+      place();
+      const now = performance.now();
+      if ((!loaded || now - after < 500) && now - t0 < 4000) requestAnimationFrame(keep); else settled = true;
+    })();
   }
 
   // The pictures nearest where the page opens are fetched first, and each appears as soon as it arrives
@@ -245,7 +255,6 @@ function start() {
   // Pointing at a painting names it; clicking (or tapping) it brings it forward to the middle of the view,
   // the others dimming behind it. Clicking it again, clicking elsewhere, pressing Escape or scrolling on sends
   // it back to its place.
-  let focus = null, leaving = [], focusAt = 0;
   const unfocus = () => { if (focus) { leaving.push(focus); focus = null; } };
   // Coming back from a painting's page, that painting is already brought forward, as it was left
   if (openWith) { focus = openWith; openWith.userData.k = 1; focusAt = scrollY; sharpen(openWith); }
@@ -301,6 +310,8 @@ function start() {
   let first = true, lastT = 0;
   const ease = (k) => k * k * (3 - 2 * k);
   renderer.setAnimationLoop(() => {
+    // coming back: shown once the page is back in place and the gallery is ready (see opening, above)
+    if (settled && !first) document.documentElement.classList.remove('restoring');
     const r = stage.getBoundingClientRect();
     if (!first && (r.bottom < 0 || r.top > innerHeight)) return;   // out of sight: nothing to draw
     const t = clock.getElapsedTime(), dt = Math.min(t - lastT, 0.05); lastT = t;
@@ -336,7 +347,6 @@ function start() {
     // rest fade in as they come
     if (first && (t > 1.5 || planes.every((m) => m.userData.ready || Math.abs(m.userData.cy - camY) > D0 * viewTan * 2))) {
       first = false; section.classList.add('gallery-live');
-      requestAnimationFrame(() => document.documentElement.classList.remove('restoring'));
     }
   });
 

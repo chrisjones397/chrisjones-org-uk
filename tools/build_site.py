@@ -476,7 +476,12 @@ def build_page(p, prev, nxt, head_bits, style, header):
     </article>
   </main>
 {footer_html()}
-  <script>try {{ sessionStorage.setItem('gallery-focus', '{p["name"]}'); }} catch (e) {{}}</script>   <!-- the floating gallery opens on this painting -->
+  <script>   /* for the home page, coming back: which painting this is, and whether it's left by a link (see the home page's head) */
+    try {{
+      sessionStorage.setItem('gallery-focus', '{p["name"]}'); sessionStorage.removeItem('left-by-link');
+      addEventListener('click', function (e) {{ if (e.target.closest && e.target.closest('a[href]')) sessionStorage.setItem('left-by-link', '1'); }}, true);
+    }} catch (e) {{}}
+  </script>
 
 </body>
 </html>

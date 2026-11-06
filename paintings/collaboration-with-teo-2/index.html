@@ -586,7 +586,12 @@
   <footer class="site-footer">
     <p>&copy;2026 Christopher Jones</p>
   </footer>
-  <script>try { sessionStorage.setItem('gallery-focus', 'collaboration-with-teo-2'); } catch (e) {}</script>   <!-- the floating gallery opens on this painting -->
+  <script>   /* for the home page, coming back: which painting this is, and whether it's left by a link (see the home page's head) */
+    try {
+      sessionStorage.setItem('gallery-focus', 'collaboration-with-teo-2'); sessionStorage.removeItem('left-by-link');
+      addEventListener('click', function (e) { if (e.target.closest && e.target.closest('a[href]')) sessionStorage.setItem('left-by-link', '1'); }, true);
+    } catch (e) {}
+  </script>
 
 </body>
 </html>
