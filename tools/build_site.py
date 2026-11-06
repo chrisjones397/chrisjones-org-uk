@@ -182,7 +182,7 @@ def read_list(site):
                 fail(f"no master for {title!r}: expected {MASTERS_DIR}/{name}.png (or .webp, .jpg, .tif)")
             item = dict(title=title, name=name, master=master, section=sec["id"],
                         details=str(p["details"]) if p.get("details") else "",
-                        wide=bool(p.get("wide")))
+                        wide=bool(p.get("wide")), white_paper=bool(p.get("white_paper")))
             sec["paintings"].append(item)
             paintings.append(item)
         sections.append(sec)
@@ -222,6 +222,24 @@ def load_srgb(path):
     return im
 
 
+def white_paper(im):
+    """A drawing on white paper, white balanced: the paper's colour is read from the picture's outer edges (a band
+    2% of the shorter side deep all round; the median, so smudges there don't count), and each colour channel is
+    scaled so that colour becomes pure white. That takes out the light's colour cast and greyness together."""
+    w, h = im.size
+    b = max(4, round(min(w, h) * 0.02))
+    hist = [0] * 768
+    for box in ((0, 0, w, b), (0, h - b, w, h), (0, b, b, h - b), (w - b, b, w, h - b)):
+        hist = [x + y for x, y in zip(hist, im.crop(box).histogram())]
+    gains = []
+    for c in range(3):
+        counts, half, total = hist[c * 256:(c + 1) * 256], sum(hist[c * 256:(c + 1) * 256]) / 2, 0
+        paper = next(v for v in range(256) if (total := total + counts[v]) >= half)
+        gains.append(255 / max(paper, 1))
+    print(f"    paper read as RGB {tuple(round(255 / g) for g in gains)}, made white")
+    return Image.merge("RGB", [ch.point(lambda v, g=g: min(255, round(v * g))) for ch, g in zip(im.split(), gains)])
+
+
 def widths_for(w):
     ws = [x for x in WIDTHS if x < w]
     ws.append(min(w, WIDTHS[-1]))
@@ -244,6 +262,8 @@ def make_images(site, p, force, dry):
              or os.path.getmtime(os.path.join(site, f)) < mtime]
     if stale and not dry:
         im = load_srgb(p["master"])
+        if p["white_paper"]:
+            im = white_paper(im)
         for f in stale:
             w = outs[f]
             out = im if w == mw else im.resize((w, round(mh * w / mw)), Image.LANCZOS)

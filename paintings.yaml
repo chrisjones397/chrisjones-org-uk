@@ -14,6 +14,10 @@
 #   details:  a second line under the caption: medium, size (height x width), year,
 #             e.g. Oil on canvas, 60 x 90 cm, 2020
 #   wide:     true to span the full width of the gallery
+#   white_paper: true for a drawing on white paper: the build white balances it so the paper at its outer
+#             edges comes out pure white (the master itself is left as it is). Crop the master to the paper,
+#             with no table or background showing at the edges. After turning this on or off for a painting
+#             whose images already exist, run the build with --force.
 #
 # Masters can be PNG, WebP, JPEG or TIFF, ideally at least 2560 pixels wide.
 # Portrait or landscape is worked out from the master.

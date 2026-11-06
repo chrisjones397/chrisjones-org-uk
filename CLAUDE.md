@@ -58,7 +58,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   section). It copies index.html's `<style>` and header into every other page, so shared styles live in
   index.html. It fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
   Never edit generated files by hand; change index.html, the script or paintings.yaml and rebuild.
-- **paintings.yaml**: sections and paintings (title, details "Medium, H x W cm, year", wide), plus
+- **paintings.yaml**: sections and paintings (title, details "Medium, H x W cm, year", wide, white_paper: drawings
+  white balanced by the build from the paper at their edges; masters untouched), plus
   `contact_picture:`, `gallery_invitation:` (paintings shown before the 3D gallery loads) and `gallery:` settings.
   Master file names come from titles: `python3 tools/build_site.py --name "Title"`.
 - **Home page order**: opening forest video (.hero) / gallery section (#paintings, .invite) / contact
