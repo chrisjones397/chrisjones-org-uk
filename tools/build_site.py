@@ -168,7 +168,7 @@ def shown(text):
 # The list
 # ---------------------------------------------------------------------------
 SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[x\u00d7]\s*(\d+(?:\.\d+)?)\s*cm")   # height x width
-GALLERY_SETTINGS = ("size", "spacing", "spread", "depth", "nearness", "drift")                             # see paintings.yaml
+GALLERY_SETTINGS = ("size", "spacing", "spread", "depth", "nearness", "drift", "seed")                             # see paintings.yaml
 
 
 def read_list(site):

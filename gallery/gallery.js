@@ -20,7 +20,7 @@ import * as THREE from '../face/vendor/three.module.min.js';
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
 // The arrangement, from paintings.yaml's gallery: settings (all 1 as first built). Adding ?tune to the page's
 // address shows sliders for trying them out live; see tuner() at the end.
-const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, nearness: 0.5, drift: 1 };
+const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, nearness: 0.5, drift: 1, seed: 1 };
 const P = { ...DEFAULTS };
 for (const k in P) if (typeof settings[k] === 'number') P[k] = settings[k];
 const TUNE = /[?&]tune\b/.test(location.search);
@@ -75,15 +75,26 @@ function start() {
   const areas = data.map((p) => heightOf(p) ** 2 * p.w / p.h);
   const order = areas.map((a, i) => [a, i]).sort((x, y) => x[0] - y[0]).map((x) => x[1]);
   const rank = []; order.forEach((i, k) => { rank[i] = data.length > 1 ? k / (data.length - 1) : 0.5; });
+  // The seed setting picks which of many equally good arrangements you get: change it for a different shuffle.
   let seed = 7;
   const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  function shuffle() {
+    seed = 7 + Math.round(P.seed) * 7919;
+    for (let k = 0; k < 5; k++) rand();
+    const start = rand();
+    planes.forEach((m, i) => {
+      const u = m.userData;
+      u.f = (start + i * 0.618034 + (rand() - 0.5) * 0.15) % 1;
+      u.jitter = rand();
+      u.phase = rand() * 6.28;
+    });
+  }
   const geometry = new THREE.PlaneGeometry(1, 1);
   const planes = data.map((p, i) => {
     const h = heightOf(p);
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
-    const f = (0.35 + i * 0.618034 + (rand() - 0.5) * 0.15) % 1;
-    mesh.userData = { p, h, w: h * p.w / p.h, f, r: rank[i], jitter: rand(), phase: rand() * 6.28 };
+    mesh.userData = { p, h, w: h * p.w / p.h, r: rank[i] };
     scene.add(mesh);
     return mesh;
   });
@@ -108,6 +119,7 @@ function start() {
     perPx = viewH0 / H;                                         // ...so one pixel of scrolling is this far
     const narrow = camera.aspect < 0.9;
     scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4) * P.size;
+    shuffle();
     let y = 0, lastH = 0;
     const placed = [];
     planes.forEach((m, i) => {
@@ -147,7 +159,7 @@ function start() {
         }
         const prev = placed[placed.length - 1];
         const under = prev ? Math.max(0, 0.3 - Math.abs(prev.sx - sx) / (half || 1)) : 0;
-        const score = Math.abs(mass / total) / (half || 1) + 3 * awkward + 2 * cover + under + 0.08 * Math.abs(c - (u.jitter * 2 - 1));
+        const score = Math.abs(mass / total) / (half || 1) + 3 * awkward + 2 * cover + under + 0.25 * Math.abs(c - (u.jitter * 2 - 1));
         if (score < bestScore) { bestScore = score; best = sx; }
       }
       placed.push({ sx: best, cy: y, w: seenW, h: seen, a: seenW * seen });
@@ -164,20 +176,30 @@ function start() {
   addEventListener('resize', () => { if (innerWidth !== lastW) { lastW = innerWidth; layout(); } });
   if (window.ResizeObserver) new ResizeObserver(() => { if (stage.clientWidth !== W || stage.clientHeight !== H) layout(); }).observe(stage);
 
-  // The pictures: one size per painting, about what this screen needs
+  // The pictures: one size per painting, about what this screen needs on the wall; when one is brought
+  // forward, a larger size is fetched for it (once) and swapped in when it arrives, so the close view is sharp
   const want = Math.min(stage.clientWidth * renderer.getPixelRatio() * 0.6, 1536);
   const loader = new THREE.TextureLoader();
-  planes.forEach((m) => {
+  function picture(m, wanted, then) {
     const p = m.userData.p;
-    const w = p.widths.find((x) => x >= want) || p.widths[p.widths.length - 1];
+    const w = p.widths.find((x) => x >= wanted) || p.widths[p.widths.length - 1];
+    if (w <= (m.userData.loaded || 0)) return;
+    m.userData.loaded = w;
     loader.load(`${BASE}img/${p.name}-${w}.webp`, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      const old = m.material.map;
       m.material.map = tex;
       m.material.needsUpdate = true;
-      m.userData.ready = true;
+      if (old) old.dispose();
+      if (then) then();
     });
-  });
+  }
+  planes.forEach((m) => picture(m, want, () => { m.userData.ready = true; }));
+  const sharpen = (m) => {
+    const fill = Math.max(stage.clientWidth * 0.82, stage.clientHeight * 0.72 * m.userData.p.w / m.userData.p.h);
+    picture(m, fill * renderer.getPixelRatio(), null);
+  };
 
   // How far down the wall the page has scrolled, in pixels: 0 at the section's top, travelPx at its end
   const progress = () => Math.min(Math.max(-section.getBoundingClientRect().top, 0), travelPx);
@@ -221,7 +243,7 @@ function start() {
     const m = at(e.clientX, e.clientY);
     const again = m && m === focus;
     unfocus();
-    if (m && !again) { focus = m; m.userData.k = m.userData.k || 0; leaving = leaving.filter((x) => x !== m); focusAt = scrollY; }
+    if (m && !again) { focus = m; m.userData.k = m.userData.k || 0; leaving = leaving.filter((x) => x !== m); focusAt = scrollY; sharpen(m); }
   });
 
   // The caption: the painting under the pointer, or else the one nearest the middle of the view
@@ -292,8 +314,8 @@ function tuner(relayout) {
   box.style.cssText = 'position:fixed;z-index:2000;top:calc(var(--header-height,80px) + 12px);right:12px;width:min(300px,calc(100vw - 24px));' +
     'padding:14px 16px;border-radius:12px;background:rgba(40,40,40,0.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
     'color:#fff;font:14px/1.3 Inter,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.35)';
-  const labels = { size: 'Size', spacing: 'Spacing down', spread: 'Spread across', depth: 'Depth', nearness: 'Small ones nearer', drift: 'Drift' };
-  const ranges = { size: [0.4, 3], spacing: [0.2, 2.5], spread: [0, 2.5], depth: [0, 2.5], nearness: [0, 1], drift: [0, 3] };
+  const labels = { size: 'Size', spacing: 'Spacing down', spread: 'Spread across', depth: 'Depth', nearness: 'Small ones nearer', drift: 'Drift', seed: 'Shuffle' };
+  const ranges = { size: [0.4, 3], spacing: [0.2, 2.5], spread: [0, 2.5], depth: [0, 2.5], nearness: [0, 1], drift: [0, 3], seed: [1, 60] };
   const saved = { ...DEFAULTS };
   for (const k in saved) if (typeof settings[k] === 'number') saved[k] = settings[k];
   const rows = {};
@@ -303,10 +325,10 @@ function tuner(relayout) {
     row.style.cssText = 'display:grid;grid-template-columns:9.5em 1fr 2.6em;align-items:center;gap:8px;margin:6px 0';
     const name = document.createElement('span'); name.textContent = labels[k];
     const input = document.createElement('input');
-    Object.assign(input, { type: 'range', min: ranges[k][0], max: ranges[k][1], step: 0.05, value: P[k] });
+    Object.assign(input, { type: 'range', min: ranges[k][0], max: ranges[k][1], step: k === 'seed' ? 1 : 0.05, value: P[k] });
     input.style.width = '100%';
     const out = document.createElement('span'); out.style.textAlign = 'right';
-    const show = () => { out.textContent = (+P[k]).toFixed(2); };
+    const show = () => { out.textContent = k === 'seed' ? String(Math.round(P[k])) : (+P[k]).toFixed(2); };
     input.addEventListener('input', () => { P[k] = +input.value; show(); relayout(); save(); });
     show();
     row.append(name, input, out);

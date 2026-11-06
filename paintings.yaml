@@ -40,6 +40,7 @@ gallery:          # the floating wall on the home page; try values live at dev.c
   depth: 1         # how much their depths differ: more gives more parallax
   nearness: 0.5    # how far depth follows real size, small ones nearer (0: not at all; 1: fully, so all look alike)
   drift: 0         # how much they gently bob (0: still)
+  seed: 1          # which shuffle of the arrangement: any whole number gives a different one
 
 sections:
   - title: Featured
