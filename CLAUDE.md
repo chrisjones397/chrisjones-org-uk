@@ -70,7 +70,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   No modes: the section is as tall as the wall (the script sets its height), the view is pinned (sticky) while
   the page scrolls through it, and ordinary scrolling moves the camera down, so paintings rise past, at
   different depths (middle depth moves exactly with the page). Placement across balances how big paintings look
-  left and right. Click or tap brings a painting forward (others dim) and puts /paintings/<name>/ in the address
+  left and right. Click or tap brings a painting forward (others dim, and the heading fades: class `painting-forward` on the section) and puts /paintings/<name>/ in the address
   bar (history.pushState, no reload); clicking again, Escape, scrolling or Back sends it back. Snapping
   treats the tall section as free, like the profile. Its arrangement comes from paintings.yaml's `gallery:` settings (size,
   spacing, spread, depth, nearness, drift, seed); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit

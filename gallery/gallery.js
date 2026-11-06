@@ -245,12 +245,14 @@ function start() {
     m.userData.k = m.userData.k || 0;
     focusAt = scrollY;
     sharpen(m);
+    section.classList.add('painting-forward');   // the heading steps back with the other paintings
     document.title = `${m.userData.p.title} - ${SITE_TITLE}`;
   }
   function backward() {
     if (!focus) return;
     leaving.push(focus);
     focus = null;
+    section.classList.remove('painting-forward');
     document.title = SITE_TITLE;
   }
   function open(m) {

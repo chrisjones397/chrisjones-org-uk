@@ -320,7 +320,11 @@
       left: 50%;
       transform: translateX(-50%);
       white-space: nowrap;
+      transition: opacity 0.5s;
     }
+    /* While a painting is brought forward, everything else steps back: the other paintings dim (gallery.js)
+       and the heading fades, so the painting never sits under it */
+    .painting-forward .invite-title { opacity: 0; }
     .gallery-3d .invite-button, .gallery-3d .invite-alt { display: none; }   /* the wall has its own list link */
     .invite-pic {
       position: absolute;
