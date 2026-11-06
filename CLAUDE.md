@@ -72,7 +72,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   different depths (middle depth moves exactly with the page). Placement across balances how big paintings look
   left and right. Click or tap brings a painting forward (others dim); clicking it again sends it back. Snapping
   treats the tall section as free, like the profile. Its arrangement comes from paintings.yaml's `gallery:` settings (size,
-  spacing, spread, depth, drift); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit
+  spacing, spread, depth, nearness, drift); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit
   Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
 - **glass.js**: the header's thick-glass look over the opening video. The header's Gallery link goes to #paintings.

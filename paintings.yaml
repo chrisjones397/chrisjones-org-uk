@@ -38,6 +38,7 @@ gallery:          # the floating wall on the home page; try values live at dev.c
   spacing: 1       # the room down the wall from one painting to the next
   spread: 1        # how far they're scattered side to side (1: across most of the view)
   depth: 1         # how much their depths differ: more gives more parallax
+  nearness: 0.5    # how far depth follows real size, small ones nearer (0: not at all; 1: fully, so all look alike)
   drift: 0         # how much they gently bob (0: still)
 
 sections:

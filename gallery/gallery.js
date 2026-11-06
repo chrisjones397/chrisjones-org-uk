@@ -20,7 +20,7 @@ import * as THREE from '../face/vendor/three.module.min.js';
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
 // The arrangement, from paintings.yaml's gallery: settings (all 1 as first built). Adding ?tune to the page's
 // address shows sliders for trying them out live; see tuner() at the end.
-const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, drift: 1 };
+const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, nearness: 0.5, drift: 1 };
 const P = { ...DEFAULTS };
 for (const k in P) if (typeof settings[k] === 'number') P[k] = settings[k];
 const TUNE = /[?&]tune\b/.test(location.search);
@@ -68,8 +68,13 @@ function start() {
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 80);
   const viewTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
 
-  // Each painting's depth and side, with a little variety from a fixed seed, so it's the same every visit.
-  // Depths step round the range by the golden ratio, so neighbours are never at the same depth.
+  // Each painting's depth, with a little variety from a fixed seed, so it's the same every visit. Two things
+  // decide it, mixed by the nearness setting: a step round the range by the golden ratio, so neighbours are
+  // never at the same depth; and the painting's real size, smaller ones nearer, larger ones further back. Only
+  // partly mixed, larger paintings still look larger (fully, at 1, they would all look about the same size).
+  const areas = data.map((p) => heightOf(p) ** 2 * p.w / p.h);
+  const order = areas.map((a, i) => [a, i]).sort((x, y) => x[0] - y[0]).map((x) => x[1]);
+  const rank = []; order.forEach((i, k) => { rank[i] = data.length > 1 ? k / (data.length - 1) : 0.5; });
   let seed = 7;
   const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   const geometry = new THREE.PlaneGeometry(1, 1);
@@ -78,7 +83,7 @@ function start() {
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
     const f = (0.35 + i * 0.618034 + (rand() - 0.5) * 0.15) % 1;
-    mesh.userData = { p, h, w: h * p.w / p.h, f, jitter: rand(), phase: rand() * 6.28 };
+    mesh.userData = { p, h, w: h * p.w / p.h, f, r: rank[i], jitter: rand(), phase: rand() * 6.28 };
     scene.add(mesh);
     return mesh;
   });
@@ -107,7 +112,8 @@ function start() {
     const placed = [];
     planes.forEach((m, i) => {
       const u = m.userData;
-      u.d = Math.max(MID + (u.f - 0.5) * RANGE * P.depth, 4);
+      const mix = Math.min(Math.max(P.nearness, 0), 1);
+      u.d = Math.max(MID + ((1 - mix) * u.f + mix * u.r - 0.5) * RANGE * P.depth, 4);
       const sw = u.w * scale, sh = u.h * scale;
       m.scale.set(sw, sh, 1);
       const seen = sh * D0 / u.d;                               // its height as it looks, at the middle depth
@@ -286,15 +292,15 @@ function tuner(relayout) {
   box.style.cssText = 'position:fixed;z-index:2000;top:calc(var(--header-height,80px) + 12px);right:12px;width:min(300px,calc(100vw - 24px));' +
     'padding:14px 16px;border-radius:12px;background:rgba(40,40,40,0.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
     'color:#fff;font:14px/1.3 Inter,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.35)';
-  const labels = { size: 'Size', spacing: 'Spacing down', spread: 'Spread across', depth: 'Depth', drift: 'Drift' };
-  const ranges = { size: [0.4, 3], spacing: [0.2, 2.5], spread: [0, 2.5], depth: [0, 2.5], drift: [0, 3] };
+  const labels = { size: 'Size', spacing: 'Spacing down', spread: 'Spread across', depth: 'Depth', nearness: 'Small ones nearer', drift: 'Drift' };
+  const ranges = { size: [0.4, 3], spacing: [0.2, 2.5], spread: [0, 2.5], depth: [0, 2.5], nearness: [0, 1], drift: [0, 3] };
   const saved = { ...DEFAULTS };
   for (const k in saved) if (typeof settings[k] === 'number') saved[k] = settings[k];
   const rows = {};
   const save = () => { try { localStorage.setItem('gallery-tune', JSON.stringify(P)); } catch (e) {} };
   for (const k of Object.keys(labels)) {
     const row = document.createElement('label');
-    row.style.cssText = 'display:grid;grid-template-columns:7.5em 1fr 2.6em;align-items:center;gap:8px;margin:6px 0';
+    row.style.cssText = 'display:grid;grid-template-columns:9.5em 1fr 2.6em;align-items:center;gap:8px;margin:6px 0';
     const name = document.createElement('span'); name.textContent = labels[k];
     const input = document.createElement('input');
     Object.assign(input, { type: 'range', min: ranges[k][0], max: ranges[k][1], step: 0.05, value: P[k] });
