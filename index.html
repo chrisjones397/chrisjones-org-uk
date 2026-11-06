@@ -24,6 +24,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="face/face.css">
   <script>
+    /* Addresses in the page (pictures, scripts, links) are worked out from the home page's folder, fixed here
+       with a <base>, because the gallery changes the address bar to a painting's address (/paintings/<name>/)
+       when one is brought forward, and they mustn't then be worked out from there. (Opened at a painting's
+       address, worker.js has already put in <base href="/">.) */
+    if (!document.querySelector('base')) {
+      var base = document.createElement('base');
+      base.href = location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '');
+      document.head.prepend(base);
+    }
     /* The window's height, as --vh (one hundredth of it, in pixels). On phones it is measured when the page opens and
        again only when the phone turns, so nothing changes size, and the page doesn't jump, as Safari's bars show and
        hide while scrolling (Safari changes its own vh units then). Everything sized by the window height uses this. */
