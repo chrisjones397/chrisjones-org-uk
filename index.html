@@ -329,40 +329,40 @@
     }
     .invite-wall { position: absolute; inset: 0; transition: opacity 1s; }
     .gallery-3d .invite-wall, .gallery-live .invite-wall { opacity: 0; pointer-events: none; }   /* the floating gallery takes their place */
-    /* The floating gallery in the page (gallery/gallery.js): it fades in once its paintings have loaded, hangs
-       still while the page scrolls past, and fills the window while flying */
-    .float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; touch-action: pan-y; }
-    .gallery-live .float-section { opacity: 1; cursor: pointer; }
-    .gallery-live .invite-words {   /* a soft shade behind the words, so they read over the paintings */
-      background: radial-gradient(closest-side, rgba(70, 70, 70, 0.55), rgba(70, 70, 70, 0));
-      padding: 3em 4em;
-    }
+    /* The floating wall in the page (gallery/gallery.js). The section is as tall as the wall (the script sets
+       the exact height); the view of it stays in place while the page scrolls through, and the paintings
+       rise past. It fades in once its paintings have loaded. The heading scrolls away with the page. */
+    .float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
     .float-section canvas { display: block; width: 100%; height: 100%; }
-    .float-section .float-text, .float-section .float-hint, .float-exit { display: none; }
-    html.flying, html.flying body { overflow: hidden; overscroll-behavior: none; }
-    html.flying .float-section { position: fixed; z-index: 1001; touch-action: none; cursor: auto; }
-    html.flying .float-section canvas { cursor: grab; }
-    html.flying .float-section .float-text { display: flex; }
-    html.flying .float-section .float-hint { display: block; }
-    .float-exit {
-      position: absolute;
-      top: calc(env(safe-area-inset-top, 0px) + 22px);
-      right: calc(env(safe-area-inset-right, 0px) + 22px);
-      font: inherit;
-      font-size: 0.95rem;
-      font-weight: 300;
-      color: #fff;
-      padding: 0.55em 1.3em;
-      border: 1px solid rgba(255, 255, 255, 0.85);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.12);
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
-      cursor: pointer;
-      transition: background 0.3s, color 0.3s;
+    .float-section .float-text { display: none; }
+    .gallery-3d .invite { display: block; overflow: clip; height: calc(var(--vh, 1svh) * 800); }
+    .gallery-3d .float-section {
+      inset: auto;
+      position: sticky;
+      top: 0;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
     }
-    html.flying .float-exit { display: block; }
-    .float-exit:hover, .float-exit:focus-visible { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
+    .gallery-live .float-section { opacity: 1; }
+    .gallery-live .float-section .float-text { display: flex; }
+    .gallery-3d .invite-words {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .gallery-3d .invite-button, .gallery-3d .invite-alt { display: none; }   /* the wall has its own list link */
+    .gallery-live .invite-title {   /* a soft shade behind the heading, so it reads over the paintings */
+      background: radial-gradient(closest-side, rgba(70, 70, 70, 0.55), rgba(70, 70, 70, 0));
+      padding: 0.6em 1.6em;
+      margin-bottom: 0;
+    }
     .invite-pic {
       position: absolute;
       display: block;
@@ -644,9 +644,7 @@
                width="1536" height="1024" alt="Seascape #1" loading="lazy">
         </a>
       </div>
-      <div id="float-stage" class="float-stage float-section" data-mode="section" data-base="">
-        <button class="float-exit" type="button">Exit Gallery</button>
-        <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through; click a painting to bring it close</span><span class="touch">Swipe to look around; pinch to move through; tap a painting to bring it close</span></p>
+      <div id="float-stage" class="float-stage float-section" data-base="">
         <div class="float-text">
           <div id="float-caption" class="float-caption"><a class="t" href="gallery/list/" title="Open this painting's page"></a><p class="d"></p></div>
           <a class="float-list" href="gallery/list/">View as a list</a>
@@ -685,33 +683,17 @@
       white-space: nowrap;
     }
     .float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
-    .float-hint {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: calc(max(24px, 5vh) + 4.5rem);
-      text-align: center;
-      font-size: 0.95rem;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 1px 6px rgba(0,0,0,0.25);
-      transition: opacity 0.8s ease;
-      pointer-events: none;
-    }
-    .float-stage.moved .float-hint { opacity: 0; }
-    .float-hint .touch { display: none; }
-    @media (pointer: coarse) { .float-hint .touch { display: inline; } .float-hint .mouse { display: none; } }
     @media (max-width: 720px) {
       .float-text { flex-direction: column; align-items: flex-start; gap: 0.9rem; bottom: 20px; }
       .float-caption .t { font-size: 1.25rem; }
-      .float-hint { bottom: 11rem; }
     }
   </style>
       <script type="application/json" id="gallery-data">{"settings": {"spacing": 4, "spread": 0.75, "glide": 0.075}, "paintings": [{"name": "green-background-with-seven-figures", "title": "Green Background with Seven Figures", "details": "Oil on canvas, 60 x 90 cm, 2023", "wide": true, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-blue-with-border", "title": "Composition in Blue with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-red-with-border", "title": "Composition in Red with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-green-with-border", "title": "Composition in Green with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-yellow-with-border", "title": "Composition in Yellow with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "collaboration-with-teo-1", "title": "Collaboration with Teo #1", "details": "Soft pastel on paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "collaboration-with-teo-2", "title": "Collaboration with Teo #2", "details": "Soft pastel on paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "collaboration-with-teo-3", "title": "Collaboration with Teo #3", "details": "Watercolour on cotton paper, 30 x 42 cm, 2026", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "seascape-1", "title": "Seascape #1", "details": "Oil on board, 15 x 21 cm, 2024", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [15.0, 21.0]}, {"name": "mont-sainte-victoire-after-cezanne", "title": "Mont Sainte-Victoire, after Cézanne", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "cjon-de-las-tomasas-albaicin-granada", "title": "Cjón. de las Tomasas, Albaicín, Granada", "details": "Oil on canvas, 21 x 15 cm, 2002", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "ponte-alda-merini-milan", "title": "Ponte Alda Merini, Milan", "details": "Oil on canvas, 21 x 15 cm, 2004", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "nighttime-brussels", "title": "Nighttime, Brussels", "details": "Oil on canvas, 21 x 15 cm, 2013", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "apple-1", "title": "Apple #1", "details": "Oil on canvas paper, 15 x 21 cm, 2023", "wide": false, "w": 1734, "h": 1186, "widths": [300, 480, 768, 1024, 1536, 1734], "cm": [15.0, 21.0]}, {"name": "apple-2", "title": "Apple #2", "details": "Oil on canvas paper, 15 x 21 cm, 2023", "wide": false, "w": 3523, "h": 2340, "widths": [300, 480, 768, 1024, 1536, 2560, 2560], "cm": [15.0, 21.0]}]}</script>
-      <script type="module" src="gallery/gallery.js?v=8b9bcc89"></script>
+      <script type="module" src="gallery/gallery.js?v=018aa9d2"></script>
       <!-- gallery invitation: end -->
       <div class="invite-words">
         <h2 class="invite-title">Paintings</h2>
-        <a class="invite-button" href="gallery/list/">Enter Gallery</a>
+        <a class="invite-button" href="gallery/list/">See the paintings</a>
         <p class="invite-alt"><a href="gallery/list/">View as a list</a></p>
       </div>
     </section>

@@ -331,7 +331,7 @@ INVITE_COUNT = 5
 
 
 def invite_html(site, paintings, settings):
-    """The home page's gallery section: the floating gallery, hanging still until the visitor chooses to fly
+    """The home page's gallery section: the floating wall, which the page scrolls down through
     (gallery/gallery.js), and, until it has loaded or where it can't run, a few paintings hung around the
     words, each linking to its page. Those are the titles listed under gallery_invitation: in
     paintings.yaml, or the first five paintings."""
@@ -356,9 +356,7 @@ def invite_html(site, paintings, settings):
     return f"""
       <div class="invite-wall" aria-hidden="true">{pics}
       </div>
-      <div id="float-stage" class="float-stage float-section" data-mode="section" data-base="">
-        <button class="float-exit" type="button">Exit Gallery</button>
-        <p class="float-hint" aria-hidden="true"><span class="mouse">Drag to look around; scroll the wheel, or pinch, to move through; click a painting to bring it close</span><span class="touch">Swipe to look around; pinch to move through; tap a painting to bring it close</span></p>
+      <div id="float-stage" class="float-stage float-section" data-base="">
         <div class="float-text">
           <div id="float-caption" class="float-caption"><a class="t" href="gallery/list/" title="Open this painting's page"></a><p class="d"></p></div>
           <a class="float-list" href="gallery/list/">View as a list</a>
@@ -520,7 +518,7 @@ def build_404(head_bits, style, header):
 """
 
 
-# The caption, hint and links over the floating gallery: on its own page and in the home page's section
+# The caption and link over the floating wall, in the home page's gallery section
 FLOAT_UI_CSS = """
     /* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right
        edges line up with the name and the menu above */
@@ -554,25 +552,9 @@ FLOAT_UI_CSS = """
       white-space: nowrap;
     }
     .float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
-    .float-hint {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: calc(max(24px, 5vh) + 4.5rem);
-      text-align: center;
-      font-size: 0.95rem;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 1px 6px rgba(0,0,0,0.25);
-      transition: opacity 0.8s ease;
-      pointer-events: none;
-    }
-    .float-stage.moved .float-hint { opacity: 0; }
-    .float-hint .touch { display: none; }
-    @media (pointer: coarse) { .float-hint .touch { display: inline; } .float-hint .mouse { display: none; } }
     @media (max-width: 720px) {
       .float-text { flex-direction: column; align-items: flex-start; gap: 0.9rem; bottom: 20px; }
       .float-caption .t { font-size: 1.25rem; }
-      .float-hint { bottom: 11rem; }
     }
 """
 

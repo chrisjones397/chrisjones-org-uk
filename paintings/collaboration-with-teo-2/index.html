@@ -303,40 +303,40 @@
     }
     .invite-wall { position: absolute; inset: 0; transition: opacity 1s; }
     .gallery-3d .invite-wall, .gallery-live .invite-wall { opacity: 0; pointer-events: none; }   /* the floating gallery takes their place */
-    /* The floating gallery in the page (gallery/gallery.js): it fades in once its paintings have loaded, hangs
-       still while the page scrolls past, and fills the window while flying */
-    .float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; touch-action: pan-y; }
-    .gallery-live .float-section { opacity: 1; cursor: pointer; }
-    .gallery-live .invite-words {   /* a soft shade behind the words, so they read over the paintings */
-      background: radial-gradient(closest-side, rgba(70, 70, 70, 0.55), rgba(70, 70, 70, 0));
-      padding: 3em 4em;
-    }
+    /* The floating wall in the page (gallery/gallery.js). The section is as tall as the wall (the script sets
+       the exact height); the view of it stays in place while the page scrolls through, and the paintings
+       rise past. It fades in once its paintings have loaded. The heading scrolls away with the page. */
+    .float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
     .float-section canvas { display: block; width: 100%; height: 100%; }
-    .float-section .float-text, .float-section .float-hint, .float-exit { display: none; }
-    html.flying, html.flying body { overflow: hidden; overscroll-behavior: none; }
-    html.flying .float-section { position: fixed; z-index: 1001; touch-action: none; cursor: auto; }
-    html.flying .float-section canvas { cursor: grab; }
-    html.flying .float-section .float-text { display: flex; }
-    html.flying .float-section .float-hint { display: block; }
-    .float-exit {
-      position: absolute;
-      top: calc(env(safe-area-inset-top, 0px) + 22px);
-      right: calc(env(safe-area-inset-right, 0px) + 22px);
-      font: inherit;
-      font-size: 0.95rem;
-      font-weight: 300;
-      color: #fff;
-      padding: 0.55em 1.3em;
-      border: 1px solid rgba(255, 255, 255, 0.85);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.12);
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
-      cursor: pointer;
-      transition: background 0.3s, color 0.3s;
+    .float-section .float-text { display: none; }
+    .gallery-3d .invite { display: block; overflow: clip; height: calc(var(--vh, 1svh) * 800); }
+    .gallery-3d .float-section {
+      inset: auto;
+      position: sticky;
+      top: 0;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
     }
-    html.flying .float-exit { display: block; }
-    .float-exit:hover, .float-exit:focus-visible { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
+    .gallery-live .float-section { opacity: 1; }
+    .gallery-live .float-section .float-text { display: flex; }
+    .gallery-3d .invite-words {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100svh;
+      height: calc(var(--vh, 1svh) * 100);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .gallery-3d .invite-button, .gallery-3d .invite-alt { display: none; }   /* the wall has its own list link */
+    .gallery-live .invite-title {   /* a soft shade behind the heading, so it reads over the paintings */
+      background: radial-gradient(closest-side, rgba(70, 70, 70, 0.55), rgba(70, 70, 70, 0));
+      padding: 0.6em 1.6em;
+      margin-bottom: 0;
+    }
     .invite-pic {
       position: absolute;
       display: block;

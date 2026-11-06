@@ -63,8 +63,12 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
   glide on to the next resting place in the direction of travel, never back; free inside the profile; any
   wheel/touch/key cancels). Christopher's principle: work with the visitor, never against them.
-- **gallery/gallery.js** (Three.js, vendored in face/vendor/): the floating gallery, a home page section (data-mode="section") that hangs still until "Enter Gallery", then fills the
-  window until "Exit Gallery" / Escape. The view is remembered for the visit (sessionStorage).
+- **gallery/gallery.js** (Three.js, vendored in face/vendor/): the floating wall, the home page's gallery section.
+  No modes: the section is as tall as the wall (the script sets its height), the view is pinned (sticky) while
+  the page scrolls through it, and ordinary scrolling moves the camera down, so paintings rise past, at
+  different depths (middle depth moves exactly with the page). Click or tap opens a painting's page. Snapping
+  treats the tall section as free, like the profile. (Until Nov 2026 it was a fly-through with Enter/Exit
+  Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
 - **glass.js**: the header's thick-glass look over the opening video. The header's Gallery link goes to #paintings.
 
