@@ -7,6 +7,7 @@ README.md
 CLAUDE.md
 wrangler.jsonc
 worker.js
+admin.js
 .git/
 .github/
 .wrangler/

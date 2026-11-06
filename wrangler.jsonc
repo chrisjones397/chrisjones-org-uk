@@ -15,7 +15,7 @@
     "directory": ".",                    // the site is the repository itself (less .assetsignore)
     "binding": "ASSETS",                 // how worker.js reaches the files
     "not_found_handling": "404-page",    // unknown addresses get 404.html, not a blank page
-    "run_worker_first": ["/paintings/*"] // painting addresses go to worker.js first
+    "run_worker_first": ["/paintings/*", "/admin", "/admin/*"] // painting addresses and the admin page go to worker.js first
   },
   "env": {
     "dev": {
@@ -27,7 +27,7 @@
         "directory": ".",
         "binding": "ASSETS",
         "not_found_handling": "404-page",
-        "run_worker_first": ["/paintings/*"]
+        "run_worker_first": ["/paintings/*", "/admin", "/admin/*"]
       }
     }
   }

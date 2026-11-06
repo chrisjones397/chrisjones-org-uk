@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Add a painting - Admin</title>
+<!-- The admin page: add a painting or drawing to the gallery from a phone or the Mac.
+     Only worker.js serves this file, and only to someone signed in through Cloudflare Access (see worker.js).
+     Sending the form makes one commit on dev: the master image in masters/ and its entry in paintings.yaml.
+     Cloudflare's build of dev then runs tools/build_site.py, so it appears on dev.chrisjones.org.uk a few
+     minutes later. -->
+<style>
+  :root { color-scheme: dark; --ink: #eee; --dim: #999; --line: #444; --glow: #fff8e0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #1c1c1c; color: var(--ink);
+         font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  main { max-width: 34rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+  h1 { font-weight: 300; font-size: 1.9rem; margin: 0 0 1.25rem; }
+  a { color: var(--ink); text-decoration: none; }
+  a:hover { text-shadow: 0 0 8px var(--glow); }
+  label { display: block; margin: 1.1rem 0 0.3rem; color: var(--dim); font-size: 0.9rem; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 0.6rem 0.7rem; font: inherit; color: var(--ink);
+    background: #262626; border: 1px solid var(--line); border-radius: 6px; }
+  input:focus, select:focus { outline: none; border-color: #888; }
+  .row { display: flex; gap: 0.75rem; }
+  .row > div { flex: 1; }
+  .tick { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.2rem; color: var(--ink); font-size: 1rem; }
+  .tick input { width: 1.3rem; height: 1.3rem; }
+  .hint { color: var(--dim); font-size: 0.85rem; margin: 0.3rem 0 0; }
+  #preview { display: none; margin-top: 0.8rem; max-width: 100%; max-height: 50vh; border-radius: 4px; }
+  button { margin-top: 1.6rem; width: 100%; padding: 0.8rem; font: inherit; font-size: 1.05rem;
+           color: #111; background: #ddd; border: 0; border-radius: 6px; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status { margin-top: 1rem; min-height: 1.5em; }
+  #status.error { color: #f99; }
+  #newsection { display: none; margin-top: 0.5rem; }
+  footer { margin-top: 2.5rem; color: var(--dim); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Add a painting</h1>
+<form id="form">
+  <label for="image">Photo</label>
+  <input id="image" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif" required>
+  <p class="hint">Cropped to the painting (for a drawing on white paper: to the paper, with no table showing).</p>
+  <img id="preview" alt="">
+
+  <label for="title">Title</label>
+  <input id="title" name="title" type="text" required autocomplete="off" placeholder="Life Drawing #4">
+  <p class="hint" id="name"></p>
+
+  <label for="medium">Medium</label>
+  <input id="medium" name="medium" type="text" autocomplete="off" placeholder="Oil on canvas">
+
+  <div class="row">
+    <div><label for="height">Height (cm)</label><input id="height" name="height" type="number" min="1" step="any" inputmode="decimal"></div>
+    <div><label for="width">Width (cm)</label><input id="width" name="width" type="number" min="1" step="any" inputmode="decimal"></div>
+    <div><label for="year">Year</label><input id="year" name="year" type="number" min="1900" max="2100" inputmode="numeric"></div>
+  </div>
+
+  <label for="section">Section</label>
+  <select id="section" name="section" required><option value="">Loading…</option></select>
+  <input id="newsection" name="newsection" type="text" autocomplete="off" placeholder="Name of the new section">
+
+  <label class="tick"><input id="white_paper" name="white_paper" type="checkbox"> Drawing on white paper (make the paper pure white)</label>
+  <label class="tick"><input id="wide" name="wide" type="checkbox"> Wide (span the full width of the gallery list)</label>
+
+  <button id="send" type="submit">Add to dev</button>
+  <div id="status" role="status"></div>
+</form>
+<footer>Goes on <a href="https://dev.chrisjones.org.uk/">dev.chrisjones.org.uk</a> a few minutes after sending; put dev live as usual when it looks right.</footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const status = (text, error) => { $('status').textContent = text; $('status').className = error ? 'error' : ''; };
+$('year').value = new Date().getFullYear();
+
+// The same rule as slug() in tools/build_site.py: a title's file and page name.
+function slug(title) {
+  let t = title.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+  t = t.replace(/&/g, ' and ').replace(/[#,.'’]/g, '');
+  return t.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+let taken = new Set();
+$('title').addEventListener('input', () => {
+  const n = slug($('title').value);
+  $('name').textContent = !n ? '' : taken.has(n) ? `“${n}” is already in the gallery: choose another title.` : `Address: /paintings/${n}/`;
+});
+
+fetch('/admin/api/sections').then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((d) => {
+  taken = new Set(d.names);
+  $('section').innerHTML = d.sections.map((s) => `<option>${s.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('')
+    + '<option value="__new">New section…</option>';
+  $('section').value = d.sections.includes('Drawings') ? 'Drawings' : d.sections[0];
+}).catch((e) => status(`Couldn't read the sections (${e}). Try reloading.`, true));
+$('section').addEventListener('change', () => {
+  const isNew = $('section').value === '__new';
+  $('newsection').style.display = isNew ? 'block' : 'none';
+  $('newsection').required = isNew;
+});
+
+// Photos are sent as they are when the build can read them (JPEG, PNG, WebP, TIFF). An iPhone's HEIC is turned
+// into a high-quality JPEG here first, upright, by the browser (Safari can read HEIC; Chrome on a Mac can't).
+let upload = null;
+$('image').addEventListener('change', async () => {
+  upload = null; $('preview').style.display = 'none'; status('');
+  const f = $('image').files[0];
+  if (!f) return;
+  const heic = /heic|heif/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
+  try {
+    if (heic) {
+      status('Converting from HEIC…');
+      const bmp = await createImageBitmap(f);
+      const c = document.createElement('canvas');
+      c.width = bmp.width; c.height = bmp.height;
+      c.getContext('2d').drawImage(bmp, 0, 0);
+      const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.95));
+      if (!blob) throw new Error('no JPEG');
+      upload = { blob, ext: 'jpg' };
+    } else {
+      const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/tiff': 'tif' })[f.type]
+        || (f.name.match(/\.(jpe?g|png|webp|tiff?)$/i) || [])[1]?.toLowerCase().replace('jpeg', 'jpg').replace('tiff', 'tif');
+      if (!ext) throw new Error('type');
+      upload = { blob: f, ext };
+    }
+    $('preview').src = URL.createObjectURL(upload.blob);
+    $('preview').style.display = 'block';
+    status('');
+  } catch (e) {
+    status(heic ? "This browser can't read HEIC photos. Use Safari, or export the photo as JPEG first."
+                : 'Use a JPEG, PNG, WebP, TIFF or HEIC photo.', true);
+  }
+});
+
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!upload) return status('Choose a photo first.', true);
+  const title = $('title').value.trim();
+  if (taken.has(slug(title))) return status('That title is already in the gallery.', true);
+  const fd = new FormData();
+  for (const k of ['title', 'medium', 'height', 'width', 'year', 'section', 'newsection']) fd.append(k, $(k).value.trim());
+  fd.append('white_paper', $('white_paper').checked ? '1' : '');
+  fd.append('wide', $('wide').checked ? '1' : '');
+  fd.append('image', upload.blob, `upload.${upload.ext}`);
+  $('send').disabled = true;
+  status('Sending…');
+  try {
+    const r = await fetch('/admin/api/add', { method: 'POST', body: fd });
+    const d = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    taken.add(d.name);
+    status(`Added “${title}” to dev. It should appear on dev.chrisjones.org.uk in a few minutes.`);
+    $('form').reset(); $('year').value = new Date().getFullYear();
+    $('preview').style.display = 'none'; $('name').textContent = ''; upload = null;
+    if (![...$('section').options].some((o) => o.value === d.section)) {
+      const o = document.createElement('option'); o.textContent = d.section;
+      $('section').insertBefore(o, $('section').lastElementChild);
+    }
+    $('section').value = d.section; $('newsection').style.display = 'none'; $('newsection').required = false;
+  } catch (err) {
+    status(`Not added: ${err.message}`, true);
+  } finally {
+    $('send').disabled = false;
+  }
+});
+</script>
+</body>
+</html>

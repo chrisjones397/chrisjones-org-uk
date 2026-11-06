@@ -1,6 +1,7 @@
 # Notes for Claude: chrisjones.org.uk
 
-Christopher's site: hand-written HTML, CSS and JavaScript, no framework and no build step on Cloudflare.
+Christopher's site: hand-written HTML, CSS and JavaScript, no framework. Cloudflare's build only fills in what
+git lacks (`sh tools/cloudflare_build.sh`: build_site.py --missing-only, for paintings added from the admin page).
 The README covers the workflow for people; this file adds what a new Claude session needs.
 Always: British English; links are never underlined; give Christopher the commands so he can do things himself.
 Consistency matters to him: all text below the header shares one shadow (`--shadow` on body; the header has its
@@ -13,7 +14,8 @@ once at the top of index.html's styles. Section headings mirror the opening titl
 - **main** is live, chrisjones.org.uk. It only ever moves by fast-forwarding to dev, after Christopher approves.
 - **painted-forest-tools** holds the scripts that made the opening video. Never merged, never published.
 - Cloudflare: two Workers build from this repository. chrisjones397-github-io builds main (`npx wrangler deploy`);
-  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Settings in wrangler.jsonc (no workers.dev or preview
+  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Both have the build command
+  `sh tools/cloudflare_build.sh` (set in each Worker's build settings). Settings in wrangler.jsonc (no workers.dev or preview
   addresses; Worker logs kept);
   `.assetsignore` lists what isn't published (this file, the README, tools/, masters/, paintings.yaml...).
 
@@ -83,6 +85,15 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   the opening video and the contact photo; over the floating gallery only with `?glass=N` in the address (N frames
   skipped between copies; off by default as it made phones stutter; gallery.js sends `glass-frame` events); not the head animation (by choice); plain CSS frost elsewhere. The header's
   Gallery link goes to #paintings.
+- **The admin page**, dev.chrisjones.org.uk/admin/ (admin/index.html and admin.js, reached through worker.js):
+  add a painting from the phone or Mac: photo (HEIC turned into JPEG in the browser), title, medium, size, year,
+  section (or a new one), white paper and wide ticks. It makes one commit on dev (master + paintings.yaml,
+  edited as text so comments stay) through the GitHub API; Cloudflare's build then makes the images. Guarded
+  by Cloudflare Access (one-time code to Christopher's email) and admin.js checks the Access token itself.
+  Only the dev Worker has its settings (ACCESS_TEAM, ACCESS_AUD, secret GITHUB_TOKEN: a fine-grained token,
+  contents read and write on this repository only); without them /admin is "not found", as on live.
+  Images it adds exist only in Cloudflare's deployment until build_site.py is next run here or on the Mac and
+  committed: after pulling an admin addition, run the build before committing other changes.
 - **worker.js** (the only server code; wrangler.jsonc sends only /paintings/* to it): a painting's address is the
   home page with that painting brought forward, one version of the truth however you arrive. It serves index.html
   with that painting's title, description and og:image (from gallery/paintings.json), a canonical link, and

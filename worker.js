@@ -1,5 +1,6 @@
 /* The site's one piece of server code. Cloudflare runs it (see wrangler.jsonc) only for a painting's address,
-   /paintings/<name>/; everything else is served straight from the files.
+   /paintings/<name>/, and for the admin page, /admin/ (handed to admin.js); everything else is served
+   straight from the files.
 
    A painting's address is the home page with that painting brought forward in the floating gallery: the same
    page and the same view however you arrive, whether by enlarging the painting in the gallery (gallery.js then
@@ -14,11 +15,14 @@
    tools/build_site.py writes from paintings.yaml. An unknown name gets the site's 404 page; an old name that's
    listed as renamed is sent on to the new one. */
 
+import { admin } from './admin.js';
+
 const SITE = 'Christopher Jones - Fine Art';
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, url);
     const m = url.pathname.match(/^\/paintings\/([a-z0-9-]+)\/?$/);
     if (!m) return env.ASSETS.fetch(request);
     if (!url.pathname.endsWith('/')) return Response.redirect(`${url.origin}${url.pathname}/${url.search}`, 301);
