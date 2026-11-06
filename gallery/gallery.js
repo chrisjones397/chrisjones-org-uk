@@ -76,14 +76,16 @@ function start() {
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
     const f = (0.35 + i * 0.618034 + (rand() - 0.5) * 0.15) % 1;
-    mesh.userData = { p, h, w: h * p.w / p.h, f, side: i % 2 ? 1 : -1,
-                      reach: 0.35 + 0.65 * rand(), phase: rand() * 6.28 };
+    // Across: anywhere from edge to edge, stepping by the golden ratio so neighbours are well apart and
+    // the wall never settles into columns
+    const across = ((0.5 + i * 0.381966 + (rand() - 0.5) * 0.12) % 1) * 2 - 1;
+    mesh.userData = { p, h, w: h * p.w / p.h, f, across, phase: rand() * 6.28 };
     scene.add(mesh);
     return mesh;
   });
 
-  // Laying out the wall for this window: across, the paintings alternate sides on a computer and keep near
-  // the middle on a phone; down, each follows the last with room for both, more room on a phone, where
+  // Laying out the wall for this window: across, the paintings scatter from edge to edge (on a phone, a
+  // little nearer the middle); down, each follows the last with room for both, more room on a phone, where
   // they're one above another rather than side by side. The section is then made as tall as the journey.
   let H = 0, W = 0, perPx = 0, travelPx = 0, scale = 1;
   function layout() {
@@ -96,7 +98,7 @@ function start() {
     perPx = viewH0 / H;                                         // ...so one pixel of scrolling is this far
     const narrow = camera.aspect < 0.9;
     scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4) * P.size;
-    let y = -(narrow ? 0.62 : 0.3) * viewH0, lastH = 0;          // the first starts below the heading
+    let y = -(narrow ? 0.38 : 0.18) * viewH0, lastH = 0;         // the first starts below the heading
     planes.forEach((m, i) => {
       const u = m.userData;
       u.d = Math.max(MID + (u.f - 0.5) * RANGE * P.depth, 4);
@@ -108,7 +110,7 @@ function start() {
       u.y = u.cy = y;                   // the view is level with it (it's in the middle) when the page is here
       const halfW = u.d * viewTan * camera.aspect;              // half the view's width at its depth
       const room = Math.max(halfW * 0.94 - sw / 2, 0);
-      u.x = u.side * Math.min(room * u.reach * (narrow ? 0.45 : 1) * P.spread, Math.max(halfW - sw / 2, 0));
+      u.x = u.across * Math.min(room * (narrow ? 0.7 : 1) * P.spread, Math.max(halfW - sw / 2, 0));
     });
     const end = planes[planes.length - 1].userData.cy;
     travelPx = Math.ceil(-end / perPx);                         // until the last painting is in the middle

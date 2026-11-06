@@ -45,6 +45,10 @@
       font-family: "Inter", sans-serif;
       background-color: rgb(100, 100, 100);
     }
+    /* One soft shadow behind all the text, so it reads the same over the video, the paintings, the
+       pictures and plain grey alike. The header keeps its own lighter one. */
+    body { text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45); }
+    .header { text-shadow: none; }
     ul {
       list-style: none;
     }
@@ -310,17 +314,15 @@
     }
     .gallery-live .float-section { opacity: 1; }
     .gallery-live .float-section .float-text { display: flex; }
-    .gallery-3d .invite-words {
+    .gallery-3d .invite-words { position: absolute; inset: 0; padding: 0; }
+    /* The heading mirrors the opening title: that sits 22% of the window up from the bottom, this 22% down
+       from the top (less the room for its shade) */
+    .gallery-3d .invite-title {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 100svh;
-      height: calc(var(--vh, 1svh) * 100);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      top: calc(var(--vh, 1svh) * 22 - 0.6em);
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
     }
     .gallery-3d .invite-button, .gallery-3d .invite-alt { display: none; }   /* the wall has its own list link */
     .gallery-live .invite-title {   /* a soft shade behind the heading, so it reads over the paintings */

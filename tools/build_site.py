@@ -535,7 +535,6 @@ FLOAT_UI_CSS = """
       justify-content: space-between;
       gap: 2rem;
       pointer-events: none;
-      text-shadow: 0 1px 6px rgba(0,0,0,0.25);
     }
     .float-text a { pointer-events: auto; }
     .float-caption {
