@@ -49,11 +49,12 @@
   <img id="preview" alt="">
 
   <label for="title">Title</label>
-  <input id="title" name="title" type="text" required autocomplete="off" placeholder="Life Drawing #4">
+  <input id="title" name="title" type="text" required autocomplete="off">
   <p class="hint" id="name"></p>
 
   <label for="medium">Medium</label>
-  <input id="medium" name="medium" type="text" autocomplete="off" placeholder="Oil on canvas">
+  <input id="medium" name="medium" type="text" autocomplete="off" value="Oil on canvas">
+  <p class="hint">Filled in with the medium you used last time on this device.</p>
 
   <div class="row">
     <div><label for="height">Height (cm)</label><input id="height" name="height" type="number" min="1" step="any" inputmode="decimal"></div>
@@ -77,6 +78,10 @@
 const $ = (id) => document.getElementById(id);
 const status = (text, error) => { $('status').textContent = text; $('status').className = error ? 'error' : ''; };
 $('year').value = new Date().getFullYear();
+// The medium box holds a real value, never grey example text (which looked filled in but sent nothing):
+// the medium last sent from this device, or Oil on canvas.
+const remembered = () => { try { return localStorage.getItem('admin-medium'); } catch { return null; } };
+if (remembered()) $('medium').value = remembered();
 
 // The same rule as slug() in tools/build_site.py: a title's file and page name.
 function slug(title) {
@@ -152,8 +157,10 @@ $('form').addEventListener('submit', async (e) => {
     const d = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     taken.add(d.name);
+    const medium = $('medium').value.trim();
+    try { localStorage.setItem('admin-medium', medium); } catch {}
     status(`Added “${title}” to dev. It should appear on dev.chrisjones.org.uk in a few minutes.`);
-    $('form').reset(); $('year').value = new Date().getFullYear();
+    $('form').reset(); $('year').value = new Date().getFullYear(); $('medium').value = medium;
     $('preview').style.display = 'none'; $('name').textContent = ''; upload = null;
     if (![...$('section').options].some((o) => o.value === d.section)) {
       const o = document.createElement('option'); o.textContent = d.section;
