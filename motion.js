@@ -123,7 +123,7 @@
 (function () {
   const sections = [...document.querySelectorAll('.hero, .invite, .contact, .face-section')];
   if (!sections.length) return;
-  const REST = 160;          // milliseconds without scrolling before the page counts as at rest
+  const REST = 100;          // milliseconds without scrolling before the page counts as at rest
   const INTO = 0.15;         // how far into the next section (a fraction of the window) before it glides on
   const MIN = 0.45, MAX = 1.1;   // glide time in seconds, for the shortest and a full window's distance
   const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
