@@ -20,8 +20,13 @@ Every commit is kept, so any file, or the whole site, can be returned to an earl
 4. Check it on localhost, then commit and push to dev.
 
 The script makes every size in `img/`, the gallery on the home page (between the gallery
-markers in index.html) and each painting's page in `paintings/`. Don't edit those by hand:
-the next run replaces them.
+markers in index.html) and `gallery/paintings.json`. Don't edit those by hand: the next run replaces them.
+
+A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
+forward in the gallery; there are no separate painting pages. On Cloudflare, `worker.js` answers those
+addresses (with the painting's title and preview image for link previews). Your local Apache copy has no
+Worker, so there those addresses don't open, though enlarging paintings in the gallery works as usual. To try
+them locally as Cloudflare would run them: `npx wrangler dev --env dev`, then open http://localhost:8787.
 
 ## Putting dev live
 

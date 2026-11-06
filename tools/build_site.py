@@ -16,8 +16,9 @@ What it makes, all from paintings.yaml and masters/:
     its own width). The browser picks the size it needs; the largest is the full-size view.
   * img/<name>-preview.jpg: 1200 wide, for link previews (some apps still want JPEG).
   * The gallery on the home page: everything between the "gallery" markers in index.html.
-  * paintings/<name>/index.html: each painting's own page, with the home page's header,
-    the painting large (click for full size), its caption, Previous / Next and the footer.
+  * gallery/paintings.json: each painting's title, details and link-preview image, for worker.js.
+    A painting's address, /paintings/<name>/, is the home page with that painting brought forward in
+    the floating gallery: worker.js answers it (see there). There are no separate painting pages.
   * gallery/list/index.html: the same paintings as a plain grid.
   * med/contact-<width>.webp: the home page's contact picture, from the file named by contact_picture: in
     paintings.yaml (a photo kept in med/jpg/, as it isn't a painting).
@@ -30,8 +31,8 @@ What it makes, all from paintings.yaml and masters/:
 
 Images are only remade when the master is newer than them (or with --force), so a run
 after a caption change is quick. Files it made earlier for paintings no longer in the
-list are removed: in img/ only files named like the ones above, and in paintings/ only
-pages carrying its own marker comment. Nothing else is touched.
+list are removed: in img/ only files named like the ones above. Any painting pages left in paintings/
+from before are removed (only pages carrying its own marker comment). Nothing else is touched.
 
 Names: each painting's master, image files and page address come from its title:
     lower case; accents removed (é -> e); "&" -> "and"; "#", commas, full stops and
@@ -72,7 +73,6 @@ GALLERY_END = "<!-- gallery: end -->"
 # How wide each kind of painting is shown in the gallery, for the browser's choice of size
 SIZES_WIDE = "(max-width: 1200px) 100vw, 1200px"
 SIZES_GRID = "(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-SIZES_PAGE = "(max-width: 1240px) 100vw, 1200px"
 
 # ---------------------------------------------------------------------------
 # Old page names that should keep working after a painting is renamed:
@@ -98,7 +98,7 @@ EXTRAS_HEAD = """<style>
 EXTRAS_RE = re.compile(r"\s*" + re.escape(EXTRAS_START) + r".*?" + re.escape(EXTRAS_END), re.S)
 
 PAGE_CSS = """
-    /* Painting page */
+    /* The 404 page's text (once also each painting's own page) */
     .painting-page {
       max-width: 1200px;
       margin: 0 auto;
@@ -116,20 +116,9 @@ PAGE_CSS = """
       width: auto;
       height: auto;
     }
-    .painting-page a.full-size { display: block; cursor: zoom-in; }
     .painting-page h1 {
       text-align: center;
     }
-    .painting-page .details { margin-top: -0.75rem; opacity: 0.85; }
-    .painting-links {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      max-width: 520px;
-      font-size: 0.95rem;
-    }
-    .painting-links a, .painting-links span { padding: 0.25rem 0; }
-    .painting-links span[aria-disabled] { color: rgba(255,255,255,0.3); cursor: default; }
     .site-footer {
       max-width: 1200px;
       margin: 0 auto;
@@ -427,67 +416,6 @@ def head_bits_from(index_html, up="../../"):
     return "\n".join(keep)
 
 
-def build_page(p, prev, nxt, head_bits, style, header):
-    esc = html.escape
-    url = f"{SITE_URL}/{PAGES_DIR}/{p['name']}/"
-    pw, ph = p["preview_size"]
-    prev_html = (f'<a href="../{prev["name"]}/" rel="prev">&larr; Previous</a>' if prev
-                 else '<span aria-disabled="true">&larr; Previous</span>')
-    next_html = (f'<a href="../{nxt["name"]}/" rel="next">Next &rarr;</a>' if nxt
-                 else '<span aria-disabled="true">Next &rarr;</span>')
-    details = f'\n      <p class="details">{shown(p["details"])}</p>' if p["details"] else ""
-    full = f"../../{IMG_DIR}/{p['name']}-{p['widths'][-1]}.webp"
-    return f"""<!DOCTYPE html>
-{MARKER}
-<html lang="en" data-page="painting">
-<head>
-{head_bits}
-  <title>{esc(p["title"])} - Christopher Jones - Fine Art</title>
-  <meta name="description" content="{esc(p["title"])}, by Christopher Jones.">
-  <link rel="canonical" href="{url}">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Christopher Jones - Fine Art">
-  <meta property="og:title" content="{esc(p["title"])}">
-  <meta property="og:description" content="By Christopher Jones">
-  <meta property="og:url" content="{url}">
-  <meta property="og:image" content="{SITE_URL}/{p["preview"]}">
-  <meta property="og:image:width" content="{pw}">
-  <meta property="og:image:height" content="{ph}">
-  <meta name="twitter:card" content="summary_large_image">
-  <style>{style}{PAGE_CSS}  </style>
-  {EXTRAS_START}
-  {EXTRAS_HEAD}
-  {EXTRAS_END}
-</head>
-<body>
-
-{header}
-
-  <main id="main-content">
-    <article class="painting-page">
-      <a class="full-size" href="{full}" title="Open the full-size image">
-        {img_tag(p, "../../", SIZES_PAGE, False, "        ")}
-      </a>
-      <h1>{shown(p["title"])}</h1>{details}
-      <nav class="painting-links" aria-label="Previous and next paintings">
-        {prev_html}
-        {next_html}
-      </nav>
-    </article>
-  </main>
-{footer_html()}
-  <script>   /* for the home page, coming back: which painting this is, and whether it's left by a link (see the home page's head) */
-    try {{
-      sessionStorage.setItem('gallery-focus', '{p["name"]}'); sessionStorage.removeItem('left-by-link');
-      addEventListener('click', function (e) {{ if (e.target.closest && e.target.closest('a[href]')) sessionStorage.setItem('left-by-link', '1'); }}, true);
-    }} catch (e) {{}}
-  </script>
-
-</body>
-</html>
-"""
-
-
 def build_404(head_bits, style, header):
     """The page Cloudflare shows for an address that doesn't exist. It can be shown at any depth
     (/paintings/no-such-thing/), so every link in it starts from the top of the site: /..."""
@@ -619,25 +547,6 @@ def build_list_page(sections, head_bits, style, header):
 """
 
 
-def build_redirect(new):
-    url = f"{SITE_URL}/{PAGES_DIR}/{new}/"
-    return f"""<!DOCTYPE html>
-{REDIRECT_MARKER}
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Moved</title>
-  <meta name="robots" content="noindex">
-  <link rel="canonical" href="{url}">
-  <meta http-equiv="refresh" content="0; url=../{new}/">
-</head>
-<body>
-  <p>This painting has moved to <a href="../{new}/">{url}</a>.</p>
-</body>
-</html>
-"""
-
-
 SCRIPT_RE = re.compile(r'(src="(?!https?:|//)([^"?#]+\.js))(\?v=[^"]*)?"')
 
 
@@ -711,35 +620,38 @@ def main():
     s = EXTRAS_RE.sub("", s).replace("</head>", f"  {EXTRAS_START}\n  {EXTRAS_HEAD}\n  {EXTRAS_END}\n</head>", 1)
     write(index_path, s, "index.html", dry)
 
-    # Each painting's page
+    # A painting's address (/paintings/<name>/) is the home page with that painting brought forward: worker.js
+    # answers it, using this list for each painting's title and link-preview image (and any renamed paintings)
+    import json
+    wanted = {p["name"] for p in paintings}
+    for old, new in sorted(REDIRECTS.items()):
+        if old in wanted or new not in wanted:
+            fail(f"REDIRECTS: {old!r} -> {new!r} must lead from an unused name to a painting in the list")
+    listing = dict(paintings={p["name"]: dict(title=p["title"], details=p["details"], image=p["preview"],
+                                               width=p["preview_size"][0], height=p["preview_size"][1])
+                              for p in paintings},
+                   renamed=dict(sorted(REDIRECTS.items())))
+    write(os.path.join(site, "gallery", "paintings.json"), json.dumps(listing, ensure_ascii=False, indent=1) + "\n",
+          "gallery/paintings.json (for worker.js)", dry)
+
+    # The other pages, which share the home page's styles and header
     style = re.search(r"<style>(.*?)</style>", s, re.S)
     header = re.search(r"(  <header\b.*?</header>)", s, re.S)
     if not style or not header:
         fail("could not find the <style> and <header> in index.html")
-    head_bits, hdr = head_bits_from(s), page_header(header.group(1))
-    root = os.path.join(site, PAGES_DIR)
-    for k, p in enumerate(paintings):
-        prev = paintings[k - 1] if k > 0 else None
-        nxt = paintings[k + 1] if k + 1 < len(paintings) else None
-        write(os.path.join(root, p["name"], "index.html"), build_page(p, prev, nxt, head_bits, style.group(1), hdr),
-              f"{PAGES_DIR}/{p['name']}/", dry)
     write(os.path.join(site, "404.html"),
           build_404(head_bits_from(s, "/"), style.group(1), page_header(header.group(1), "/")), "404.html", dry)
     write(os.path.join(site, "gallery", "index.html"), build_gallery_redirect(), "gallery/index.html (forwards to the home page's gallery)", dry)
     write(os.path.join(site, "gallery", "list", "index.html"),
           build_list_page(sections, head_bits_from(s, "../../"), style.group(1), page_header(header.group(1), "../../")),
           "gallery/list/index.html", dry)
-    wanted = {p["name"] for p in paintings}
-    for old, new in sorted(REDIRECTS.items()):
-        if old in wanted or new not in wanted:
-            fail(f"REDIRECTS: {old!r} -> {new!r} must lead from an unused name to a painting in the list")
-        write(os.path.join(root, old, "index.html"), build_redirect(new), f"{PAGES_DIR}/{old}/ (forwards to {new}/)", dry)
 
-    # Pages for paintings no longer in the list (only ones this script, or make_pages.py, made)
+    # The separate painting pages this script used to make are no longer needed: remove them (only ones it made)
+    root = os.path.join(site, PAGES_DIR)
     if os.path.isdir(root):
         for d in sorted(os.listdir(root)):
             page = os.path.join(root, d, "index.html")
-            if d in wanted or d in REDIRECTS or not os.path.isfile(page):
+            if not os.path.isfile(page):
                 continue
             text = open(page, encoding="utf-8").read()
             if MARKER in text or REDIRECT_MARKER in text or any(m in text for m in OLD_MARKERS):
@@ -748,6 +660,8 @@ def main():
                     shutil.rmtree(os.path.join(root, d))
             else:
                 print(f"  left alone {PAGES_DIR}/{d}/ (not made by this script)")
+        if not dry and not os.listdir(root):
+            os.rmdir(root)
     print("Dry run: nothing was changed." if dry else "Done.")
 
 

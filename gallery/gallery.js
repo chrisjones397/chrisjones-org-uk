@@ -191,6 +191,7 @@ function start() {
       const old = m.material.map;
       m.material.map = tex;
       m.material.needsUpdate = true;
+      m.userData.src = `${BASE}img/${p.name}-${w}.webp`;
       if (old) old.dispose();
       if (then) then();
     });
@@ -198,48 +199,29 @@ function start() {
   // How far down the wall the page has scrolled, in pixels: 0 at the section's top, travelPx at its end
   const progress = () => Math.min(Math.max(-section.getBoundingClientRect().top, 0), travelPx);
 
-  // Coming back to the page (the browser's Back, or reloading), it opens where it was left. The browser would
-  // do that itself, but it does it before this script has made the gallery its full height, so it can land in
-  // the wrong place; so the page's place is kept here instead, along with the window's width (a different
-  // width lays the wall out differently, and then it opens at the top as usual). Arriving by the menu's
-  // Gallery link from a painting's page, the wall opens with that painting in the middle.
-  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-  addEventListener('pagehide', () => {
-    try { sessionStorage.setItem('home-place', JSON.stringify({ y: scrollY, w: innerWidth, focus: focus && focus.userData.p.name })); } catch (e) {}
-  });
-  let focus = null, leaving = [], focusAt = 0;     // a painting brought forward (see below)
-  let opening = null, openWith = null, settled = true;
-  try {
-    const how = window.homeOpening, kept = JSON.parse(sessionStorage.getItem('home-place') || 'null');
-    const top = section.getBoundingClientRect().top + scrollY;
-    if (how && how.how === 'link') {
-      const m = planes.find((x) => x.userData.p.name === how.name);
-      if (m) { opening = top + Math.max(-m.userData.cy / perPx, 0); openWith = m; }   // never above the gallery's top
-    } else if (how && kept && kept.w === innerWidth) {
-      opening = kept.y;
-      openWith = (kept.focus && planes.find((x) => x.userData.p.name === kept.focus)) || null;
-    }
-  } catch (e) { /* no storage: the page opens as usual */ }
-  if (opening !== null) {
-    // Put there, and kept there while the page finishes loading (a phone's browser may move it, to the top or to
-    // the gallery's heading, as it loads), until half a second after it has loaded, or the visitor takes over
-    settled = false;
-    let touched = false, loaded = document.readyState === 'complete', after = performance.now();
-    const t0 = performance.now();
-    for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown']) addEventListener(ev, () => { touched = true; }, { once: true, passive: true });
-    addEventListener('load', () => { loaded = true; after = performance.now(); }, { once: true });
+  // A painting's address. Bringing a painting forward puts its address, /paintings/<name>/, in the address bar
+  // (without loading anything), and the browser's Back sends it back again. That address, opened from a link,
+  // is this same page with that painting brought forward (worker.js serves it, with a <base href="/"> so the
+  // page's files are found). So a painting's address always shows the same thing, and nothing reloads.
+  const SITE_TITLE = 'Christopher Jones - Fine Art';
+  const homeURL = new URL('./', document.baseURI).href;
+  const pageURL = (m) => new URL(`paintings/${m.userData.p.name}/`, document.baseURI).href;
+  const named = (name) => planes.find((x) => x.userData.p.name === name) || null;
+  let focus = null, leaving = [], focusAt = 0, pushed = false;
+  const opened = location.href.split('#')[0] !== homeURL && named((location.pathname.match(/\/paintings\/([a-z0-9-]+)\/?$/) || [])[1]);
+  if (opened) {
+    // Opened at a painting's address: the wall is put where that painting hangs, and it's brought forward
+    const opening = section.getBoundingClientRect().top + scrollY + Math.max(-opened.userData.cy / perPx, 0);
     const place = () => {
-      if (Math.abs(scrollY - opening) > 1) scrollTo({ top: opening, behavior: 'instant' });
-      if (window.snapHere) window.snapHere();
+      scrollTo({ top: opening, behavior: 'instant' });
+      if (window.snapHere) window.snapHere();                 // the page putting itself there isn't scrolling
       focusAt = scrollY;
     };
+    let touched = false;
+    for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown']) addEventListener(ev, () => { touched = true; }, { once: true, passive: true });
     place();
-    (function keep() {
-      if (touched) { settled = true; return; }
-      place();
-      const now = performance.now();
-      if ((!loaded || now - after < 500) && now - t0 < 4000) requestAnimationFrame(keep); else settled = true;
-    })();
+    addEventListener('load', () => { if (!touched) place(); }, { once: true });   // once more, in case anything moved it
+    history.replaceState({ painting: opened.userData.p.name }, '', location.href);
   }
 
   // The pictures nearest where the page opens are fetched first, and each appears as soon as it arrives
@@ -253,13 +235,66 @@ function start() {
 
 
   // Pointing at a painting names it; clicking (or tapping) it brings it forward to the middle of the view,
-  // the others dimming behind it. Clicking it again, clicking elsewhere, pressing Escape or scrolling on sends
-  // it back to its place.
-  const unfocus = () => { if (focus) { leaving.push(focus); focus = null; } };
-  // Coming back from a painting's page, that painting is already brought forward, as it was left
-  if (openWith) { focus = openWith; openWith.userData.k = 1; focusAt = scrollY; sharpen(openWith); }
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') unfocus(); });
-  addEventListener('scroll', () => { if (focus && Math.abs(scrollY - focusAt) > 40) unfocus(); }, { passive: true });
+  // the others dimming behind it, and its address goes in the address bar. Clicking it again, clicking
+  // elsewhere, pressing Escape, scrolling on or the browser's Back sends it back to its place.
+  function forward(m) {                       // brought forward (the address is dealt with by open and close)
+    if (focus === m) return;
+    if (focus) leaving.push(focus);
+    focus = m;
+    leaving = leaving.filter((x) => x !== m);
+    m.userData.k = m.userData.k || 0;
+    focusAt = scrollY;
+    sharpen(m);
+    document.title = `${m.userData.p.title} - ${SITE_TITLE}`;
+  }
+  function backward() {
+    if (!focus) return;
+    leaving.push(focus);
+    focus = null;
+    document.title = SITE_TITLE;
+  }
+  function open(m) {
+    forward(m);
+    const state = { painting: m.userData.p.name };
+    if (pushed) { history.replaceState(state, '', pageURL(m)); return; }
+    // Coming back to the home page's entry in the history mustn't move the page (it hasn't moved since), so
+    // that entry is told not to restore its scroll position, until we're back on it
+    history.scrollRestoration = 'manual';
+    history.pushState(state, '', pageURL(m));
+    history.scrollRestoration = 'auto';
+    pushed = true;
+  }
+  function close() {
+    if (!focus) return;
+    backward();
+    if (pushed) { pushed = false; history.back(); }          // as the browser's Back would
+    else history.replaceState(null, '', homeURL);           // opened at its address: there's no entry to go back to
+  }
+  addEventListener('popstate', (e) => {
+    history.scrollRestoration = 'auto';
+    const m = e.state && named(e.state.painting);
+    if (m) { forward(m); pushed = true; } else { backward(); pushed = false; }
+  });
+  if (opened) { forward(opened); opened.userData.k = 1; }
+
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  addEventListener('scroll', () => { if (focus && Math.abs(scrollY - focusAt) > 40) close(); }, { passive: true });
+  // The menu's links (Gallery, Contact, Profile) and the name go to places on this page. While a painting's
+  // address is showing they'd otherwise load the home page afresh, so they're followed here instead.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a || location.href.split('#')[0] === homeURL) return;
+    const to = new URL(a.href);
+    if (to.href.split('#')[0] !== homeURL || a.target) return;
+    const place = to.hash.length > 1 ? document.querySelector(to.hash) : null;
+    if (to.hash.length > 1 && !place) return;
+    e.preventDefault();
+    backward();
+    pushed = false;
+    history.replaceState(null, '', to.href);
+    if (place) place.scrollIntoView({ behavior: 'smooth' }); else scrollTo({ top: 0, behavior: 'smooth' });
+  }, true);
+
   const ray = new THREE.Raycaster();
   let pointed = null, mx = 0, px = 0;
   const at = (x, y) => {
@@ -277,17 +312,42 @@ function start() {
   }, { passive: true });
   stage.addEventListener('pointerleave', () => { lastPointer = null; pointed = null; });
   stage.addEventListener('click', (e) => {
-    if (e.target.closest('a, button')) return;                  // the caption's links work as normal
+    if (e.target.closest('a, button')) return;                  // the caption's links are dealt with below
     const m = at(e.clientX, e.clientY);
-    const again = m && m === focus;
-    unfocus();
-    if (m && !again) { focus = m; m.userData.k = m.userData.k || 0; leaving = leaving.filter((x) => x !== m); focusAt = scrollY; sharpen(m); }
+    if (m && m !== focus) open(m); else close();
   });
+
+  // The paintings are drawn, not images in the page, so the browser's own menu (right-click: open or save the
+  // image) would only find a passing snapshot of the drawing. So an invisible copy of the real picture lies
+  // over the painting under the pointer, and that menu finds the painting itself.
+  const real = document.createElement('img');
+  real.alt = '';
+  real.draggable = false;
+  real.setAttribute('aria-hidden', 'true');
+  real.style.cssText = 'position:absolute;opacity:0;display:none;z-index:1;';
+  renderer.domElement.after(real);
+  const corner = new THREE.Vector3();
+  function cover(m) {
+    if (!m || !m.userData.src) { real.style.display = 'none'; return; }
+    m.updateMatrixWorld();
+    camera.updateMatrixWorld();
+    const r = renderer.domElement.getBoundingClientRect(), s = stage.getBoundingClientRect();
+    const xy = [[-0.5, 0.5], [0.5, -0.5]].map(([x, y]) => {
+      corner.set(x, y, 0).applyMatrix4(m.matrixWorld).project(camera);
+      return [r.left - s.left + (corner.x + 1) / 2 * r.width, r.top - s.top + (1 - corner.y) / 2 * r.height];
+    });
+    if (real.getAttribute('src') !== m.userData.src) real.src = m.userData.src;
+    Object.assign(real.style, { display: 'block', left: `${xy[0][0]}px`, top: `${xy[0][1]}px`,
+      width: `${xy[1][0] - xy[0][0]}px`, height: `${xy[1][1] - xy[0][1]}px`, cursor: renderer.domElement.style.cursor });
+  }
 
   // The caption: the painting under the pointer, or else the one nearest the middle of the view
   const cap = document.getElementById('float-caption');
   const capTitle = cap.querySelector('.t'), capDetails = cap.querySelector('.d');
   let shown = null;
+  // the name in the caption is the painting's address: following it brings the painting forward (or, already
+  // forward, sends it back), here, rather than loading anything
+  capTitle.addEventListener('click', (e) => { e.preventDefault(); if (shown) { if (shown === focus) close(); else open(shown); } });
   function caption(camY) {
     let best = focus || pointed, bestS = Infinity;
     if (!best) for (const m of planes) {
@@ -300,7 +360,7 @@ function start() {
     setTimeout(() => {
       if (shown !== best || !best) return;
       capTitle.textContent = best.userData.p.title;
-      capTitle.href = `${BASE}paintings/${best.userData.p.name}/`;
+      capTitle.href = pageURL(best);
       capDetails.textContent = best.userData.p.details || '';
       cap.classList.add('on');
     }, 180);
@@ -310,8 +370,6 @@ function start() {
   let first = true, lastT = 0;
   const ease = (k) => k * k * (3 - 2 * k);
   renderer.setAnimationLoop(() => {
-    // coming back: shown once the page is back in place and the gallery is ready (see opening, above)
-    if (settled && !first) document.documentElement.classList.remove('restoring');
     const r = stage.getBoundingClientRect();
     if (!first && (r.bottom < 0 || r.top > innerHeight)) return;   // out of sight: nothing to draw
     const t = clock.getElapsedTime(), dt = Math.min(t - lastT, 0.05); lastT = t;
@@ -341,6 +399,7 @@ function start() {
     }
     pointed = lastPointer ? at(...lastPointer) : null;
     renderer.domElement.style.cursor = pointed ? (pointed === focus ? 'zoom-out' : 'zoom-in') : '';
+    cover(pointed);
     caption(camY);
     renderer.render(scene, camera);
     // the gallery shows as soon as the paintings in view have arrived (or after a moment, whatever has); the

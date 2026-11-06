@@ -2,19 +2,26 @@
 //   chrisjones397-github-io      builds main, deploy command: npx wrangler deploy
 //   chrisjones397-github-io-dev  builds dev,  deploy command: npx wrangler deploy --env dev
 // The dev Worker MUST use --env dev: without it, it would deploy under the live Worker's name.
+// Almost everything is served straight from the files. worker.js runs only for a painting's address
+// (/paintings/<name>/), which it answers with the home page, that painting brought forward: see worker.js.
 {
   "name": "chrisjones397-github-io",
+  "main": "worker.js",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": ".",                    // the site is the repository itself (less .assetsignore)
-    "not_found_handling": "404-page"     // unknown addresses get 404.html, not a blank page
+    "binding": "ASSETS",                 // how worker.js reaches the files
+    "not_found_handling": "404-page",    // unknown addresses get 404.html, not a blank page
+    "run_worker_first": ["/paintings/*"] // painting addresses go to worker.js first
   },
   "env": {
     "dev": {
       "name": "chrisjones397-github-io-dev",
       "assets": {
         "directory": ".",
-        "not_found_handling": "404-page"
+        "binding": "ASSETS",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/paintings/*"]
       }
     }
   }

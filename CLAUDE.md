@@ -52,8 +52,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 
 ## How the site is made
 
-- **tools/build_site.py** reads paintings.yaml and masters/ and writes: every image size in img/ (WebP), each
-  painting's page in paintings/<name>/, gallery/ (now only forwards to the home page's gallery section), gallery/list/, 404.html, and the
+- **tools/build_site.py** reads paintings.yaml and masters/ and writes: every image size in img/ (WebP),
+  gallery/paintings.json (for worker.js), gallery/ (now only forwards to the home page's gallery section), gallery/list/, 404.html, and the
   built blocks inside index.html (between `<!-- ... start/end -->` markers: contact picture, gallery
   section). It copies index.html's `<style>` and header into every other page, so shared styles live in
   index.html. It fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
@@ -70,12 +70,18 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   No modes: the section is as tall as the wall (the script sets its height), the view is pinned (sticky) while
   the page scrolls through it, and ordinary scrolling moves the camera down, so paintings rise past, at
   different depths (middle depth moves exactly with the page). Placement across balances how big paintings look
-  left and right. Click or tap brings a painting forward (others dim); clicking it again sends it back. Snapping
+  left and right. Click or tap brings a painting forward (others dim) and puts /paintings/<name>/ in the address
+  bar (history.pushState, no reload); clicking again, Escape, scrolling or Back sends it back. Snapping
   treats the tall section as free, like the profile. Its arrangement comes from paintings.yaml's `gallery:` settings (size,
   spacing, spread, depth, nearness, drift, seed); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit
   Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
 - **glass.js**: the header's thick-glass look over the opening video. The header's Gallery link goes to #paintings.
+- **worker.js** (the only server code; wrangler.jsonc sends only /paintings/* to it): a painting's address is the
+  home page with that painting brought forward, one version of the truth however you arrive. It serves index.html
+  with that painting's title, description and og:image (from gallery/paintings.json), a canonical link, and
+  `<base href="/">` so relative paths still work. There are no separate painting pages (removed Nov 2026).
+  Test locally with `npx wrangler dev --env dev` (http://localhost:8787); plain Apache has no Worker.
 
 ## Testing
 

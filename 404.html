@@ -47,8 +47,7 @@
     /* Text, the same everywhere: one soft shadow behind all the text below the header, so it reads the same
        over the video, the paintings, the pictures and plain grey alike; the header has its own lighter one.
        Links glow on top of whichever shadow they have when pointed at (see "Text links" below). */
-    body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); transition: opacity 0.35s; }
-    html.restoring body { opacity: 0; transition: none; }   /* see the script in the head */
+    body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); }
     .header { --shadow: 0 1px 6px rgba(0, 0, 0, 0.25); text-shadow: var(--shadow); }
     /* Headings: one look everywhere below the header. Titles (the opening title, each section's heading, a
        painting's name on its page, the list's) share one size and weight; the list's section names are smaller. */
@@ -153,14 +152,14 @@
     /* Text links, the same everywhere on the site: a little dimmed, then bright white with a soft glow when
        pointed at (or reached with the keyboard). Icons follow, as they're drawn in the text's colour. */
     .nav-link, .contact-line a, .contact-line #footer-email, .invite-alt a, .site-footer a, .float-caption .t, .float-list,
-    .painting-links a, .float-link a {
+    .float-link a {
       color: rgba(255,255,255,0.75);
       transition: color 0.3s, text-shadow 0.3s, filter 0.3s;
     }
     .nav-link:hover, .nav-link:focus-visible, .contact-line a:hover, .contact-line a:focus-visible,
     .contact-line #footer-email:hover, .contact-line #footer-email:focus-visible, .invite-alt a:hover, .invite-alt a:focus-visible,
     .site-footer a:hover, .site-footer a:focus-visible, .float-caption .t:hover, .float-caption .t:focus-visible,
-    .float-list:hover, .float-list:focus-visible, .painting-links a:hover, .painting-links a:focus-visible,
+    .float-list:hover, .float-list:focus-visible,
     .float-link a:hover, .float-link a:focus-visible, .site-title:hover, .site-title:focus-visible {
       color: #fff;
       text-shadow: 0 0 12px rgba(255,255,255,0.75), var(--shadow);
@@ -478,7 +477,7 @@
       .wrapper { grid-template-columns: 1fr; }
     }
   
-    /* Painting page */
+    /* The 404 page's text (once also each painting's own page) */
     .painting-page {
       max-width: 1200px;
       margin: 0 auto;
@@ -496,20 +495,9 @@
       width: auto;
       height: auto;
     }
-    .painting-page a.full-size { display: block; cursor: zoom-in; }
     .painting-page h1 {
       text-align: center;
     }
-    .painting-page .details { margin-top: -0.75rem; opacity: 0.85; }
-    .painting-links {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      max-width: 520px;
-      font-size: 0.95rem;
-    }
-    .painting-links a, .painting-links span { padding: 0.25rem 0; }
-    .painting-links span[aria-disabled] { color: rgba(255,255,255,0.3); cursor: default; }
     .site-footer {
       max-width: 1200px;
       margin: 0 auto;
