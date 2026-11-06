@@ -8,7 +8,8 @@
    depth move exactly with the page (on a phone, with your finger); nearer ones move a little faster and
    further ones a little slower, which is what makes them seem to hang in space. They drift gently, and the
    view shifts a little with the mouse. Pointing at a painting names it in the caption; clicking or tapping it
-   opens its page. Otherwise the caption names the painting nearest the middle of the view.
+   brings it forward to the middle of the view, and clicking it again opens its page. Otherwise the caption
+   names the painting nearest the middle of the view.
 
    The list of paintings and the settings from paintings.yaml are written into the page by tools/build_site.py
    (the "gallery-data" block). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
@@ -76,17 +77,17 @@ function start() {
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
     const f = (0.35 + i * 0.618034 + (rand() - 0.5) * 0.15) % 1;
-    // Across: anywhere from edge to edge, stepping by the golden ratio so neighbours are well apart and
-    // the wall never settles into columns
-    const across = ((0.5 + i * 0.381966 + (rand() - 0.5) * 0.12) % 1) * 2 - 1;
-    mesh.userData = { p, h, w: h * p.w / p.h, f, across, phase: rand() * 6.28 };
+    mesh.userData = { p, h, w: h * p.w / p.h, f, jitter: rand(), phase: rand() * 6.28 };
     scene.add(mesh);
     return mesh;
   });
 
-  // Laying out the wall for this window: across, the paintings scatter from edge to edge (on a phone, a
-  // little nearer the middle); down, each follows the last with room for both, more room on a phone, where
-  // they're one above another rather than side by side. The section is then made as tall as the journey.
+  // Laying out the wall for this window. Down, each painting follows the last with room for both (more room on
+  // a phone, where they're one above another rather than side by side). Across, each is placed to keep the
+  // wall balanced as you see it: of the places it could go, it takes the one that best evens out the weight
+  // (how big the paintings look) on the left and right of those around it, without covering its neighbours
+  // or sitting straight below the one before, so big and small ones mix on both sides rather than gathering
+  // on one. The section is then made as tall as the journey.
   let H = 0, W = 0, perPx = 0, travelPx = 0, scale = 1;
   function layout() {
     W = stage.clientWidth; H = stage.clientHeight;
@@ -99,21 +100,40 @@ function start() {
     const narrow = camera.aspect < 0.9;
     scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4) * P.size;
     let y = 0, lastH = 0;
+    const placed = [];
     planes.forEach((m, i) => {
       const u = m.userData;
       u.d = Math.max(MID + (u.f - 0.5) * RANGE * P.depth, 4);
       const sw = u.w * scale, sh = u.h * scale;
       m.scale.set(sw, sh, 1);
       const seen = sh * D0 / u.d;                               // its height as it looks, at the middle depth
-      // the first hangs with its top just below the heading (26% down the view); each after it below the last
-      if (!i) y = 0.24 * viewH0 - seen / 2;
+      // the first hangs with its top just below the heading (30% down the view); each after it below the last
+      if (!i) y = 0.2 * viewH0 - seen / 2;
       else y -= (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2;
       lastH = seen;
       u.cy = i ? y : y * u.d / D0;      // where the view is when it's in the middle
       u.y = u.cy;
-      const halfW = u.d * viewTan * camera.aspect;              // half the view's width at its depth
-      const room = Math.max(halfW * 0.94 - sw / 2, 0);
-      u.x = u.across * Math.min(room * (narrow ? 0.7 : 1) * P.spread, Math.max(halfW - sw / 2, 0));
+      // Across, worked out as it looks (at the middle depth), then put at its own depth
+      const seenW = sw * D0 / u.d, half = D0 * viewTan * camera.aspect;
+      const room = Math.max(half * 0.95 - seenW / 2, 0);
+      const reach = Math.min(room * (narrow ? 0.7 : 1) * P.spread, room);
+      let best = 0, bestScore = Infinity;
+      for (let c = -1; c <= 1.0001; c += 0.1) {
+        const sx = c * reach;
+        let mass = seenW * seen * sx, total = seenW * seen, cover = 0;
+        for (const q of placed) {
+          const dy = Math.abs(q.cy - y);
+          if (dy < viewH0 * 0.6) { mass += q.a * q.sx; total += q.a; }
+          const ox = Math.max(0, (q.w + seenW) / 2 - Math.abs(q.sx - sx)), oy = Math.max(0, (q.h + seen) / 2 - dy);
+          cover += (ox * oy) / Math.min(q.a, seenW * seen);
+        }
+        const prev = placed[placed.length - 1];
+        const under = prev ? Math.max(0, 0.3 - Math.abs(prev.sx - sx) / (half || 1)) : 0;
+        const score = Math.abs(mass / total) / (half || 1) + 2 * cover + under + 0.08 * Math.abs(c - (u.jitter * 2 - 1));
+        if (score < bestScore) { bestScore = score; best = sx; }
+      }
+      placed.push({ sx: best, cy: y, w: seenW, h: seen, a: seenW * seen });
+      u.x = best * u.d / D0;
     });
     const end = planes[planes.length - 1].userData.cy;
     travelPx = Math.ceil(-end / perPx);                         // until the last painting is in the middle
@@ -155,14 +175,20 @@ function start() {
     }
   } catch (e) { /* no storage: the wall opens at its start */ }
 
-  // Pointing at and opening a painting
+  // Pointing at a painting names it; clicking (or tapping) it brings it forward to the middle of the view,
+  // the others dimming behind it; clicking it again opens its page. Clicking elsewhere, pressing Escape or
+  // scrolling on sends it back to its place.
+  let focus = null, leaving = [], focusAt = 0;
+  const unfocus = () => { if (focus) { leaving.push(focus); focus = null; } };
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') unfocus(); });
+  addEventListener('scroll', () => { if (focus && Math.abs(scrollY - focusAt) > 40) unfocus(); }, { passive: true });
   const ray = new THREE.Raycaster();
   let pointed = null, mx = 0, px = 0;
   const at = (x, y) => {
     const r = renderer.domElement.getBoundingClientRect();
     if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
     ray.setFromCamera(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), camera);
-    const hit = ray.intersectObjects(planes.filter((m) => m.visible && m.material.opacity > 0.5))[0];
+    const hit = ray.intersectObjects(planes.filter((m) => m.visible && m.material.opacity > 0.1))[0];
     return hit ? hit.object : null;
   };
   let lastPointer = null;
@@ -175,7 +201,9 @@ function start() {
   stage.addEventListener('click', (e) => {
     if (e.target.closest('a, button')) return;                  // the caption's links work as normal
     const m = at(e.clientX, e.clientY);
-    if (m) location.href = `${BASE}paintings/${m.userData.p.name}/`;
+    if (m && m === focus) { location.href = `${BASE}paintings/${m.userData.p.name}/`; return; }
+    unfocus();
+    if (m) { focus = m; m.userData.k = m.userData.k || 0; leaving = leaving.filter((x) => x !== m); focusAt = scrollY; }
   });
 
   // The caption: the painting under the pointer, or else the one nearest the middle of the view
@@ -183,7 +211,7 @@ function start() {
   const capTitle = cap.querySelector('.t'), capDetails = cap.querySelector('.d');
   let shown = null;
   function caption(camY) {
-    let best = pointed, bestS = Infinity;
+    let best = focus || pointed, bestS = Infinity;
     if (!best) for (const m of planes) {
       const u = m.userData, s = Math.abs(u.cy - camY);
       if (s < bestS && s < D0 * viewTan * 0.8) { bestS = s; best = m; }
@@ -201,23 +229,34 @@ function start() {
   }
 
   const clock = new THREE.Clock();
-  let first = true;
+  let first = true, lastT = 0;
+  const ease = (k) => k * k * (3 - 2 * k);
   renderer.setAnimationLoop(() => {
     const r = stage.getBoundingClientRect();
     if (!first && (r.bottom < 0 || r.top > innerHeight)) return;   // out of sight: nothing to draw
-    const t = clock.getElapsedTime();
+    const t = clock.getElapsedTime(), dt = Math.min(t - lastT, 0.05); lastT = t;
     px += (mx - px) * 0.05;
     const camY = -progress() * perPx;
     camera.position.set(px * 0.35 * scale, camY, 0);
     for (const m of planes) {
       const u = m.userData;
-      m.position.set(u.x, u.y + Math.sin(t * 0.45 + u.phase) * 0.06 * scale * P.drift, -u.d);   // drifting, never turning
-      const o = u.ready ? 1 : 0;
+      let x = u.x, y = u.y + Math.sin(t * 0.45 + u.phase) * 0.06 * scale * P.drift, z = -u.d;   // drifting, never turning
+      // brought forward: to the middle of the view, near enough to fill most of it
+      if (m === focus) u.k = Math.min((u.k || 0) + dt * 2.2, 1);
+      else if (u.k) u.k = Math.max(u.k - dt * 2.2, 0);
+      if (u.k) {
+        const near = Math.max(m.scale.y / (0.72 * 2 * viewTan), m.scale.x / (0.82 * 2 * viewTan * camera.aspect), 2);
+        const e = ease(u.k);
+        x += (camera.position.x - x) * e; y += (camY - y) * e; z += (-near - z) * e;
+      }
+      m.position.set(x, y, z);
+      m.renderOrder = u.k ? 1 : 0;
+      const o = !u.ready ? 0 : focus && m !== focus ? 0.25 : 1;
       m.material.opacity += (o - m.material.opacity) * 0.08;
       m.visible = m.material.opacity > 0.01;
     }
     pointed = lastPointer ? at(...lastPointer) : null;
-    renderer.domElement.style.cursor = pointed ? 'pointer' : '';
+    renderer.domElement.style.cursor = pointed ? (pointed === focus ? 'zoom-in' : 'pointer') : '';
     caption(camY);
     renderer.render(scene, camera);
     if (first && planes.every((m) => m.userData.ready)) { first = false; section.classList.add('gallery-live'); }

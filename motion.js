@@ -25,10 +25,16 @@
   if (title && hero) pieces.push({ el: title, wait: 0, fade: false,
     target: () => TITLE_DRIFT * Math.max(-hero.getBoundingClientRect().top, 0) });
   const heading = document.querySelector('.gallery-3d .invite-title'), gallery = document.querySelector('.invite');
+  const header = document.querySelector('.header');
   if (heading && gallery) pieces.push({ el: heading, wait: 0, fade: false,
     // in its place while the gallery is still below the window; as the line between the sections rises to the
-    // top of the window, the heading rises towards it, just as the opening title sinks towards it
-    target: () => -TITLE_DRIFT * (VH - Math.min(Math.max(gallery.getBoundingClientRect().top, 0), VH)) });
+    // top of the window, the heading rises towards it, just as the opening title sinks towards it. It comes
+    // to rest as far below the header as the title ends above the bottom of the window (the header covers the
+    // top of the window, where nothing covers the bottom), so it rises less by the header's height.
+    target: () => {
+      const s = VH - Math.min(Math.max(gallery.getBoundingClientRect().top, 0), VH);
+      return (header ? header.offsetHeight / VH : 0) * s - TITLE_DRIFT * s;
+    } });
   const stage = document.querySelector('.face-stage'), words = document.querySelector('.face-words');
   if (stage && words) [...words.children].forEach((el, i) => pieces.push({ el, wait: STAGGER * i, fade: true,
     target: () => RISE * Math.max(stage.getBoundingClientRect().top, 0) }));
