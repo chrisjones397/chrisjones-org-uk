@@ -170,16 +170,20 @@
   }
 
   // The floating gallery: the frames gallery.js draws under the header (only once the gallery is showing).
-  // Copying them is the costly part on phones, where it made scrolling the gallery less smooth, so only every
-  // other frame is copied, at a quarter of its size on screen: the glass only shows it blurred, so it looks
-  // the same.
-  let gallery = null, every = 0;
-  addEventListener('glass-frame', (e) => {
-    const c = e.detail;
-    if (!gallery) gallery = source(c, c.closest('section') || c, [0.5, 0.5], 0, () => !!c.closest('.gallery-live'));
-    if (every++ % 2 && gallery.tex) return;
-    frame(gallery, c, c.width, c.height, 0.25);
-  });
+  // Copying them made scrolling the gallery stutter on phones, so this is off unless the address asks for it:
+  // ?glass=N, where N is how many frames to skip between copies (0: every frame; 1: every other frame; ...).
+  // Each copy is a quarter of the gallery's size on screen: the glass only shows it blurred.
+  const asked = location.search.match(/[?&]glass=(\d+)/);
+  if (asked) {
+    const skip = +asked[1];
+    let gallery = null, count = 0;
+    addEventListener('glass-frame', (e) => {
+      const c = e.detail;
+      if (!gallery) gallery = source(c, c.closest('section') || c, [0.5, 0.5], 0, () => !!c.closest('.gallery-live'));
+      if (count++ % (skip + 1) && gallery.tex) return;
+      frame(gallery, c, c.width, c.height, 0.25);
+    });
+  }
 
   // The Get in touch photo, with the light shade laid over it on the page
   const contact = document.querySelector('.contact-pic');

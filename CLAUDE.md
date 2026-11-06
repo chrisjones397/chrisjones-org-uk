@@ -77,8 +77,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
 - **glass.js**: the header's thick glass (frost plus a bent bottom edge) over every picture that passes under it:
-  the opening video, the floating gallery (gallery.js sends a `glass-frame` event after each frame drawn under the
-  header) and the contact photo; not the head animation (by choice); plain CSS frost elsewhere. The header's
+  the opening video and the contact photo; over the floating gallery only with `?glass=N` in the address (N frames
+  skipped between copies; off by default as it made phones stutter; gallery.js sends `glass-frame` events); not the head animation (by choice); plain CSS frost elsewhere. The header's
   Gallery link goes to #paintings.
 - **worker.js** (the only server code; wrangler.jsonc sends only /paintings/* to it): a painting's address is the
   home page with that painting brought forward, one version of the truth however you arrive. It serves index.html
