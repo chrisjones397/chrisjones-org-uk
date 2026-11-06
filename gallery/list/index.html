@@ -48,7 +48,8 @@
     /* Text, the same everywhere: one soft shadow behind all the text below the header, so it reads the same
        over the video, the paintings, the pictures and plain grey alike; the header has its own lighter one.
        Links glow on top of whichever shadow they have when pointed at (see "Text links" below). */
-    body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); }
+    body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); transition: opacity 0.35s; }
+    html.restoring body { opacity: 0; transition: none; }   /* see the script in the head */
     .header { --shadow: 0 1px 6px rgba(0, 0, 0, 0.25); text-shadow: var(--shadow); }
     /* Headings: one look everywhere below the header. Titles (the opening title, each section's heading, a
        painting's name on its page, the list's) share one size and weight; the list's section names are smaller. */

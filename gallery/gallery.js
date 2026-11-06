@@ -205,17 +205,20 @@ function start() {
   // Gallery link from a painting's page, the wall opens with that painting in the middle.
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   addEventListener('pagehide', () => {
-    try { sessionStorage.setItem('home-place', JSON.stringify({ y: scrollY, w: innerWidth })); } catch (e) {}
+    try { sessionStorage.setItem('home-place', JSON.stringify({ y: scrollY, w: innerWidth, focus: focus && focus.userData.p.name })); } catch (e) {}
   });
-  let opening = null, fromLink = false;
+  let opening = null, fromLink = false, openWith = null;
   try {
     const nav = (performance.getEntriesByType('navigation')[0] || {}).type;
     const name = sessionStorage.getItem('gallery-focus');
     sessionStorage.removeItem('gallery-focus');
     const m = name && location.hash === '#paintings' && planes.find((x) => x.userData.p.name === name);
     const kept = JSON.parse(sessionStorage.getItem('home-place') || 'null');
-    if (m) { opening = section.getBoundingClientRect().top + scrollY - m.userData.cy / perPx; fromLink = true; }
-    else if ((nav === 'back_forward' || nav === 'reload') && kept && kept.w === innerWidth) opening = kept.y;
+    if (m) { opening = section.getBoundingClientRect().top + scrollY - m.userData.cy / perPx; fromLink = true; openWith = m; }
+    else if ((nav === 'back_forward' || nav === 'reload') && kept && kept.w === innerWidth) {
+      opening = kept.y;
+      openWith = kept.focus && planes.find((x) => x.userData.p.name === kept.focus);
+    }
   } catch (e) { /* no storage: the page opens as usual */ }
   if (opening !== null) {
     scrollTo({ top: opening, behavior: 'instant' });
@@ -225,6 +228,7 @@ function start() {
     addEventListener('load', () => setTimeout(() => {
       const moved = Math.abs(scrollY - set) > 2 && !(fromLink && Math.abs(scrollY - sectionTop) < 2);
       if (!moved) scrollTo({ top: opening, behavior: 'instant' });
+      focusAt = scrollY;
     }, 0), { once: true });
   }
 
@@ -243,6 +247,8 @@ function start() {
   // it back to its place.
   let focus = null, leaving = [], focusAt = 0;
   const unfocus = () => { if (focus) { leaving.push(focus); focus = null; } };
+  // Coming back from a painting's page, that painting is already brought forward, as it was left
+  if (openWith) { focus = openWith; openWith.userData.k = 1; focusAt = scrollY; sharpen(openWith); }
   addEventListener('keydown', (e) => { if (e.key === 'Escape') unfocus(); });
   addEventListener('scroll', () => { if (focus && Math.abs(scrollY - focusAt) > 40) unfocus(); }, { passive: true });
   const ray = new THREE.Raycaster();
@@ -330,6 +336,7 @@ function start() {
     // rest fade in as they come
     if (first && (t > 1.5 || planes.every((m) => m.userData.ready || Math.abs(m.userData.cy - camY) > D0 * viewTan * 2))) {
       first = false; section.classList.add('gallery-live');
+      requestAnimationFrame(() => document.documentElement.classList.remove('restoring'));
     }
   });
 
