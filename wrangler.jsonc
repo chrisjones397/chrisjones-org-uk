@@ -8,6 +8,9 @@
   "name": "chrisjones397-github-io",
   "main": "worker.js",
   "compatibility_date": "2026-10-01",
+  "workers_dev": false,                  // no copy of the site at *.workers.dev: only chrisjones.org.uk (and www)
+  "preview_urls": false,                 // nor a preview address for every version
+  "observability": { "enabled": true },  // keep the Worker's logs, so a misbehaving painting address can be looked into
   "assets": {
     "directory": ".",                    // the site is the repository itself (less .assetsignore)
     "binding": "ASSETS",                 // how worker.js reaches the files
@@ -17,6 +20,9 @@
   "env": {
     "dev": {
       "name": "chrisjones397-github-io-dev",
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": { "enabled": true },
       "assets": {
         "directory": ".",
         "binding": "ASSETS",

@@ -13,7 +13,8 @@ once at the top of index.html's styles. Section headings mirror the opening titl
 - **main** is live, chrisjones.org.uk. It only ever moves by fast-forwarding to dev, after Christopher approves.
 - **painted-forest-tools** holds the scripts that made the opening video. Never merged, never published.
 - Cloudflare: two Workers build from this repository. chrisjones397-github-io builds main (`npx wrangler deploy`);
-  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Settings in wrangler.jsonc;
+  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Settings in wrangler.jsonc (no workers.dev or preview
+  addresses; Worker logs kept);
   `.assetsignore` lists what isn't published (this file, the README, tools/, masters/, paintings.yaml...).
 
 ## Who does what
@@ -87,6 +88,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   with that painting's title, description and og:image (from gallery/paintings.json), a canonical link, and
   `<base href="/">` so relative paths still work. There are no separate painting pages (removed Nov 2026).
   Test locally with `npx wrangler dev --env dev` (http://localhost:8787); plain Apache has no Worker.
+
+## Cloudflare account settings (set in the dashboard, not the repository)
+
+Always Use HTTPS on; minimum TLS 1.2; DNSSEC on; Email Routing (catch-all to Gmail). The domain's address records
+are made and locked by the Workers' custom domains (including a wildcard), so they can't be edited by hand.
 
 ## Testing
 
