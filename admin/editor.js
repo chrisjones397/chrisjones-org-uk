@@ -138,27 +138,6 @@ function contentView() {
   out.push(h('h2', {}, 'Add a painting'));
   out.push(addForm(secs));
 
-  // ONE-OFF (remove once both sites are done): move the paintings that were in git into storage
-  const old = entries.filter((e) => e.kind === 'painting' && e.draft && draftOf(e).base === 'img/');
-  if (media && old.length) {
-    const note = h('p', { class: 'hint' }, `${old.length} older painting${old.length === 1 ? '' : 's'} still use the site's own image files. `
-      + 'This copies each one\'s original and images into storage and changes its draft to use them. Then publish them under Review.');
-    const progress = h('div', { id: 'upload-progress' });
-    const go = h('button', { onclick: async () => {
-      go.disabled = true;
-      let done = 0;
-      try {
-        for (const e of old) {
-          progress.textContent = `Moving ${current(e).title} (${done + 1} of ${old.length})…`;
-          await call('POST', 'move-old', { id: e.id });
-          done++;
-        }
-        toast(`Moved ${done} painting${done === 1 ? '' : 's'}: check the preview, then publish under Review`);
-      } catch (err) { toast(`${err.message} (moved ${done} before that; pressing again carries on)`, true); }
-      render();
-    } }, 'Move the older paintings to storage');
-    out.push(h('h2', {}, 'Older paintings'), h('div', { class: 'card' }, note, h('div', { class: 'actions' }, go), progress));
-  }
   return out;
 }
 

@@ -94,8 +94,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb), both
   seeded from db/seed.sql (tools/import_content.py, a one-off from paintings.yaml). Query them through the
   Cloudflare API connector. dev's database is a sandbox for code changes: content never goes from dev to live.
-  paintings.yaml and masters/ are now only the record of what was imported; img/ still holds those paintings'
-  images (build_site.py, unchanged, still makes them and the contact picture).
+  paintings.yaml, masters/ and the painting files in img/ are now only the record of what was imported (no
+  page uses them); removing them from git is a later step, when Christopher says. build_site.py still makes the
+  contact picture.
 - **worker.js** runs first (wrangler.jsonc run_worker_first) for /, /paintings/*, /gallery/list/, /media/* and
   /admin*. It fills the pages from the database with HTMLRewriter (site.js): the gallery-data JSON, the
   invitation wall, the list page's grid, `data-text="key"` elements and `data-paragraphs="key"` blocks in
@@ -114,11 +115,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original goes to originals/ in R2 for later processing. ONE-OFF, to remove once both sites
-  are done: the editor's "Move the older paintings to storage" button (API move-old in editor.js) copies each
-  imported painting's master from the public repository on GitHub (raw.githubusercontent.com, dev branch) and its
-  sizes from img/ into R2, and sets its draft's base to media/images/; Christopher reviews and publishes. He
-  prefers no code run on his Mac, and the simplest route with no extra keys. R2 binding MEDIA: bucket site-media (live),
+  and the original goes to originals/ in R2 for later processing. Every painting on both sites is now in
+  R2 (moved Nov 2026 by a one-off editor button, since removed: see the history). R2 binding MEDIA: bucket site-media (live),
   site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.
   Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
   --persist-to /tmp/wr --port 8787` is the site, and a second one on --port 8788 is the editor, signed in as
