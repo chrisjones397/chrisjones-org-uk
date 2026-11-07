@@ -6,7 +6,7 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
-import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp } from './darkroom.js';
+import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp, oriented, turnPoint, ordered } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
 function h(tag, props = {}, ...kids) {
@@ -223,6 +223,11 @@ function addForm(secs) {
   const form = h('div', { class: 'card' },
     h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
     f.steps = h('div', { class: 'steps', hidden: true },
+      h('label', {}, 'Which way up'),
+      h('div', { class: 'row' },
+        h('button', { type: 'button', onclick: () => turn('left') }, '↺ Rotate left'),
+        h('button', { type: 'button', onclick: () => turn('right') }, '↻ Rotate right'),
+        h('button', { type: 'button', onclick: () => turn('mirror') }, '⇋ Mirror')),
       h('label', {}, 'White balance'),
       h('div', { class: 'row' },
         f.white = h('select', { class: 'grow', onchange: () => { if (f.white.value === 'picks' && !pending.spots.length) pickSpots(); else update(); } },
@@ -273,10 +278,26 @@ function addForm(secs) {
     }
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
-    pending = { file, W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
+    const raw = scaled(img, Math.round(W * k));
+    pending = { file, raw, W0: W, H0: H, W, H, src: raw, rotate: 0, mirror: false, spots: [], corners: null, white: null };
     f.white.value = 'none'; f.bright.value = 100; f.warm.value = 0; slid(); clearTimeout(timer);
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
     f.steps.hidden = false;
+    update();
+  }
+
+  /* Turn or mirror the photo (as if the camera had it the wrong way round): the result is the original turned
+     clockwise by rotate degrees, then mirrored if mirror. Spots and corners already placed turn with it. */
+  function turn(how) {
+    const p = pending;
+    if (how === 'mirror') p.mirror = !p.mirror;
+    else p.rotate = (p.rotate + ((how === 'right') !== p.mirror ? 90 : 270)) % 360;   // mirrored, a turn goes the other way
+    p.spots = p.spots.map(turnPoint[how]);
+    if (p.corners) p.corners = ordered(p.corners.map(turnPoint[how]));
+    p.src = p.rotate || p.mirror ? oriented(p.raw, p.rotate, p.mirror) : p.raw;
+    const side = p.rotate % 180 !== 0;
+    p.W = side ? p.H0 : p.W0; p.H = side ? p.W0 : p.H0;
+    p.white = null;
     update();
   }
 
@@ -361,7 +382,9 @@ function addForm(secs) {
       }
       const order = paintingsIn(f.section.value).length;
       const shape = pending.corners ? shapeLine() : null;
-      const process = { original: `originals/${stemName}.${ext}`, white: f.white.value,
+      const process = { original: `originals/${stemName}.${ext}`,
+        ...(pending.rotate ? { rotate: pending.rotate } : {}), ...(pending.mirror ? { mirror: true } : {}),
+        white: f.white.value,
         ...(f.white.value === 'picks' ? { spots: pending.spots } : {}),
         ...(f.white.value !== 'none' ? how() : {}),
         ...(pending.corners ? { corners: pending.corners } : {}), ...(shape ? { shape } : {}) };

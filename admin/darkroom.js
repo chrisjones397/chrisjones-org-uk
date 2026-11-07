@@ -33,6 +33,23 @@ export function resized(src, w) {
   return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Couldn\'t make an image size'))), 'image/jpeg', 0.88));
 }
 
+/* The picture turned clockwise by rotate degrees (0, 90, 180 or 270), then mirrored left to right if mirror. */
+export function oriented(src, rotate, mirror) {
+  const W = src.width, H = src.height, side = rotate % 180 !== 0;
+  const c = canvas(side ? H : W, side ? W : H), x = c.getContext('2d');
+  x.translate(c.width / 2, c.height / 2);
+  if (mirror) x.scale(-1, 1);
+  x.rotate(rotate * Math.PI / 180);
+  x.drawImage(src, -W / 2, -H / 2);
+  return c;
+}
+/* Where a point (fractions across and down) goes when the picture is turned a quarter right or left, or mirrored. */
+export const turnPoint = {
+  right: ([u, v]) => [1 - v, u],
+  left: ([u, v]) => [v, 1 - u],
+  mirror: ([u, v]) => [1 - u, v],
+};
+
 const copy = (c) => { const d = canvas(c.width, c.height); d.getContext('2d').drawImage(c, 0, 0); return d; };
 const pixels = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
 

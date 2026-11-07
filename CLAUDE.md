@@ -116,7 +116,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
   and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
-  from a working copy (at most 4096 pixels along its longer side): white balance (none; "paper all round", a
+  from a working copy (at most 4096 pixels along its longer side): which way up (rotate in quarter turns and
+  mirror, for photos the camera saved the wrong way round; spots and corners turn with it), white balance (none; "paper all round", a
   port of build_site.py's white_paper() matching it to within 3 levels in 255; or spots picked as white: one
   evens the colour, two follow the light along their line, three or more fit a flat slope, kept within the
   spots' range; a pixel brighter than the white is turned down as a whole, keeping its hue, not cut off one
@@ -125,8 +126,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   colour factor, the colour factor taken to the power 1 - warmth), then an optional four-corner crop squared up by a perspective map, to the shape of the
   "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, drag to move, magnifier while dragging a corner). Before and after are shown side by side; the sizes
-  are made from the result. The choices are saved with the painting as `process` (original, white, spots,
-  brightness, warmth, corners, shape; fractions of the original's width and height; checked by editor.js processOf()), so the
+  are made from the result. The choices are saved with the painting as `process` (original, rotate, mirror, white, spots,
+  brightness, warmth, corners, shape; fractions of the original's width and height, that way up; checked by editor.js processOf()), so the
   images can be made again from the original. In the browser, not a Worker: the free plan allows Workers 10 ms
   of CPU per request. Every painting on both sites is now in
   R2 (moved Nov 2026 by a one-off editor button, since removed: see the history). R2 binding MEDIA: bucket site-media (live),
