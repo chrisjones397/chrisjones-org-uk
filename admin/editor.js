@@ -6,6 +6,8 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
+import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp } from './darkroom.js';
+
 const $ = (s) => document.querySelector(s);
 function h(tag, props = {}, ...kids) {
   const el = document.createElement(tag);
@@ -161,12 +163,11 @@ function paintingRow(e, items, i, secs) {
     h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', value: d.details }),
     h('label', {}, 'Section'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
-    h('label', { class: 'tick' }, f.white = h('input', { type: 'checkbox', checked: d.white_paper }), 'Drawing on white paper'),
     h('p', { class: 'hint' }, `Address: /paintings/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
       h('button', { class: 'main', onclick: () => {
         const moved = f.section.value !== d.section;
-        const data = { ...d, title: f.title.value, details: f.details.value, wide: f.wide.checked, white_paper: f.white.checked,
+        const data = { ...d, title: f.title.value, details: f.details.value, wide: f.wide.checked,
           section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order };
         open.delete(e.id);
         save([{ id: e.id, kind: 'painting', data }]);
@@ -213,25 +214,42 @@ function nameFor(title) {
   return n;
 }
 
-let pending = null;   // the chosen photo, decoded
+let pending = null;   // the chosen photo, its working copy and the choices made for it
 function addForm(secs) {
   if (!media) {
     return h('p', { class: 'hint' }, 'Adding paintings needs image storage (R2), which isn\'t switched on yet for this site. Everything else here works.');
   }
   const f = {};
   const form = h('div', { class: 'card' },
-    h('label', {}, 'Photo, cropped to the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
+    h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
+    f.steps = h('div', { class: 'steps', hidden: true },
+      h('label', {}, 'White balance'),
+      h('div', { class: 'row' },
+        f.white = h('select', { class: 'grow', onchange: () => { if (f.white.value === 'picks' && !pending.spots.length) pickSpots(); else update(); } },
+          h('option', { value: 'none' }, 'None: as photographed'),
+          h('option', { value: 'paper' }, 'Paper all round: a drawing on white paper'),
+          h('option', { value: 'picks' }, 'From white I pick on the photo')),
+        f.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
+      h('label', {}, 'Corners'),
+      h('div', { class: 'row' },
+        f.cornersNote = h('span', { class: 'grow muted' }),
+        h('button', { type: 'button', onclick: () => setCorners() }, 'Set corners…'),
+        f.wholeBtn = h('button', { type: 'button', onclick: () => { pending.corners = null; update(); } }, 'Whole photo')),
+      f.shapeRow = h('label', { class: 'tick' }, f.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
+        f.shapeText = h('span', {})),
+      f.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') })),
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
-    h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', autocomplete: 'off', value: localStorage.getItem('editor-medium') || '' }),
+    h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', autocomplete: 'off',
+      value: localStorage.getItem('editor-medium') || '', oninput: () => { if (pending && pending.corners) later(update); else shapeLine(); } }),
     h('label', {}, 'Section'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
-    h('label', { class: 'tick' }, f.white = h('input', { type: 'checkbox', onchange: () => compare() }), 'Drawing on white paper: make the paper white'),
-    f.compare = h('div', { class: 'compare', hidden: true, title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') }),
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
     f.progress = h('div', { id: 'upload-progress' }));
+  let timer;
+  const later = (fn) => { clearTimeout(timer); timer = setTimeout(fn, 500); };
 
   async function pick() {
-    pending = null;
+    pending = null; f.steps.hidden = true;
     const file = f.file.files[0];
     if (!file) return;
     f.progress.textContent = 'Reading the photo…';
@@ -241,47 +259,80 @@ function addForm(secs) {
       f.progress.textContent = 'This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.';
       return;
     }
-    const W = img.naturalWidth, H = img.naturalHeight;
-    // Everything is made from one copy at the largest size the site uses (a whole phone photo can be bigger
-    // than Safari allows a canvas to be).
-    pending = { file, img, W, H, base: scaled(img, Math.min(W, WIDTHS[WIDTHS.length - 1])), fixed: null, note: '' };
+    const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
+    // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
+    pending = { file, W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
+    f.white.value = 'none';
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
-    compare();
+    f.steps.hidden = false;
+    update();
   }
 
-  /* The photo as it will be used: with "white paper" ticked, before and after side by side. */
-  function compare() {
-    f.compare.replaceChildren();
-    f.compare.hidden = !pending;
-    if (!pending) return;
-    const p = pending, size = `${p.W} × ${p.H} pixels`;
-    if (!f.white.checked) {
-      f.compare.classList.add('one');
-      f.compare.append(h('figure', {}, show(p.base), h('figcaption', {}, 'As it will be added')));
-      f.progress.textContent = size;
-      return;
-    }
-    if (!p.fixed) {
-      p.fixed = scaled(p.base, p.base.width);
-      const r = whitePaper(p.fixed);
-      p.note = `Paper read as RGB ${r.from.join(', ')} (top left) to ${r.to.join(', ')} (bottom right), made white.`;
-    }
-    f.compare.classList.remove('one');
-    f.compare.append(h('figure', {}, show(p.base), h('figcaption', {}, 'Before')),
-      h('figure', {}, show(p.fixed), h('figcaption', {}, 'After: this is what will be added')));
-    f.progress.textContent = `${size}. ${p.note}`;
+  async function pickSpots() {
+    const r = await fullView(pending.src, 'spots', pending.spots);
+    if (r) pending.spots = r;
+    if (!pending.spots.length && f.white.value === 'picks') f.white.value = 'none';
+    update();
   }
-  const show = (c) => { const s = scaled(c, Math.min(c.width, 1000)); s.className = 'shot'; return s; };
+  async function setCorners() {
+    await busy('Getting the full-size view ready…');
+    const r = await fullView(balanced().canvas, 'corners', pending.corners);
+    if (r) pending.corners = r;
+    update();
+  }
+
+  function balanced() {
+    const p = pending, key = `${f.white.value}|${JSON.stringify(p.spots)}`;
+    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, f.white.value, p.spots) };
+    return p.white;
+  }
+  function shapeLine() {
+    const size = sizeIn(f.details.value);
+    f.shapeRow.hidden = !(pending && pending.corners && size);
+    if (size) f.shapeText.textContent = `Squared up to the shape of the size in the details: ${size[0]} × ${size[1]} centimetres`;
+    return f.shape.checked ? size : null;
+  }
+  const busy = (text) => { f.progress.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
+
+  /* Make the picture that will be uploaded from the choices, and show it beside the photo. */
+  async function update() {
+    const p = pending;
+    if (!p) return;
+    f.spotsBtn.hidden = f.white.value !== 'picks';
+    f.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
+    f.wholeBtn.hidden = !p.corners;
+    f.cornersNote.textContent = p.corners ? 'Set: squared up' : 'Whole photo';
+    const shape = shapeLine();
+    await busy('Working…');
+    const { canvas: wb, note } = balanced();
+    let out, W = p.W, H = p.H;
+    if (p.corners) {
+      const q = p.corners.map(([u, v]) => [u * wb.width, v * wb.height]);
+      const [cw, chh] = cropSize(q, shape), k = wb.width / p.W;      // k: working copy's pixels per original pixel
+      W = Math.round(cw / k); H = Math.round(chh / k);                 // the cropped picture at the original's resolution
+      const ow = Math.min(W, WIDTHS[WIDTHS.length - 1]);
+      out = squaredUp(wb, q, ow, Math.max(1, Math.round(H * ow / W)));
+    } else {
+      out = scaled(wb, Math.min(W, WIDTHS[WIDTHS.length - 1]));
+    }
+    Object.assign(p, { out, outW: W, outH: H });
+    const shot = (c) => { const s = scaled(c, Math.min(c.width, 1000)); s.className = 'shot'; return s; };
+    const changed = f.white.value !== 'none' && p.white.canvas !== p.src || p.corners;
+    f.compare.replaceChildren(...(changed
+      ? [h('figure', {}, shot(p.src), h('figcaption', {}, 'Before')), h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be added'))]
+      : [h('figure', {}, shot(out), h('figcaption', {}, 'As it will be added'))]));
+    f.compare.classList.toggle('one', !changed);
+    f.progress.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
+  }
 
   async function add() {
-    if (!pending) return toast('Choose a photo first', true);
+    if (!pending || !pending.out) return toast('Choose a photo first', true);
     const title = f.title.value.trim();
     if (!title) return toast('Give it a title', true);
     if (!f.section.value) return toast('Add a section first', true);
     f.go.disabled = true;
     try {
-      const { file, W, H } = pending;
-      const img = f.white.checked ? pending.fixed : pending.base;
+      const { file, out, outW: W, outH: H } = pending;
       const name = nameFor(title);
       const { file: stemName } = await call('GET', `free?name=${encodeURIComponent(name)}`);
       const base = 'media/images/';
@@ -293,13 +344,17 @@ function addForm(secs) {
       await put(`originals/${stemName}.${ext}`, file, file.type || 'image/jpeg');
       for (const [fname, w] of jobs) {
         f.progress.textContent = `Making and uploading image sizes: ${++done} of ${jobs.length}`;
-        await put(`images/${fname}`, await resized(img, w), 'image/jpeg');
+        await put(`images/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
       }
       const order = paintingsIn(f.section.value).length;
+      const shape = pending.corners ? shapeLine() : null;
+      const process = { original: `originals/${stemName}.${ext}`, white: f.white.value,
+        ...(f.white.value === 'picks' ? { spots: pending.spots } : {}),
+        ...(pending.corners ? { corners: pending.corners } : {}), ...(shape ? { shape } : {}) };
       const data = { name, title, details: f.details.value, section: f.section.value, order, wide: f.wide.checked,
-        white_paper: f.white.checked, w: W, h: H, widths, base, ext: 'jpg',
+        white_paper: f.white.value === 'paper', w: W, h: H, widths, base, ext: 'jpg',
         preview: { src: `${base}${stemName}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) },
-        file: stemName };
+        file: stemName, process };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
       try { localStorage.setItem('editor-medium', f.details.value.replace(/,[^,]*\d.*$/, '')); } catch { /* private browsing */ }
       pending = null;
@@ -315,84 +370,6 @@ function addForm(secs) {
 async function put(key, blob, type) {
   const r = await fetch(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
-}
-
-/* The picture (an image or a canvas) drawn at width w on a canvas, halving in steps for a smooth result. */
-function scaled(src, w) {
-  let sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
-  const th = Math.max(1, Math.round(sh * w / sw));
-  while (sw / 2 >= w * 1.0001) {
-    const c = h('canvas', { width: Math.round(sw / 2), height: Math.round(sh / 2) });
-    const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height);
-    src = c; sw = c.width; sh = c.height;
-  }
-  const c = h('canvas', { width: w, height: th });
-  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, th);
-  return c;
-}
-
-/* A JPEG of the picture at width w. (Safari can't write WebP from a page, so uploads are JPEG.) */
-function resized(src, w) {
-  const c = scaled(src, w);
-  return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Couldn\'t make an image size'))), 'image/jpeg', 0.88));
-}
-
-/* A drawing on white paper, white balanced in place so the paper comes out pure white everywhere: the same
-   method as build_site.py's white_paper(). The paper's colour is read all round the outer edges (a band 2% of
-   the shorter side deep, in 16 lengths along each side, on a copy 512 pixels across; the median of each, so
-   smudges don't count). Phone photos are lit unevenly, so the paper's colour inside is filled in smoothly from
-   the edges (a Coons patch: each point blends the four sides by how near it is to them), and every pixel is
-   divided by the paper's colour where it is. That takes out the light's colour cast, its greyness and its
-   fall-off across the sheet together. Returns the paper's colour at the top left and bottom right corners. */
-function whitePaper(c) {
-  const W = c.width, H = c.height, n = 16;
-  const small = scaled(c, Math.max(1, Math.round(W * 512 / Math.max(W, H))));
-  const sw = small.width, sh = small.height, px = small.getContext('2d').getImageData(0, 0, sw, sh).data;
-  const b = Math.max(3, Math.round(Math.min(sw, sh) * 0.02));
-  const median = (x0, y0, x1, y1) => {
-    const hist = [0, 1, 2].map(() => new Uint32Array(256));
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-      const i = (y * sw + x) * 4; hist[0][px[i]]++; hist[1][px[i + 1]]++; hist[2][px[i + 2]]++;
-    }
-    const half = (x1 - x0) * (y1 - y0) / 2;
-    return hist.map((counts) => { let t = 0, v = 0; while (v < 255 && (t += counts[v]) < half) v++; return Math.max(1, v); });
-  };
-  const cuts = (len) => Array.from({ length: n }, (_, i) => [Math.floor(len * i / n), Math.floor(len * (i + 1) / n)]);
-  const xs = cuts(sw), ys = cuts(sh);
-  const top = xs.map(([a, z]) => median(a, 0, z, b)), bottom = xs.map(([a, z]) => median(a, sh - b, z, sh));
-  const left = ys.map(([a, z]) => median(0, a, b, z)), right = ys.map(([a, z]) => median(sw - b, a, sw, z));
-  const avg = (p, q) => p.map((v, k) => (v + q[k]) / 2);
-  const c00 = avg(top[0], left[0]), c10 = avg(top[n - 1], right[0]), c01 = avg(bottom[0], left[n - 1]), c11 = avg(bottom[n - 1], right[n - 1]);
-  const gain = new Float32Array(n * n * 3);          // 255 / the paper's colour, at the centre of each of n x n cells
-  for (let j = 0; j < n; j++) {
-    const v = (j + 0.5) / n;
-    for (let i = 0; i < n; i++) {
-      const u = (i + 0.5) / n;
-      for (let k = 0; k < 3; k++) {
-        const paper = (1 - v) * top[i][k] + v * bottom[i][k] + (1 - u) * left[j][k] + u * right[j][k]
-          - ((1 - u) * (1 - v) * c00[k] + u * (1 - v) * c10[k] + (1 - u) * v * c01[k] + u * v * c11[k]);
-        gain[(j * n + i) * 3 + k] = 255 / Math.max(paper, 1);
-      }
-    }
-  }
-  // Spread the gains smoothly over the whole picture (bilinear, like the build's resize) and apply them.
-  const where = (x, len) => { const g = Math.min(n - 1, Math.max(0, (x + 0.5) * n / len - 0.5)); const a = Math.min(n - 2, Math.floor(g)); return [a, g - a]; };
-  const colA = new Int32Array(W), colT = new Float32Array(W);
-  for (let x = 0; x < W; x++) { const [a, t] = where(x, W); colA[x] = a; colT[x] = t; }
-  const ctx = c.getContext('2d'), im = ctx.getImageData(0, 0, W, H), d = im.data, row = new Float32Array(n * 3);
-  for (let y = 0; y < H; y++) {
-    const [a, t] = where(y, H);
-    for (let q = 0; q < n * 3; q++) row[q] = gain[a * n * 3 + q] * (1 - t) + gain[(a + 1) * n * 3 + q] * t;
-    let i = y * W * 4;
-    for (let x = 0; x < W; x++, i += 4) {
-      const o = colA[x] * 3, s = colT[x];
-      d[i] = d[i] * (row[o] * (1 - s) + row[o + 3] * s);
-      d[i + 1] = d[i + 1] * (row[o + 1] * (1 - s) + row[o + 4] * s);
-      d[i + 2] = d[i + 2] * (row[o + 2] * (1 - s) + row[o + 5] * s);
-    }
-  }
-  ctx.putImageData(im, 0, 0);
-  return { from: c00.map(Math.round), to: c11.map(Math.round) };
 }
 
 // ---- review and publish ------------------------------------------------------------------------------------

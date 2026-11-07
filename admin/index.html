@@ -12,6 +12,7 @@
   :root { color-scheme: dark; --ink: #eee; --dim: #9a9a9a; --line: #3a3a3a; --card: #232323; --glow: #fff8e0;
           --new: #8fd18f; --changed: #f5c66b; --gone: #f08c8c; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: #1a1a1a; color: var(--ink);
          font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
   a { color: var(--ink); text-decoration: none; }
@@ -76,6 +77,17 @@
   .compare figure { margin: 0; min-width: 0; }
   .compare .shot { display: block; width: 100%; height: auto; border-radius: 4px; background: #111; }
   .compare figcaption { color: var(--dim); font-size: 0.85rem; margin-top: 0.25rem; }
+  .steps { margin-top: 0.4rem; }
+  .darkroom { position: fixed; inset: 0; z-index: 20; background: #000; display: flex; flex-direction: column; }
+  .dr-bar { padding: 0.5rem 0.7rem; padding-top: max(0.5rem, env(safe-area-inset-top)); background: #1a1a1a;
+            border-bottom: 1px solid var(--line); }
+  .dr-hint { margin: 0 0 0.45rem; font-size: 0.88rem; color: var(--dim); }
+  .dr-buttons { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .dr-buttons button { min-width: 2.4rem; }
+  .dr-count { margin-left: auto; color: var(--dim); font-size: 0.85rem; }
+  .dr-canvas { flex: 1; width: 100%; min-height: 0; touch-action: none; display: block; cursor: crosshair; }
+  .dr-loupe { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 2px solid #fff;
+              box-shadow: 0 2px 14px rgba(0,0,0,0.7); pointer-events: none; display: none; margin-top: 0; }
   #upload-progress { color: var(--dim); font-size: 0.9rem; margin-top: 0.6rem; min-height: 1.4em; }
 </style>
 </head>

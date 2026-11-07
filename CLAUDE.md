@@ -115,10 +115,17 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original goes to originals/ in R2, untouched. With "Drawing on white paper" ticked, the browser white
-  balances the photo first (admin/editor.js whitePaper(), a port of build_site.py's white_paper(), matching it to
-  within 3 levels in 255) and shows before and after side by side (tap to enlarge); the sizes are made from the
-  corrected copy. Done in the browser, not a Worker: the free plan allows Workers 10 ms of CPU per request. Every painting on both sites is now in
+  and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
+  from a working copy (at most 4096 pixels along its longer side): white balance (none; "paper all round", a
+  port of build_site.py's white_paper() matching it to within 3 levels in 255; or spots picked as white: one
+  evens the colour, two follow the light along their line, three or more fit a flat slope, kept within the
+  spots' range), then an optional four-corner crop squared up by a perspective map, to the shape of the
+  "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
+  zoom, drag to move, magnifier while dragging a corner). Before and after are shown side by side; the sizes
+  are made from the result. The choices are saved with the painting as `process` (original, white, spots,
+  corners, shape; fractions of the original's width and height; checked by editor.js processOf()), so the
+  images can be made again from the original. In the browser, not a Worker: the free plan allows Workers 10 ms
+  of CPU per request. Every painting on both sites is now in
   R2 (moved Nov 2026 by a one-off editor button, since removed: see the history). R2 binding MEDIA: bucket site-media (live),
   site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.
   Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
@@ -130,9 +137,10 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 
 1. Tidy git: remove masters/, the painting files in img/ and paintings.yaml (nothing uses them now; one commit,
    undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
-2. Image processing at upload: white balancing for drawings on white paper with before and after side by side
-   is done (in the browser, Nov 2026). Still open: redoing it for a painting already added when its tick
-   changes (from its original in R2).
+2. Image processing at upload: white balance and four-corner crop are done (Nov 2026). Next: detail images
+   (rectangles drawn on the cropped painting, cut from the full-size original); then reopening a painting
+   already added to change its white or corners (needs the original read back from R2 for the editor). How
+   details show on the site comes later: probably a page of its own for each painting that has them.
 3. Users and roles.
 4. Editing in place on the editor's preview.
 5. Optional: a "change address" option, so a retitle can rename a painting's files and address (with the

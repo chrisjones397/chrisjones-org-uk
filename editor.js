@@ -106,6 +106,29 @@ const num = (v, what) => { if (typeof v !== 'number' || !isFinite(v)) throw new 
 const int = (v, what) => { if (!Number.isInteger(v) || v < 0 || v > 100000) throw new Bad(`${what} must be a whole number`); return v; };
 const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'drift', 'seed'];
 
+/* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
+   round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
+   width and height; shape is the size from its details [height, width] when the crop took that shape. Kept so
+   the images can be made again from the original. */
+function processOf(p) {
+  if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
+  if (typeof p.original !== 'string' || !/^originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}$/.test(p.original)) throw new Bad('Bad original');
+  if (!['none', 'paper', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
+  const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
+  const points = (a, lo, hi, what) => {
+    if (!Array.isArray(a) || a.length < lo || a.length > hi) throw new Bad(`Bad ${what}`);
+    return a.map((q) => { if (!Array.isArray(q) || q.length !== 2) throw new Bad(`Bad ${what}`); return q.map(frac); });
+  };
+  const out = { original: p.original, white: p.white };
+  if (p.white === 'picks') out.spots = points(p.spots, 1, 20, 'white spots');
+  if (p.corners != null) out.corners = points(p.corners, 4, 4, 'corners');
+  if (p.shape != null) {
+    if (!Array.isArray(p.shape) || p.shape.length !== 2 || !p.shape.every((v) => num(v, 'Size') > 0 && v < 10000)) throw new Bad('Bad size');
+    out.shape = p.shape.slice();
+  }
+  return out;
+}
+
 function normalise(id, kind, d) {
   if (!d || typeof d !== 'object') throw new Bad('Missing content');
   if (kind === 'section') {
@@ -131,6 +154,7 @@ function normalise(id, kind, d) {
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       base: d.base, ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
       ...(file !== d.name ? { file } : {}),     // only when it differs, so imported entries keep their exact text
+      ...(d.process != null ? { process: processOf(d.process) } : {}),
     };
   }
   if (kind === 'text') return { text: str(d.text, 5000, 'Text') };
