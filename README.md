@@ -38,8 +38,11 @@ The paintings already on the site keep their images in `img/`, made by `tools/bu
 A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
 forward in the gallery. On Cloudflare, `worker.js` answers the home page, those addresses and the list page,
 filling in the content from the database (`site.js`). Your local Apache copy has no Worker or database, so it
-shows the content as it was in the files. To run it as Cloudflare would:
-`npx wrangler dev --env dev`, then open http://localhost:8787.
+shows a frozen snapshot from before the move (the old files in `img/`, `gallery/list/`, `gallery/paintings.json`),
+and will show broken pictures once those are tidied away. Check the site on dev.chrisjones.org.uk instead.
+To run your local code as Cloudflare would, against the dev database and dev image storage (needs Node, and
+signing in to Cloudflare once with `npx wrangler login`): `npx wrangler dev --env dev --remote`, then open
+http://localhost:8787. Without `--remote` it uses an empty local database.
 
 ## Putting dev live
 
