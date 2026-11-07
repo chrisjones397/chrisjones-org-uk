@@ -277,6 +277,9 @@ export function fullView(img, mode, start) {
           done = btn('Done', () => close(pts), 'main'))),
       cv, loupe);
     document.body.append(box);
+    // No text or picture selection, long-press menu or magnifier while working in here (Safari offers them on a long press).
+    for (const ev of ['selectstart', 'contextmenu', 'dragstart']) box.addEventListener(ev, (e) => e.preventDefault());
+    cv.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
     document.body.style.overflow = 'hidden';
     const ctx = cv.getContext('2d'), lctx = loupe.getContext('2d');
     let s = 1, tx = 0, ty = 0, cw = 0, ch = 0, dpr = 1;
@@ -352,8 +355,14 @@ export function fullView(img, mode, start) {
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill('evenodd');
         ctx.beginPath(); ctx.moveTo(...q[0]); q.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath();
         ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = ok ? '#fff' : '#f08c8c'; ctx.lineWidth = 1.2; ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(...q[3]); ctx.lineTo(...q[2]);   // the painting's bottom edge
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = '#f5c66b'; ctx.lineWidth = 4; ctx.stroke();
+        {                                                          // the painting's bottom edge, marked just outside it
+          const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+          const ex = q[2][0] - q[3][0], ey = q[2][1] - q[3][1], n = Math.hypot(ex, ey) || 1;
+          let nx = -ey / n, ny = ex / n;
+          if ((q[3][0] - cx) * nx + (q[3][1] - cy) * ny < 0) { nx = -nx; ny = -ny; }
+          ctx.beginPath(); ctx.moveTo(q[3][0] + nx * 6, q[3][1] + ny * 6); ctx.lineTo(q[2][0] + nx * 6, q[2][1] + ny * 6);
+          ctx.strokeStyle = '#f5c66b'; ctx.lineWidth = 3; ctx.stroke();
+        }
         const K = knobs();
         const twice = (path, w) => { path(); ctx.strokeStyle = '#000'; ctx.lineWidth = w + 2; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = w; ctx.stroke(); };
         for (const { p, k } of K) {
@@ -463,7 +472,7 @@ export function fullView(img, mode, start) {
           if (near[0] < 28) { const k = near[1] + 2; pts = [0, 1, 2, 3].map((i) => pts[(i + k) % 4]); draw(); }
         }
         if (tap && mode === 'spots' && performance.now() - tap.t < 500) {
-          const near = pts.findIndex((q) => { const [x, y] = toScreen(q); return Math.max(Math.abs(x - tap.p[0]), Math.abs(y - tap.p[1])) < Math.max(14, spotR * s); });
+          const near = pts.findIndex((q) => { const [x, y] = toScreen(q); return Math.max(Math.abs(x - tap.p[0]), Math.abs(y - tap.p[1])) < Math.max(28, spotR * s); });
           if (near >= 0) pts.splice(near, 1);
           else { const q = toImage(...tap.p); if (q[0] >= 0 && q[1] >= 0 && q[0] <= W && q[1] <= H) pts.push(q); }
           draw();
