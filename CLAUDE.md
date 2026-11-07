@@ -110,9 +110,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original is kept under masters/<id>/ in R2 for later processing. The R2 binding MEDIA (buckets
-  site-media and site-media-dev) goes into wrangler.jsonc only once R2 is enabled on the account; without it
-  the editor says adding paintings isn't available yet. On other hosts /admin is not found.
+  and the original is kept under masters/<id>/ in R2 for later processing. R2 binding MEDIA: bucket site-media (live),
+  site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.
   Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
   --persist-to /tmp/wr --port 8787` is the site, and a second one on --port 8788 is the editor, signed in as
   DEV_USER; load the tables with `npx wrangler d1 execute site-content-dev --env dev --local --persist-to

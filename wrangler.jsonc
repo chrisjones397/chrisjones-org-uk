@@ -6,8 +6,8 @@
 // the content database (the home page, painting addresses, the list), uploaded images and the editor.
 //
 // Each Worker has its own content database and editor address:
-//   live: database site-content,     site chrisjones.org.uk,     editor admin.chrisjones.org.uk
-//   dev:  database site-content-dev, site dev.chrisjones.org.uk, editor admin-dev.chrisjones.org.uk
+//   live: database site-content,     images site-media,     site chrisjones.org.uk,     editor admin.chrisjones.org.uk
+//   dev:  database site-content-dev, images site-media-dev, site dev.chrisjones.org.uk, editor admin-dev.chrisjones.org.uk
 // The editor addresses are guarded by Cloudflare Access applications "Site editor" and "Site editor (dev)";
 // ACCESS_AUD is the application's audience tag, which editor.js checks. Not secret.
 {
@@ -25,6 +25,9 @@
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "site-content", "database_id": "92160592-99ad-48c8-84db-e418928d0f46" }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "site-media" }       // uploaded images (served at /media/p/...) and originals
   ],
   "vars": {
     "ACCESS_TEAM": "still-mountain-1dde",
@@ -44,6 +47,9 @@
       },
       "d1_databases": [
         { "binding": "DB", "database_name": "site-content-dev", "database_id": "746fef4b-4f14-402a-b658-3ef2a1576dbb" }
+      ],
+      "r2_buckets": [
+        { "binding": "MEDIA", "bucket_name": "site-media-dev" }
       ],
       "vars": {
         "ACCESS_TEAM": "still-mountain-1dde",
