@@ -67,7 +67,7 @@ const sections = () => entries.filter((e) => e.kind === 'section' && e.draft != 
   .map((e) => ({ id: e.id, ...draftOf(e) })).sort((a, b) => a.order - b.order);
 const paintingsIn = (sid) => entries.filter((e) => e.kind === 'painting' && current(e).section === sid)
   .sort((a, b) => current(a).order - current(b).order);
-const thumb = (d) => `/${d.base}${d.name}-${d.widths[0]}.${d.ext}`;
+const thumb = (d) => `/${d.base}${d.file || d.name}-${d.widths[0]}.${d.ext}`;
 const label = (e) => {
   const d = current(e) || {};
   if (e.kind === 'painting') return d.title;
@@ -254,22 +254,23 @@ function addForm(secs) {
       const { file, img } = pending;
       const W = img.naturalWidth, H = img.naturalHeight;
       const name = nameFor(title);
-      const folder = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(16).padStart(2, '0')).join('');
-      const base = `media/p/${folder}/`;
+      const { file: stemName } = await call('GET', `free?name=${encodeURIComponent(name)}`);
+      const base = 'media/images/';
       const widths = [...new Set(WIDTHS.filter((w) => w < W).concat(Math.min(W, WIDTHS[WIDTHS.length - 1])))];
-      const jobs = widths.map((w) => [`${name}-${w}.jpg`, w]).concat([[`${name}-preview.jpg`, Math.min(PREVIEW, W)]]);
+      const jobs = widths.map((w) => [`${stemName}-${w}.jpg`, w]).concat([[`${stemName}-preview.jpg`, Math.min(PREVIEW, W)]]);
       let done = 0;
       const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase();
       f.progress.textContent = 'Keeping the original…';
-      await put(`masters/${folder}/${name}-master.${ext}`, file, file.type || 'image/jpeg');
+      await put(`originals/${stemName}.${ext}`, file, file.type || 'image/jpeg');
       for (const [fname, w] of jobs) {
         f.progress.textContent = `Making and uploading image sizes: ${++done} of ${jobs.length}`;
-        await put(`p/${folder}/${fname}`, await resized(img, w), 'image/jpeg');
+        await put(`images/${fname}`, await resized(img, w), 'image/jpeg');
       }
       const order = paintingsIn(f.section.value).length;
       const data = { name, title, details: f.details.value, section: f.section.value, order, wide: f.wide.checked,
         white_paper: f.white.checked, w: W, h: H, widths, base, ext: 'jpg',
-        preview: { src: `${base}${name}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) } };
+        preview: { src: `${base}${stemName}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) },
+        file: stemName };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
       try { localStorage.setItem('editor-medium', f.details.value.replace(/,[^,]*\d.*$/, '')); } catch { /* private browsing */ }
       pending = null;

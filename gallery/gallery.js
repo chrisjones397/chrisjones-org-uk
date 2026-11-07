@@ -185,7 +185,7 @@ function start() {
     const w = p.widths.find((x) => x >= wanted) || p.widths[p.widths.length - 1];
     if (w <= (m.userData.loaded || 0)) return;
     m.userData.loaded = w;
-    const src = `${BASE}${p.base || 'img/'}${p.name}-${w}.${p.ext || 'webp'}`;   // base and ext: see site.js
+    const src = `${BASE}${p.base || 'img/'}${p.file || p.name}-${w}.${p.ext || 'webp'}`;   // base and ext: see site.js
     loader.load(src, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();

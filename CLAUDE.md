@@ -101,8 +101,12 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   invitation wall, the list page's grid, `data-text="key"` elements and `data-paragraphs="key"` blocks in
   index.html (entries t-<key>). A painting's address is the home page with that painting brought forward (its
   title, og:image from `preview`, canonical link, `<base href="/">`). Painting images are
-  `<base><name>-<width>.<ext>`: base img/ + webp (from the build) or media/p/<12 hex>/ + jpg (uploaded, in R2,
-  served by worker.js with long caching). Everything but chrisjones.org.uk and www gets noindex.
+  `<base><file>-<width>.<ext>` (file = name, or name-v2... if R2 already had that name; stored only when it
+  differs): base img/ + webp (from the build) or media/images/ + jpg (uploaded) or webp (moved from img/). R2
+  layout, two folders only: images/ (served by worker.js at /media/images/..., to visitors only if a published
+  painting uses that file, checked in D1 then cached for a year; to the signed-in editor always) and
+  originals/<file>.<ext> (as uploaded, never served). Uploads never overwrite (409); GET /admin/api/free
+  picks the file name. Everything but chrisjones.org.uk and www gets noindex.
 - **The editor**: any host starting "admin" is the editor: admin.chrisjones.org.uk (live Worker, Access app
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
@@ -110,7 +114,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original is kept under masters/<id>/ in R2 for later processing. R2 binding MEDIA: bucket site-media (live),
+  and the original goes to originals/ in R2 for later processing. tools/copy_paintings_to_r2.py (run on
+  Christopher's Mac with Wrangler, which can read masters/) copies the imported paintings into R2 under the same
+  layout; their entries then need base media/images/ (still to do, Nov 2026). R2 binding MEDIA: bucket site-media (live),
   site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.
   Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
   --persist-to /tmp/wr --port 8787` is the site, and a second one on --port 8788 is the editor, signed in as

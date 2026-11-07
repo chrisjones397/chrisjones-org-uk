@@ -8,9 +8,11 @@
      - the list page's grid.
    mode 'published' is what visitors see; mode 'draft' is the editor's preview (admin.chrisjones.org.uk).
 
-   A painting's images are <base><name>-<width>.<ext>, from the site's top folder:
+   A painting's images are <base><file>-<width>.<ext> (and <base><file>-preview.jpg), from the site's top
+   folder, where <file> is the painting's name, or name-v2, -v3... when a name's files already exist in R2:
      base "img/",          ext "webp": made by tools/build_site.py from masters/, in the site's files;
-     base "media/p/<id>/", ext "jpg":  uploaded through the editor, kept in R2 and served by worker.js. */
+     base "media/images/", ext "jpg" (or "webp" for paintings moved from img/): in R2, served by worker.js.
+   R2 holds images/ (what the site shows) and originals/ (each painting's photo as uploaded, never served). */
 
 const INVITE_COUNT = 5;
 const SIZES_GRID = '(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw';
@@ -50,7 +52,8 @@ export async function load(env, mode) {
   return { mode, sections, paintings: ordered, byName, texts, settings, changes };
 }
 
-const file = (p, w, prefix = '') => `${prefix}${p.base}${p.name}-${w}.${p.ext}`;
+export const stem = (p) => p.file || p.name;
+const file = (p, w, prefix = '') => `${prefix}${p.base}${stem(p)}-${w}.${p.ext}`;
 
 function imgTag(p, prefix, sizes, indent) {
   const srcset = p.widths.map((w) => `${file(p, w, prefix)} ${w}w`).join(`,\n${indent}        `);
@@ -63,7 +66,7 @@ export function galleryData(c) {
   const items = c.paintings.map((p) => {
     const m = SIZE_RE.exec(p.details || '');
     return { name: p.name, title: p.title, details: p.details, wide: p.wide, w: p.w, h: p.h, widths: p.widths,
-      cm: m ? [parseFloat(m[1]), parseFloat(m[2])] : null, base: p.base, ext: p.ext };
+      cm: m ? [parseFloat(m[1]), parseFloat(m[2])] : null, base: p.base, file: stem(p), ext: p.ext };
   });
   // inside <script>, so no "<" may appear as itself
   return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items }).replace(/</g, '\\u003c');

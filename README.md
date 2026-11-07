@@ -25,7 +25,10 @@ Paintings, sections and the marked page text live in a database (Cloudflare D1),
 dev has its own copy of the database and its own editor, **admin-dev.chrisjones.org.uk**, for trying out code
 changes without touching the live content. dev is for code only: content never travels from dev to live.
 
-New paintings' images are kept in R2, Cloudflare's file storage (buckets site-media and site-media-dev).
+New paintings' images are kept in R2, Cloudflare's file storage (buckets site-media and site-media-dev), in two
+folders: `originals/` (each photo as uploaded, never shown) and `images/` (the sizes the site shows, named after
+the painting: `red-on-blue-768.jpg`; a later painting reusing a name gets `red-on-blue-v2-...`). Visitors can
+only open the images of published paintings.
 For now the photo's sizes are made as JPEG in the browser; the white-paper correction comes in a later stage.
 
 The paintings already on the site keep their images in `img/`, made by `tools/build_site.py` from

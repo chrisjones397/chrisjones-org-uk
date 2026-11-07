@@ -14,7 +14,7 @@
                           and one view however you arrive. Its title and link-preview details are the painting's,
                           with <base href="/"> so the page's own files are found from the top folder.
      /gallery/list/       every painting as a plain grid
-   Uploaded images: /media/p/<id>/<file>, from R2 (binding MEDIA). */
+   Images kept in R2 (binding MEDIA): /media/images/<file>, published paintings' only, except to the editor. */
 
 import { load, homeRewriter, listRewriter, esc } from './site.js';
 import { signedIn, api } from './editor.js';
@@ -28,7 +28,7 @@ export default {
     const editor = url.hostname.startsWith('admin') || (env.DEV_USER && url.hostname === 'localhost' && url.port === '8788');
     const path = url.pathname;
 
-    if (path.startsWith('/media/')) return media(request, env, ctx, url);
+    if (path.startsWith('/media/')) return media(request, env, ctx, url, editor);
 
     if (editor) {
       const who = await signedIn(request, env, url);
@@ -124,17 +124,29 @@ function bar(c) {
 </div>`;
 }
 
-/* An uploaded image, from R2. Its address never changes once uploaded, so browsers and Cloudflare may keep it. */
-async function media(request, env, ctx, url) {
+/* An image from R2: /media/images/<file>-<width>.<ext> or -preview.jpg. Visitors get it only if it belongs to a
+   published painting; on the editor's address (signed in) drafts' images are shown too. Originals are never
+   served. An image's address never changes once written, so browsers and Cloudflare may keep it for a year. */
+async function media(request, env, ctx, url, editor) {
   const key = decodeURIComponent(url.pathname.slice('/media/'.length));
-  if (!env.MEDIA || !/^p\/[a-z0-9]{12}\/[a-z0-9-]+\.jpg$/.test(key)) return notFound(env, url);
+  const m = /^images\/([a-z0-9-]+)-(?:\d{2,4}|preview)\.(jpg|webp)$/.exec(key);
+  if (!env.MEDIA || !m) return notFound(env, url);
   const cache = caches.default;
-  const hit = await cache.match(request);
-  if (hit) return hit;
+  if (!editor) {
+    const hit = await cache.match(request);
+    if (hit) return hit;
+    const ok = await env.DB.prepare(`SELECT 1 FROM entries WHERE kind = 'painting'
+        AND json_extract(published, '$.base') = 'media/images/'
+        AND coalesce(json_extract(published, '$.file'), json_extract(published, '$.name')) = ? LIMIT 1`).bind(m[1]).first();
+    if (!ok) return notFound(env, url);
+  } else if (!(await signedIn(request, env, url))) {
+    return new Response('Sign in required.', { status: 403 });
+  }
   const obj = await env.MEDIA.get(key);
   if (!obj) return notFound(env, url);
   const res = new Response(obj.body, { headers: {
-    'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable', etag: obj.httpEtag } });
-  ctx.waitUntil(cache.put(request, res.clone()));
+    'content-type': m[2] === 'webp' ? 'image/webp' : 'image/jpeg', etag: obj.httpEtag,
+    'cache-control': editor ? 'private, max-age=3600' : 'public, max-age=31536000, immutable' } });
+  if (!editor) ctx.waitUntil(cache.put(request, res.clone()));
   return res;
 }

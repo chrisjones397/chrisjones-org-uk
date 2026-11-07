@@ -60,6 +60,7 @@ export async function api(request, env, url, who) {
     if (request.method === 'GET') {
       if (path === 'state') return json(await state(env, who));
       if (path === 'history') return json(await history(env));
+      if (path === 'free') return json(await free(env, url.searchParams.get('name') || ''));
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -116,8 +117,10 @@ function normalise(id, kind, d) {
     const title = str(d.title, 200, 'A title');
     if (!title) throw new Bad('A painting needs a title');
     if (!/^[a-z0-9-]{1,100}$/.test(d.name || '')) throw new Bad('Bad painting name');
-    if (!/^(img\/|media\/p\/[a-z0-9]{12}\/)$/.test(d.base || '')) throw new Bad('Bad image location');
+    if (!['img/', 'media/images/'].includes(d.base)) throw new Bad('Bad image location');
     if (!['webp', 'jpg'].includes(d.ext)) throw new Bad('Bad image type');
+    const file = d.file || d.name;
+    if (!/^[a-z0-9-]{1,110}$/.test(file) || !(file === d.name || file.startsWith(`${d.name}-v`))) throw new Bad('Bad file name');
     if (!Array.isArray(d.widths) || !d.widths.length || d.widths.length > 12) throw new Bad('Bad image sizes');
     const pv = d.preview || {};
     if (typeof pv.src !== 'string' || !pv.src.startsWith(d.base) || !/^[a-z0-9/.-]+$/.test(pv.src)) throw new Bad('Bad preview image');
@@ -127,6 +130,7 @@ function normalise(id, kind, d) {
       order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       base: d.base, ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
+      ...(file !== d.name ? { file } : {}),     // only when it differs, so imported entries keep their exact text
     };
   }
   if (kind === 'text') return { text: str(d.text, 5000, 'Text') };
@@ -253,23 +257,37 @@ async function restore(env, who, revision) {
   return { entries: await rows(env) };
 }
 
-/* PUT /admin/api/upload?key=p/<id>/<file>.jpg (an image size, made in the browser) or masters/<id>/<file>
-   (the photo as sent, kept for the image processing to come). */
+/* The file name to use for a new painting's images: its name, or name-v2, -v3... if R2 already has files by
+   that name (a painting deleted earlier keeps its files, so History can bring it back). */
+async function free(env, name) {
+  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
+  if (!/^[a-z0-9-]{1,100}$/.test(name)) throw new Bad('Bad name');
+  for (let v = 1; v < 100; v++) {
+    const file = v === 1 ? name : `${name}-v${v}`;
+    const found = await env.MEDIA.list({ prefix: `originals/${file}.`, limit: 1 });
+    const sized = await env.MEDIA.list({ prefix: `images/${file}-preview.`, limit: 1 });
+    if (!found.objects.length && !sized.objects.length) return { file };
+  }
+  throw new Bad('Too many versions of that name');
+}
+
+/* PUT /admin/api/upload?key=images/<file>-<width>.jpg or images/<file>-preview.jpg (made in the browser), or
+   originals/<file>.<ext> (the photo as sent, kept for the image processing to come). Never overwrites. */
 async function upload(request, env, url) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on yet', 503);
   const key = url.searchParams.get('key') || '';
-  const m = /^(p|masters)\/[a-z0-9]{12}\/[a-z0-9-]{1,100}(-\d{2,4}|-preview|-master)\.(jpg|jpeg|png|webp|heic|heif|tif|tiff)$/.exec(key);
+  const m = /^(?:images\/[a-z0-9-]{1,110}-(?:\d{2,4}|preview)\.jpg|originals\/[a-z0-9-]{1,110}\.(jpg|jpeg|png|webp|heic|heif|tif|tiff))$/.exec(key);
   if (!m) throw new Bad('Bad file name');
-  if (m[1] === 'p' && m[3] !== 'jpg') throw new Bad('Image sizes must be JPEG');
+  const original = key.startsWith('originals/');
   const type = request.headers.get('content-type') || '';
   if (!/^image\/[a-z0-9.+-]+$/.test(type)) throw new Bad('Only images can be uploaded');
   const size = Number(request.headers.get('content-length') || 0);
   if (!size || size > 80 * 1024 * 1024) throw new Bad('Images must be under 80 megabytes');
+  if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
   const body = await request.arrayBuffer();
-  const b = new Uint8Array(body.slice(0, 12));
-  const jpeg = b[0] === 0xff && b[1] === 0xd8;
-  if (m[1] === 'p' && !jpeg) throw new Bad('That file is not a JPEG');
-  await env.MEDIA.put(key, body, { httpMetadata: { contentType: m[1] === 'p' ? 'image/jpeg' : type } });
+  const b = new Uint8Array(body.slice(0, 4));
+  if (!original && !(b[0] === 0xff && b[1] === 0xd8)) throw new Bad('That file is not a JPEG');
+  await env.MEDIA.put(key, body, { httpMetadata: { contentType: original ? type : 'image/jpeg' } });
   return { key };
 }
 
