@@ -468,7 +468,8 @@ export function fullView(img, mode, start) {
           else { const q = toImage(...tap.p); if (q[0] >= 0 && q[1] >= 0 && q[0] <= W && q[1] <= H) pts.push(q); }
           draw();
         }
-        drag = null; tap = null; loupe.style.display = 'none';
+        const was = drag && drag.dir; drag = null; tap = null; loupe.style.display = 'none';
+        if (was) draw();                                          // let the stick point outwards again
       }
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
