@@ -68,6 +68,14 @@
            max-width: 90vw; z-index: 10; }
   #toast.show { opacity: 1; } #toast.error { background: #5a2626; }
   .muted { color: var(--dim); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 0.6rem 0; cursor: zoom-in; }
+  .compare.big { grid-template-columns: 1fr; cursor: zoom-out; }
+  .compare.one { grid-template-columns: minmax(0, 24rem); }
+  .compare.one.big { grid-template-columns: 1fr; }
+  .compare[hidden] { display: none; }
+  .compare figure { margin: 0; min-width: 0; }
+  .compare .shot { display: block; width: 100%; height: auto; border-radius: 4px; background: #111; }
+  .compare figcaption { color: var(--dim); font-size: 0.85rem; margin-top: 0.25rem; }
   #upload-progress { color: var(--dim); font-size: 0.9rem; margin-top: 0.6rem; min-height: 1.4em; }
 </style>
 </head>

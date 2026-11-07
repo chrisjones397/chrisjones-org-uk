@@ -225,7 +225,8 @@ function addForm(secs) {
     h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', autocomplete: 'off', value: localStorage.getItem('editor-medium') || '' }),
     h('label', {}, 'Section'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
-    h('label', { class: 'tick' }, f.white = h('input', { type: 'checkbox' }), 'Drawing on white paper (its white balancing comes in a later stage)'),
+    h('label', { class: 'tick' }, f.white = h('input', { type: 'checkbox', onchange: () => compare() }), 'Drawing on white paper: make the paper white'),
+    f.compare = h('div', { class: 'compare', hidden: true, title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') }),
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
     f.progress = h('div', { id: 'upload-progress' }));
 
@@ -240,10 +241,37 @@ function addForm(secs) {
       f.progress.textContent = 'This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.';
       return;
     }
-    pending = { file, img };
-    f.progress.textContent = `${img.naturalWidth} × ${img.naturalHeight} pixels`;
+    const W = img.naturalWidth, H = img.naturalHeight;
+    // Everything is made from one copy at the largest size the site uses (a whole phone photo can be bigger
+    // than Safari allows a canvas to be).
+    pending = { file, img, W, H, base: scaled(img, Math.min(W, WIDTHS[WIDTHS.length - 1])), fixed: null, note: '' };
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+    compare();
   }
+
+  /* The photo as it will be used: with "white paper" ticked, before and after side by side. */
+  function compare() {
+    f.compare.replaceChildren();
+    f.compare.hidden = !pending;
+    if (!pending) return;
+    const p = pending, size = `${p.W} × ${p.H} pixels`;
+    if (!f.white.checked) {
+      f.compare.classList.add('one');
+      f.compare.append(h('figure', {}, show(p.base), h('figcaption', {}, 'As it will be added')));
+      f.progress.textContent = size;
+      return;
+    }
+    if (!p.fixed) {
+      p.fixed = scaled(p.base, p.base.width);
+      const r = whitePaper(p.fixed);
+      p.note = `Paper read as RGB ${r.from.join(', ')} (top left) to ${r.to.join(', ')} (bottom right), made white.`;
+    }
+    f.compare.classList.remove('one');
+    f.compare.append(h('figure', {}, show(p.base), h('figcaption', {}, 'Before')),
+      h('figure', {}, show(p.fixed), h('figcaption', {}, 'After: this is what will be added')));
+    f.progress.textContent = `${size}. ${p.note}`;
+  }
+  const show = (c) => { const s = scaled(c, Math.min(c.width, 1000)); s.className = 'shot'; return s; };
 
   async function add() {
     if (!pending) return toast('Choose a photo first', true);
@@ -252,8 +280,8 @@ function addForm(secs) {
     if (!f.section.value) return toast('Add a section first', true);
     f.go.disabled = true;
     try {
-      const { file, img } = pending;
-      const W = img.naturalWidth, H = img.naturalHeight;
+      const { file, W, H } = pending;
+      const img = f.white.checked ? pending.fixed : pending.base;
       const name = nameFor(title);
       const { file: stemName } = await call('GET', `free?name=${encodeURIComponent(name)}`);
       const base = 'media/images/';
@@ -289,11 +317,10 @@ async function put(key, blob, type) {
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
 }
 
-/* A JPEG of the photo at width w, halving in steps for a smooth result. (Safari can't write WebP from a page,
-   so uploads are JPEG; the server-side processing to come can make WebP.) */
-async function resized(img, w) {
-  let src = img, sw = img.naturalWidth, sh = img.naturalHeight;
-  const th = Math.round(sh * w / sw);
+/* The picture (an image or a canvas) drawn at width w on a canvas, halving in steps for a smooth result. */
+function scaled(src, w) {
+  let sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const th = Math.max(1, Math.round(sh * w / sw));
   while (sw / 2 >= w * 1.0001) {
     const c = h('canvas', { width: Math.round(sw / 2), height: Math.round(sh / 2) });
     const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height);
@@ -301,7 +328,71 @@ async function resized(img, w) {
   }
   const c = h('canvas', { width: w, height: th });
   const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, th);
+  return c;
+}
+
+/* A JPEG of the picture at width w. (Safari can't write WebP from a page, so uploads are JPEG.) */
+function resized(src, w) {
+  const c = scaled(src, w);
   return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Couldn\'t make an image size'))), 'image/jpeg', 0.88));
+}
+
+/* A drawing on white paper, white balanced in place so the paper comes out pure white everywhere: the same
+   method as build_site.py's white_paper(). The paper's colour is read all round the outer edges (a band 2% of
+   the shorter side deep, in 16 lengths along each side, on a copy 512 pixels across; the median of each, so
+   smudges don't count). Phone photos are lit unevenly, so the paper's colour inside is filled in smoothly from
+   the edges (a Coons patch: each point blends the four sides by how near it is to them), and every pixel is
+   divided by the paper's colour where it is. That takes out the light's colour cast, its greyness and its
+   fall-off across the sheet together. Returns the paper's colour at the top left and bottom right corners. */
+function whitePaper(c) {
+  const W = c.width, H = c.height, n = 16;
+  const small = scaled(c, Math.max(1, Math.round(W * 512 / Math.max(W, H))));
+  const sw = small.width, sh = small.height, px = small.getContext('2d').getImageData(0, 0, sw, sh).data;
+  const b = Math.max(3, Math.round(Math.min(sw, sh) * 0.02));
+  const median = (x0, y0, x1, y1) => {
+    const hist = [0, 1, 2].map(() => new Uint32Array(256));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      const i = (y * sw + x) * 4; hist[0][px[i]]++; hist[1][px[i + 1]]++; hist[2][px[i + 2]]++;
+    }
+    const half = (x1 - x0) * (y1 - y0) / 2;
+    return hist.map((counts) => { let t = 0, v = 0; while (v < 255 && (t += counts[v]) < half) v++; return Math.max(1, v); });
+  };
+  const cuts = (len) => Array.from({ length: n }, (_, i) => [Math.floor(len * i / n), Math.floor(len * (i + 1) / n)]);
+  const xs = cuts(sw), ys = cuts(sh);
+  const top = xs.map(([a, z]) => median(a, 0, z, b)), bottom = xs.map(([a, z]) => median(a, sh - b, z, sh));
+  const left = ys.map(([a, z]) => median(0, a, b, z)), right = ys.map(([a, z]) => median(sw - b, a, sw, z));
+  const avg = (p, q) => p.map((v, k) => (v + q[k]) / 2);
+  const c00 = avg(top[0], left[0]), c10 = avg(top[n - 1], right[0]), c01 = avg(bottom[0], left[n - 1]), c11 = avg(bottom[n - 1], right[n - 1]);
+  const gain = new Float32Array(n * n * 3);          // 255 / the paper's colour, at the centre of each of n x n cells
+  for (let j = 0; j < n; j++) {
+    const v = (j + 0.5) / n;
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      for (let k = 0; k < 3; k++) {
+        const paper = (1 - v) * top[i][k] + v * bottom[i][k] + (1 - u) * left[j][k] + u * right[j][k]
+          - ((1 - u) * (1 - v) * c00[k] + u * (1 - v) * c10[k] + (1 - u) * v * c01[k] + u * v * c11[k]);
+        gain[(j * n + i) * 3 + k] = 255 / Math.max(paper, 1);
+      }
+    }
+  }
+  // Spread the gains smoothly over the whole picture (bilinear, like the build's resize) and apply them.
+  const where = (x, len) => { const g = Math.min(n - 1, Math.max(0, (x + 0.5) * n / len - 0.5)); const a = Math.min(n - 2, Math.floor(g)); return [a, g - a]; };
+  const colA = new Int32Array(W), colT = new Float32Array(W);
+  for (let x = 0; x < W; x++) { const [a, t] = where(x, W); colA[x] = a; colT[x] = t; }
+  const ctx = c.getContext('2d'), im = ctx.getImageData(0, 0, W, H), d = im.data, row = new Float32Array(n * 3);
+  for (let y = 0; y < H; y++) {
+    const [a, t] = where(y, H);
+    for (let q = 0; q < n * 3; q++) row[q] = gain[a * n * 3 + q] * (1 - t) + gain[(a + 1) * n * 3 + q] * t;
+    let i = y * W * 4;
+    for (let x = 0; x < W; x++, i += 4) {
+      const o = colA[x] * 3, s = colT[x];
+      d[i] = d[i] * (row[o] * (1 - s) + row[o + 3] * s);
+      d[i + 1] = d[i + 1] * (row[o + 1] * (1 - s) + row[o + 4] * s);
+      d[i + 2] = d[i + 2] * (row[o + 2] * (1 - s) + row[o + 5] * s);
+    }
+  }
+  ctx.putImageData(im, 0, 0);
+  return { from: c00.map(Math.round), to: c11.map(Math.round) };
 }
 
 // ---- review and publish ------------------------------------------------------------------------------------

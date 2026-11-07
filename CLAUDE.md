@@ -115,7 +115,10 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original goes to originals/ in R2 for later processing. Every painting on both sites is now in
+  and the original goes to originals/ in R2, untouched. With "Drawing on white paper" ticked, the browser white
+  balances the photo first (admin/editor.js whitePaper(), a port of build_site.py's white_paper(), matching it to
+  within 3 levels in 255) and shows before and after side by side (tap to enlarge); the sizes are made from the
+  corrected copy. Done in the browser, not a Worker: the free plan allows Workers 10 ms of CPU per request. Every painting on both sites is now in
   R2 (moved Nov 2026 by a one-off editor button, since removed: see the history). R2 binding MEDIA: bucket site-media (live),
   site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.
   Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
@@ -127,9 +130,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 
 1. Tidy git: remove masters/, the painting files in img/ and paintings.yaml (nothing uses them now; one commit,
    undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
-2. Image processing at upload, server-side, including white balancing for drawings on white paper (the
-   white_paper tick; build_site.py's correction is the reference). Christopher wants to see the photo
-   before and after correction side by side in the editor, so he can judge it before adding/publishing.
+2. Image processing at upload: white balancing for drawings on white paper with before and after side by side
+   is done (in the browser, Nov 2026). Still open: redoing it for a painting already added when its tick
+   changes (from its original in R2).
 3. Users and roles.
 4. Editing in place on the editor's preview.
 5. Optional: a "change address" option, so a retitle can rename a painting's files and address (with the
