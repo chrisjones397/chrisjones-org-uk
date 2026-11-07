@@ -185,13 +185,14 @@ function start() {
     const w = p.widths.find((x) => x >= wanted) || p.widths[p.widths.length - 1];
     if (w <= (m.userData.loaded || 0)) return;
     m.userData.loaded = w;
-    loader.load(`${BASE}img/${p.name}-${w}.webp`, (tex) => {
+    const src = `${BASE}${p.base || 'img/'}${p.name}-${w}.${p.ext || 'webp'}`;   // base and ext: see site.js
+    loader.load(src, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
       const old = m.material.map;
       m.material.map = tex;
       m.material.needsUpdate = true;
-      m.userData.src = `${BASE}img/${p.name}-${w}.webp`;
+      m.userData.src = src;
       if (old) old.dispose();
       if (then) then();
     });

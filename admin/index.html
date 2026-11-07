@@ -1,178 +1,88 @@
 <!DOCTYPE html>
-<html lang="en-GB">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Add a painting - Admin</title>
-<!-- The admin page: add a painting or drawing to the gallery from a phone or the Mac.
-     Only worker.js serves this file, and only to someone signed in through Cloudflare Access (see worker.js).
-     Sending the form makes one commit on dev: the master image in masters/ and its entry in paintings.yaml.
-     Cloudflare's build of dev then runs tools/build_site.py, so it appears on dev.chrisjones.org.uk a few
-     minutes later. -->
+<title>Editor - Christopher Jones - Fine Art</title>
+<!-- The site's editor, at admin.chrisjones.org.uk/admin/ (admin-dev... for dev). worker.js serves it only to someone
+     signed in through Cloudflare Access; editor.js (server) holds the content API; admin/editor.js runs this page.
+     Changes are saved as drafts straight away; nothing reaches visitors until it's published under "Review". -->
 <style>
-  :root { color-scheme: dark; --ink: #eee; --dim: #999; --line: #444; --glow: #fff8e0; }
+  :root { color-scheme: dark; --ink: #eee; --dim: #9a9a9a; --line: #3a3a3a; --card: #232323; --glow: #fff8e0;
+          --new: #8fd18f; --changed: #f5c66b; --gone: #f08c8c; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #1c1c1c; color: var(--ink);
-         font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
-  main { max-width: 34rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
-  h1 { font-weight: 300; font-size: 1.9rem; margin: 0 0 1.25rem; }
+  body { margin: 0; background: #1a1a1a; color: var(--ink);
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
   a { color: var(--ink); text-decoration: none; }
   a:hover { text-shadow: 0 0 8px var(--glow); }
-  label { display: block; margin: 1.1rem 0 0.3rem; color: var(--dim); font-size: 0.9rem; }
-  input[type=text], input[type=number], select {
-    width: 100%; padding: 0.6rem 0.7rem; font: inherit; color: var(--ink);
-    background: #262626; border: 1px solid var(--line); border-radius: 6px; }
-  input:focus, select:focus { outline: none; border-color: #888; }
-  .row { display: flex; gap: 0.75rem; }
-  .row > div { flex: 1; }
-  .tick { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.2rem; color: var(--ink); font-size: 1rem; }
-  .tick input { width: 1.3rem; height: 1.3rem; }
-  .hint { color: var(--dim); font-size: 0.85rem; margin: 0.3rem 0 0; }
-  #preview { display: none; margin-top: 0.8rem; max-width: 100%; max-height: 50vh; border-radius: 4px; }
-  button { margin-top: 1.6rem; width: 100%; padding: 0.8rem; font: inherit; font-size: 1.05rem;
-           color: #111; background: #ddd; border: 0; border-radius: 6px; cursor: pointer; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  #status { margin-top: 1rem; min-height: 1.5em; }
-  #status.error { color: #f99; }
-  #newsection { display: none; margin-top: 0.5rem; }
-  footer { margin-top: 2.5rem; color: var(--dim); font-size: 0.85rem; }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(26,26,26,0.94); backdrop-filter: blur(8px);
+           border-bottom: 1px solid var(--line); }
+  .bar { max-width: 46rem; margin: 0 auto; padding: 0.7rem 1rem; display: flex; gap: 0.9rem; align-items: center; flex-wrap: wrap; }
+  .bar .site { font-weight: 300; font-size: 1.2rem; margin-right: auto; }
+  @media (max-width: 440px) { .bar .site { display: none; } .bar a[data-view="content"] { margin-left: 0; } }
+  .bar a:last-child { margin-left: auto; }
+  .bar a.on { color: #fff; border-bottom: 2px solid #ddd; }
+  .count { display: inline-block; min-width: 1.4em; padding: 0 0.35em; margin-left: 0.25em; border-radius: 999px;
+           background: var(--changed); color: #111; font-size: 0.8rem; text-align: center; }
+  main { max-width: 46rem; margin: 0 auto; padding: 1rem 1rem 6rem; }
+  h1 { font-weight: 300; font-size: 1.6rem; margin: 0.6rem 0 0.4rem; }
+  h2 { font-weight: 400; font-size: 1.15rem; margin: 1.8rem 0 0.6rem; }
+  p.hint { color: var(--dim); font-size: 0.9rem; margin: 0.2rem 0 1rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0.8rem; margin: 0.6rem 0; }
+  label { display: block; margin: 0.8rem 0 0.25rem; color: var(--dim); font-size: 0.85rem; }
+  input[type=text], select, textarea { width: 100%; padding: 0.55rem 0.65rem; font: inherit; color: var(--ink);
+    background: #1c1c1c; border: 1px solid var(--line); border-radius: 6px; }
+  textarea { min-height: 9rem; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #888; }
+  .tick { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
+  .tick input { width: 1.2rem; height: 1.2rem; }
+  button { font: inherit; font-size: 0.9rem; padding: 0.45rem 0.8rem; color: var(--ink); background: #333;
+           border: 1px solid #4a4a4a; border-radius: 6px; cursor: pointer; }
+  button:hover { background: #3c3c3c; }
+  button.main { background: #ddd; color: #111; border-color: #ddd; }
+  button.main:hover { background: #fff; }
+  button.danger { color: var(--gone); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .row .grow { flex: 1; min-width: 8rem; }
+  .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
+  .badge { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .badge.new { color: var(--new); } .badge.changed { color: var(--changed); } .badge.gone { color: var(--gone); }
+  .painting { display: flex; gap: 0.7rem; align-items: center; padding: 0.5rem 0; border-top: 1px solid var(--line); }
+  .painting:first-of-type { border-top: 0; }
+  .painting img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; background: #111; flex: none; }
+  .painting .what { flex: 1; min-width: 0; }
+  .painting .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .painting .d { color: var(--dim); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .painting.deleted .what { opacity: 0.5; text-decoration: line-through; }
+  .move button { padding: 0.3rem 0.55rem; }
+  .edit { margin: 0.2rem 0 0.8rem; }
+  .diff { font-size: 0.88rem; margin: 0.3rem 0 0 1.9rem; color: var(--dim); }
+  .diff b { color: var(--ink); font-weight: 400; }
+  .diff del { color: var(--gone); } .diff ins { color: var(--new); text-decoration: none; }
+  .change { display: flex; gap: 0.6rem; align-items: flex-start; }
+  .change input { width: 1.2rem; height: 1.2rem; margin-top: 0.2rem; flex: none; }
+  #toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); padding: 0.6rem 1rem; border-radius: 8px;
+           background: #333; box-shadow: 0 2px 12px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.2s; pointer-events: none;
+           max-width: 90vw; z-index: 10; }
+  #toast.show { opacity: 1; } #toast.error { background: #5a2626; }
+  .muted { color: var(--dim); }
+  #upload-progress { color: var(--dim); font-size: 0.9rem; margin-top: 0.6rem; min-height: 1.4em; }
 </style>
 </head>
 <body>
-<main>
-<h1>Add a painting</h1>
-<form id="form">
-  <label for="image">Photo</label>
-  <input id="image" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif" required>
-  <p class="hint">Cropped to the painting (for a drawing on white paper: to the paper, with no table showing).</p>
-  <img id="preview" alt="">
-
-  <label for="title">Title</label>
-  <input id="title" name="title" type="text" required autocomplete="off">
-  <p class="hint" id="name"></p>
-
-  <label for="medium">Medium</label>
-  <input id="medium" name="medium" type="text" autocomplete="off" value="Oil on canvas">
-  <p class="hint">Filled in with the medium you used last time on this device.</p>
-
-  <div class="row">
-    <div><label for="height">Height (cm)</label><input id="height" name="height" type="number" min="1" step="any" inputmode="decimal"></div>
-    <div><label for="width">Width (cm)</label><input id="width" name="width" type="number" min="1" step="any" inputmode="decimal"></div>
-    <div><label for="year">Year</label><input id="year" name="year" type="number" min="1900" max="2100" inputmode="numeric"></div>
+<header>
+  <div class="bar">
+    <span class="site">Editor</span>
+    <a href="#content" data-view="content">Content</a>
+    <a href="#review" data-view="review">Review<span class="count" id="count" hidden></span></a>
+    <a href="#history" data-view="history">History</a>
+    <a href="/" target="_blank" rel="noopener">Preview ↗</a>
   </div>
-
-  <label for="section">Section</label>
-  <select id="section" name="section" required><option value="">Loading…</option></select>
-  <input id="newsection" name="newsection" type="text" autocomplete="off" placeholder="Name of the new section">
-
-  <label class="tick"><input id="white_paper" name="white_paper" type="checkbox"> Drawing on white paper (make the paper pure white)</label>
-  <label class="tick"><input id="wide" name="wide" type="checkbox"> Wide (span the full width of the gallery list)</label>
-
-  <button id="send" type="submit">Add to dev</button>
-  <div id="status" role="status"></div>
-</form>
-<footer>Goes on <a href="https://dev.chrisjones.org.uk/">dev.chrisjones.org.uk</a> a few minutes after sending; put dev live as usual when it looks right.</footer>
-</main>
-<script>
-const $ = (id) => document.getElementById(id);
-const status = (text, error) => { $('status').textContent = text; $('status').className = error ? 'error' : ''; };
-$('year').value = new Date().getFullYear();
-// The medium box holds a real value, never grey example text (which looked filled in but sent nothing):
-// the medium last sent from this device, or Oil on canvas.
-const remembered = () => { try { return localStorage.getItem('admin-medium'); } catch { return null; } };
-if (remembered()) $('medium').value = remembered();
-
-// The same rule as slug() in tools/build_site.py: a title's file and page name.
-function slug(title) {
-  let t = title.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
-  t = t.replace(/&/g, ' and ').replace(/[#,.'’]/g, '');
-  return t.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-let taken = new Set();
-$('title').addEventListener('input', () => {
-  const n = slug($('title').value);
-  $('name').textContent = !n ? '' : taken.has(n) ? `“${n}” is already in the gallery: choose another title.` : `Address: /paintings/${n}/`;
-});
-
-fetch('/admin/api/sections').then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((d) => {
-  taken = new Set(d.names);
-  $('section').innerHTML = d.sections.map((s) => `<option>${s.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('')
-    + '<option value="__new">New section…</option>';
-  $('section').value = d.sections.includes('Drawings') ? 'Drawings' : d.sections[0];
-}).catch((e) => status(`Couldn't read the sections (${e}). Try reloading.`, true));
-$('section').addEventListener('change', () => {
-  const isNew = $('section').value === '__new';
-  $('newsection').style.display = isNew ? 'block' : 'none';
-  $('newsection').required = isNew;
-});
-
-// Photos are sent as they are when the build can read them (JPEG, PNG, WebP, TIFF). An iPhone's HEIC is turned
-// into a high-quality JPEG here first, upright, by the browser (Safari can read HEIC; Chrome on a Mac can't).
-let upload = null;
-$('image').addEventListener('change', async () => {
-  upload = null; $('preview').style.display = 'none'; status('');
-  const f = $('image').files[0];
-  if (!f) return;
-  const heic = /heic|heif/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
-  try {
-    if (heic) {
-      status('Converting from HEIC…');
-      const bmp = await createImageBitmap(f);
-      const c = document.createElement('canvas');
-      c.width = bmp.width; c.height = bmp.height;
-      c.getContext('2d').drawImage(bmp, 0, 0);
-      const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.95));
-      if (!blob) throw new Error('no JPEG');
-      upload = { blob, ext: 'jpg' };
-    } else {
-      const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/tiff': 'tif' })[f.type]
-        || (f.name.match(/\.(jpe?g|png|webp|tiff?)$/i) || [])[1]?.toLowerCase().replace('jpeg', 'jpg').replace('tiff', 'tif');
-      if (!ext) throw new Error('type');
-      upload = { blob: f, ext };
-    }
-    $('preview').src = URL.createObjectURL(upload.blob);
-    $('preview').style.display = 'block';
-    status('');
-  } catch (e) {
-    status(heic ? "This browser can't read HEIC photos. Use Safari, or export the photo as JPEG first."
-                : 'Use a JPEG, PNG, WebP, TIFF or HEIC photo.', true);
-  }
-});
-
-$('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!upload) return status('Choose a photo first.', true);
-  const title = $('title').value.trim();
-  if (taken.has(slug(title))) return status('That title is already in the gallery.', true);
-  const fd = new FormData();
-  for (const k of ['title', 'medium', 'height', 'width', 'year', 'section', 'newsection']) fd.append(k, $(k).value.trim());
-  fd.append('white_paper', $('white_paper').checked ? '1' : '');
-  fd.append('wide', $('wide').checked ? '1' : '');
-  fd.append('image', upload.blob, `upload.${upload.ext}`);
-  $('send').disabled = true;
-  status('Sending…');
-  try {
-    const r = await fetch('/admin/api/add', { method: 'POST', body: fd });
-    const d = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    taken.add(d.name);
-    const medium = $('medium').value.trim();
-    try { localStorage.setItem('admin-medium', medium); } catch {}
-    status(`Added “${title}” to dev. It should appear on dev.chrisjones.org.uk in a few minutes.`);
-    $('form').reset(); $('year').value = new Date().getFullYear(); $('medium').value = medium;
-    $('preview').style.display = 'none'; $('name').textContent = ''; upload = null;
-    if (![...$('section').options].some((o) => o.value === d.section)) {
-      const o = document.createElement('option'); o.textContent = d.section;
-      $('section').insertBefore(o, $('section').lastElementChild);
-    }
-    $('section').value = d.section; $('newsection').style.display = 'none'; $('newsection').required = false;
-  } catch (err) {
-    status(`Not added: ${err.message}`, true);
-  } finally {
-    $('send').disabled = false;
-  }
-});
-</script>
+</header>
+<main id="main"><p class="muted">Loading…</p></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="editor.js"></script>
 </body>
 </html>

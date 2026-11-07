@@ -1,7 +1,7 @@
 # Notes for Claude: chrisjones.org.uk
 
-Christopher's site: hand-written HTML, CSS and JavaScript, no framework. Cloudflare's build only fills in what
-git lacks (`sh tools/cloudflare_build.sh`: build_site.py --missing-only, for paintings added from the admin page).
+Christopher's site: hand-written HTML, CSS and JavaScript, no framework. Paintings and page text come from a
+database (Cloudflare D1), edited at admin.chrisjones.org.uk: see "Content is in D1" below.
 The README covers the workflow for people; this file adds what a new Claude session needs.
 Always: British English; links are never underlined; give Christopher the commands so he can do things himself.
 Consistency matters to him: all text below the header shares one shadow (`--shadow` on body; the header has its
@@ -17,7 +17,8 @@ once at the top of index.html's styles. Section headings mirror the opening titl
   chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Both have the build command
   `sh tools/cloudflare_build.sh` (set in each Worker's build settings). Settings in wrangler.jsonc (no workers.dev or preview
   addresses; Worker logs kept);
-  `.assetsignore` lists what isn't published (this file, the README, tools/, masters/, paintings.yaml...).
+  `.assetsignore` lists what isn't published (this file, the README, tools/, masters/, paintings.yaml, db/,
+  the server code...). Anchor root files there with / (a bare name matches in every folder).
 
 ## Who does what
 
@@ -85,20 +86,39 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   the opening video and the contact photo; over the floating gallery only with `?glass=N` in the address (N frames
   skipped between copies; off by default as it made phones stutter; gallery.js sends `glass-frame` events); not the head animation (by choice); plain CSS frost elsewhere. The header's
   Gallery link goes to #paintings.
-- **The admin page**, dev.chrisjones.org.uk/admin/ (admin/index.html and admin.js, reached through worker.js):
-  add a painting from the phone or Mac: photo (HEIC turned into JPEG in the browser), title, medium, size, year,
-  section (or a new one), white paper and wide ticks. It makes one commit on dev (master + paintings.yaml,
-  edited as text so comments stay) through the GitHub API; Cloudflare's build then makes the images. Guarded
-  by Cloudflare Access (one-time code to Christopher's email) and admin.js checks the Access token itself.
-  Only the dev Worker has its settings (ACCESS_TEAM, ACCESS_AUD, secret GITHUB_TOKEN: a fine-grained token,
-  contents read and write on this repository only); without them /admin is "not found", as on live.
-  Images it adds exist only in Cloudflare's deployment until build_site.py is next run here or on the Mac and
-  committed: after pulling an admin addition, run the build before committing other changes.
-- **worker.js** (the only server code; wrangler.jsonc sends only /paintings/* to it): a painting's address is the
-  home page with that painting brought forward, one version of the truth however you arrive. It serves index.html
-  with that painting's title, description and og:image (from gallery/paintings.json), a canonical link, and
-  `<base href="/">` so relative paths still work. There are no separate painting pages (removed Nov 2026).
-  Test locally with `npx wrangler dev --env dev` (http://localhost:8787); plain Apache has no Worker.
+- **Content is in D1, not git (stage 1, Nov 2026).** Tables in db/schema.sql: `entries` (one row per section,
+  painting, page text or setting; `draft` and `published` JSON side by side; a change = draft differs from
+  published; draft NULL = deleted in the draft, published NULL = never published), `releases` (each publish)
+  and `revisions` (what each entry became in each release, and what it was). JSON is written with fixed key
+  order (editor.js `normalise`), so equal text means no change. Databases: live site-content
+  (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb), both
+  seeded from db/seed.sql (tools/import_content.py, a one-off from paintings.yaml). Query them through the
+  Cloudflare API connector. dev's database is a sandbox for code changes: content never goes from dev to live.
+  paintings.yaml and masters/ are now only the record of what was imported; img/ still holds those paintings'
+  images (build_site.py, unchanged, still makes them and the contact picture).
+- **worker.js** runs first (wrangler.jsonc run_worker_first) for /, /paintings/*, /gallery/list/, /media/* and
+  /admin*. It fills the pages from the database with HTMLRewriter (site.js): the gallery-data JSON, the
+  invitation wall, the list page's grid, `data-text="key"` elements and `data-paragraphs="key"` blocks in
+  index.html (entries t-<key>). A painting's address is the home page with that painting brought forward (its
+  title, og:image from `preview`, canonical link, `<base href="/">`). Painting images are
+  `<base><name>-<width>.<ext>`: base img/ + webp (from the build) or media/p/<12 hex>/ + jpg (uploaded, in R2,
+  served by worker.js with long caching). Everything but chrisjones.org.uk and www gets noindex.
+- **The editor**: any host starting "admin" is the editor: admin.chrisjones.org.uk (live Worker, Access app
+  "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
+  Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
+  ACCESS_AUD per Worker). There the site shows drafts, with a bar; /admin/ is the editor (admin/index.html,
+  admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
+  editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
+  Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
+  and the original is kept under masters/<id>/ in R2 for later processing. The R2 binding MEDIA (buckets
+  site-media and site-media-dev) goes into wrangler.jsonc only once R2 is enabled on the account; without it
+  the editor says adding paintings isn't available yet. On other hosts /admin is not found.
+  Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
+  --persist-to /tmp/wr --port 8787` is the site, and a second one on --port 8788 is the editor, signed in as
+  DEV_USER; load the tables with `npx wrangler d1 execute site-content-dev --env dev --local --persist-to
+  /tmp/wr --file db/schema.sql` (then db/seed.sql). Headless Chrome with Playwright works here for the editor.
+- Later stages (agreed): image processing at upload, server-side (including white_paper); users and roles;
+  editing in place on the preview.
 
 ## Cloudflare account settings (set in the dashboard, not the repository)
 

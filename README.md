@@ -1,6 +1,7 @@
 # chrisjones.org.uk
 
-Plain HTML, CSS and JavaScript, published by Cloudflare straight from this repository (no build step on Cloudflare).
+Plain HTML, CSS and JavaScript, published by Cloudflare from this repository. The paintings and page text come
+from a database, edited at admin.chrisjones.org.uk (see Content, below).
 
 ## Branches
 
@@ -10,23 +11,32 @@ Plain HTML, CSS and JavaScript, published by Cloudflare straight from this repos
 
 Every commit is kept, so any file, or the whole site, can be returned to an earlier state.
 
-## Adding or changing a painting
+## Content: paintings and page text (the editor)
 
-1. Put the master image in `masters/`, named after the painting's title
-   (`python3 tools/build_site.py --name "My Title"` prints the name). PNG, WebP, JPEG or TIFF;
-   ideally at least 2560 pixels wide.
-2. Add the painting to `paintings.yaml` (or change its title, details or position there).
-3. Run `python3 tools/build_site.py` (in the venv: it needs `pip install pillow pyyaml`).
-4. Check it on localhost, then commit and push to dev.
+Paintings, sections and the marked page text live in a database (Cloudflare D1), not in git. They're edited at
+**admin.chrisjones.org.uk** (sign in with the one-time code sent to your email):
 
-The script makes every size in `img/`, the gallery on the home page (between the gallery
-markers in index.html) and `gallery/paintings.json`. Don't edit those by hand: the next run replaces them.
+- the whole site, showing the drafts in place, with a bar at the bottom ("Draft · 2 changes to publish · Edit · Review");
+- **/admin/** is the editor: change text, sections and paintings, add a painting from a photo. Every change is
+  saved as a draft at once; visitors see nothing until it's published;
+- **Review**: every unpublished change with a tick. Publish the ticked ones, or all, or discard them;
+- **History**: each publication, and every earlier version of anything, which can be brought back as a draft.
+
+dev has its own copy of the database and its own editor, **admin-dev.chrisjones.org.uk**, for trying out code
+changes without touching the live content. dev is for code only: content never travels from dev to live.
+
+Adding paintings needs R2, Cloudflare's file storage, switched on (Storage & databases, R2, in the dashboard).
+For now the photo's sizes are made as JPEG in the browser; the white-paper correction comes in a later stage.
+
+The paintings already on the site keep their images in `img/`, made by `tools/build_site.py` from
+`masters/`, and `paintings.yaml` is how they were listed before the move: it no longer changes the site.
+`tools/import_content.py` wrote `db/seed.sql` from it, once; `db/schema.sql` describes the tables.
 
 A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
-forward in the gallery; there are no separate painting pages. On Cloudflare, `worker.js` answers those
-addresses (with the painting's title and preview image for link previews). Your local Apache copy has no
-Worker, so there those addresses don't open, though enlarging paintings in the gallery works as usual. To try
-them locally as Cloudflare would run them: `npx wrangler dev --env dev`, then open http://localhost:8787.
+forward in the gallery. On Cloudflare, `worker.js` answers the home page, those addresses and the list page,
+filling in the content from the database (`site.js`). Your local Apache copy has no Worker or database, so it
+shows the content as it was in the files. To run it as Cloudflare would:
+`npx wrangler dev --env dev`, then open http://localhost:8787.
 
 ## Putting dev live
 
