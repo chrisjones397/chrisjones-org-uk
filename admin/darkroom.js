@@ -33,23 +33,6 @@ export function resized(src, w) {
   return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Couldn\'t make an image size'))), 'image/jpeg', 0.88));
 }
 
-/* The picture turned clockwise by rotate degrees (0, 90, 180 or 270), then mirrored left to right if mirror. */
-export function oriented(src, rotate, mirror) {
-  const W = src.width, H = src.height, side = rotate % 180 !== 0;
-  const c = canvas(side ? H : W, side ? W : H), x = c.getContext('2d');
-  x.translate(c.width / 2, c.height / 2);
-  if (mirror) x.scale(-1, 1);
-  x.rotate(rotate * Math.PI / 180);
-  x.drawImage(src, -W / 2, -H / 2);
-  return c;
-}
-/* Where a point (fractions across and down) goes when the picture is turned a quarter right or left, or mirrored. */
-export const turnPoint = {
-  right: ([u, v]) => [1 - v, u],
-  left: ([u, v]) => [v, 1 - u],
-  mirror: ([u, v]) => [1 - u, v],
-};
-
 const copy = (c) => { const d = canvas(c.width, c.height); d.getContext('2d').drawImage(c, 0, 0); return d; };
 const pixels = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
 
@@ -183,13 +166,35 @@ export function whiteBalanced(src, white, spots, how) {
 
 // ---- cropping with perspective correction ------------------------------------------------------------------
 
-/* Four points in the order top left, top right, bottom right, bottom left, whatever order they were placed in. */
+/* Four points in the order top left, top right, bottom right, bottom left as they lie on the photo, whatever
+   order they were placed in. */
 export function ordered(pts) {
   const cx = pts.reduce((s, p) => s + p[0], 0) / 4, cy = pts.reduce((s, p) => s + p[1], 0) / 4;
   const round = pts.slice().sort((a, b) => Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx));
   const first = round.reduce((best, p, i) => (p[0] + p[1] < round[best][0] + round[best][1] ? i : best), 0);
   return [0, 1, 2, 3].map((i) => round[(first + i) % 4]);       // clockwise on screen, from the top left
 }
+
+/* Which way up: the corners geometrically in order g (from ordered()), labelled as the painting's top left, top
+   right, bottom right and bottom left when it is turned r quarter turns clockwise, then mirrored if m. Squaring
+   up maps the labels to the picture's corners, so it turns and mirrors the painting as well. */
+export function labelled(g, r, m) {
+  const L = [0, 1, 2, 3].map((i) => g[(i - r + 4) % 4]);
+  return m ? [L[1], L[0], L[3], L[2]] : L;
+}
+/* The turn and mirror of labelled corners q. */
+export function turnOf(q) {
+  const g = ordered(q), same = (a, b) => a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1]);
+  for (const m of [false, true]) for (let r = 0; r < 4; r++) if (same(labelled(g, r, m), q)) return { r, m };
+  return { r: 0, m: false };
+}
+export function describeTurn({ r, m }) {
+  const t = ['', 'turned a quarter right', 'turned upside down', 'turned a quarter left'][r];
+  return [t, m ? 'mirrored' : ''].filter(Boolean).join(' and ');
+}
+export const FRAME = [[0, 0], [1, 0], [1, 1], [0, 1]];
+/* Do these corners (fractions) take in the whole photo? */
+export const wholePhoto = (q) => ordered(q).every((p, i) => Math.abs(p[0] - FRAME[i][0]) < 1e-4 && Math.abs(p[1] - FRAME[i][1]) < 1e-4);
 
 /* "Oil on canvas, 60 x 90 cm, 2020" -> [60, 90] (height, width), or null. */
 export function sizeIn(details) {
@@ -242,16 +247,18 @@ export function squaredUp(src, q, w, h) {
 
 /* Opens the picture full screen, to zoom into (pinch, or pinch on a trackpad, or the + and - buttons) and move
    about (drag, or scroll). mode 'spots': tap a spot to add it, tap it again to take it away. mode 'corners': drag
-   the four corners onto the painting's corners; a magnifier shows the spot under the finger. Resolves with the
-   new spots or corners (fractions of the picture), or null if cancelled. */
+   the four corners onto the painting's corners (a magnifier shows the spot under the finger); tap an edge to
+   make it the painting's bottom, and Mirror swaps its left and right. They start on the photo's own corners.
+   Resolves with the new spots, or the corners labelled top left, top right, bottom right, bottom left (fractions
+   of the picture), or null if cancelled. */
 export function fullView(img, mode, start) {
   return new Promise((resolve) => {
     const W = img.width, H = img.height;
-    let pts = (start && start.length ? start : mode === 'corners'
-      ? [[0.08, 0.08], [0.92, 0.08], [0.92, 0.92], [0.08, 0.92]] : []).map((p) => [p[0] * W, p[1] * H]);
+    let pts = (start && start.length ? start : mode === 'corners' ? FRAME : []).map((p) => [p[0] * W, p[1] * H]);
+    let turn = mode === 'corners' && start ? turnOf(start) : { r: 0, m: false };
     const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
     const hint = mode === 'corners'
-      ? 'Drag each corner onto a corner of the painting. Pinch or use + and − to zoom in for accuracy.'
+      ? 'Drag each corner onto a corner of the painting (pinch or use + and − to zoom in). Tap an edge to make it the painting\'s bottom; Mirror swaps left and right.'
       : 'Tap spots that should be white or neutral grey (a white wall, card or paper). Tap a spot again to remove it. Two or more spots apart also even out the light.';
     const cv = el('canvas', { className: 'dr-canvas' }), loupe = el('canvas', { className: 'dr-loupe', width: 300, height: 300 });
     const count = el('span', { className: 'dr-count' });
@@ -261,10 +268,11 @@ export function fullView(img, mode, start) {
         el('p', { className: 'dr-hint' }, hint),
         el('div', { className: 'dr-buttons' },
           btn('−', () => zoomBy(1 / 1.6)), btn('+', () => zoomBy(1.6)), btn('Fit', () => { fit(); draw(); }),
-          mode === 'corners' ? btn('Reset', () => { pts = [[0.08, 0.08], [0.92, 0.08], [0.92, 0.92], [0.08, 0.92]].map((p) => [p[0] * W, p[1] * H]); draw(); })
-            : btn('Clear', () => { pts = []; draw(); }),
+          ...(mode === 'corners' ? [btn('⇋ Mirror', () => { turn.m = !turn.m; draw(); }),
+            btn('Reset', () => { pts = FRAME.map((p) => [p[0] * W, p[1] * H]); turn = { r: 0, m: false }; draw(); })]
+            : [btn('Clear', () => { pts = []; draw(); })]),
           count, btn('Cancel', () => close(null)),
-          btn('Done', () => close(mode === 'corners' ? ordered(pts) : pts), 'main'))),
+          btn('Done', () => close(mode === 'corners' ? labelled(ordered(pts), turn.r, turn.m) : pts), 'main'))),
       cv, loupe);
     document.body.append(box);
     document.body.style.overflow = 'hidden';
@@ -299,6 +307,16 @@ export function fullView(img, mode, start) {
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill('evenodd');
         ctx.beginPath(); ctx.moveTo(...q[0]); q.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath();
         ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.stroke();
+        const L = labelled(q, turn.r, turn.m);                   // the painting's bottom edge: from L[3] to L[2]
+        ctx.beginPath(); ctx.moveTo(...L[3]); ctx.lineTo(...L[2]);
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = '#f5c66b'; ctx.lineWidth = 4; ctx.stroke();
+        const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+        ctx.font = '600 13px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (const [p, text] of [[L[3], 'bottom left'], [L[2], 'bottom right']]) {
+          const dx = p[0] - cx, dy = p[1] - cy, d = Math.hypot(dx, dy) || 1, x = p[0] + dx / d * 30, y = p[1] + dy / d * 30;
+          ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeText(text, x, y); ctx.fillStyle = '#f5c66b'; ctx.fillText(text, x, y);
+        }
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
         for (const p of pts.map(toScreen)) {
           ctx.beginPath(); ctx.arc(p[0], p[1], 11, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
           ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -373,6 +391,13 @@ export function fullView(img, mode, start) {
       down.delete(e.pointerId);
       if (down.size < 2) pinch = null;
       if (down.size === 0) {
+        if (tap && mode === 'corners' && performance.now() - tap.t < 500) {
+          // A tap near an edge makes it the bottom. Edge j runs from corner j to j + 1 of ordered(): top, right, bottom, left.
+          const g = ordered(pts).map(toScreen), [x, y] = tap.p;
+          const dist = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy); };
+          const near = [0, 1, 2, 3].map((j) => [dist(g[j], g[(j + 1) % 4]), j]).sort((a, b) => a[0] - b[0])[0];
+          if (near[0] < 28) { turn.r = (2 - near[1] + 4) % 4; draw(); }
+        }
         if (tap && mode === 'spots' && performance.now() - tap.t < 500) {
           const near = pts.findIndex((q) => { const [x, y] = toScreen(q); return Math.max(Math.abs(x - tap.p[0]), Math.abs(y - tap.p[1])) < Math.max(14, spotR * s); });
           if (near >= 0) pts.splice(near, 1);

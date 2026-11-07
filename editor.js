@@ -109,8 +109,8 @@ const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'dri
 /* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
    round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
    width and height; brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
-   colour kept, 0 to 1) go with any white balance; rotate (degrees clockwise) and mirror (left to right, after
-   turning) say which way up the original was used, and the positions are fractions of it that way up; shape is the size from its details [height, width] when the crop took that shape. Kept so
+   colour kept, 0 to 1) go with any white balance; the corners are in the order the painting's top left, top
+   right, bottom right and bottom left, so they also say which way up it goes (and whether it's mirrored); shape is the size from its details [height, width] when the crop took that shape. Kept so
    the images can be made again from the original. */
 function processOf(p) {
   if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
@@ -121,8 +121,7 @@ function processOf(p) {
     if (!Array.isArray(a) || a.length < lo || a.length > hi) throw new Bad(`Bad ${what}`);
     return a.map((q) => { if (!Array.isArray(q) || q.length !== 2) throw new Bad(`Bad ${what}`); return q.map(frac); });
   };
-  if (p.rotate != null && ![0, 90, 180, 270].includes(p.rotate)) throw new Bad('Bad rotation');
-  const out = { original: p.original, ...(p.rotate ? { rotate: p.rotate } : {}), ...(p.mirror ? { mirror: true } : {}), white: p.white };
+  const out = { original: p.original, white: p.white };
   if (p.white === 'picks') out.spots = points(p.spots, 1, 20, 'white spots');
   if (p.white !== 'none') {
     const share = (v, lo, what) => { num(v, what); if (v < lo || v > 1) throw new Bad(`Bad ${what}`); return Math.round(v * 100) / 100; };

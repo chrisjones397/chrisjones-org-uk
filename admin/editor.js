@@ -6,7 +6,7 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
-import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp, oriented, turnPoint, ordered } from './darkroom.js';
+import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
 function h(tag, props = {}, ...kids) {
@@ -223,11 +223,6 @@ function addForm(secs) {
   const form = h('div', { class: 'card' },
     h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
     f.steps = h('div', { class: 'steps', hidden: true },
-      h('label', {}, 'Which way up'),
-      h('div', { class: 'row' },
-        h('button', { type: 'button', onclick: () => turn('left') }, '↺ Rotate left'),
-        h('button', { type: 'button', onclick: () => turn('right') }, '↻ Rotate right'),
-        h('button', { type: 'button', onclick: () => turn('mirror') }, '⇋ Mirror')),
       h('label', {}, 'White balance'),
       h('div', { class: 'row' },
         f.white = h('select', { class: 'grow', onchange: () => { if (f.white.value === 'picks' && !pending.spots.length) pickSpots(); else update(); } },
@@ -244,7 +239,10 @@ function addForm(secs) {
       h('div', { class: 'row' },
         f.cornersNote = h('span', { class: 'grow muted' }),
         h('button', { type: 'button', onclick: () => setCorners() }, 'Set corners…'),
-        f.wholeBtn = h('button', { type: 'button', onclick: () => { pending.corners = null; update(); } }, 'Whole photo')),
+        f.wholeBtn = h('button', { type: 'button', onclick: () => {
+          const t = turnOf(pending.corners);                            // keep which way up, take in the whole photo
+          pending.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
+        } }, 'Whole photo')),
       f.shapeRow = h('label', { class: 'tick' }, f.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
         f.shapeText = h('span', {})),
       f.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') })),
@@ -278,26 +276,10 @@ function addForm(secs) {
     }
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
-    const raw = scaled(img, Math.round(W * k));
-    pending = { file, raw, W0: W, H0: H, W, H, src: raw, rotate: 0, mirror: false, spots: [], corners: null, white: null };
+    pending = { file, W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
     f.white.value = 'none'; f.bright.value = 100; f.warm.value = 0; slid(); clearTimeout(timer);
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
     f.steps.hidden = false;
-    update();
-  }
-
-  /* Turn or mirror the photo (as if the camera had it the wrong way round): the result is the original turned
-     clockwise by rotate degrees, then mirrored if mirror. Spots and corners already placed turn with it. */
-  function turn(how) {
-    const p = pending;
-    if (how === 'mirror') p.mirror = !p.mirror;
-    else p.rotate = (p.rotate + ((how === 'right') !== p.mirror ? 90 : 270)) % 360;   // mirrored, a turn goes the other way
-    p.spots = p.spots.map(turnPoint[how]);
-    if (p.corners) p.corners = ordered(p.corners.map(turnPoint[how]));
-    p.src = p.rotate || p.mirror ? oriented(p.raw, p.rotate, p.mirror) : p.raw;
-    const side = p.rotate % 180 !== 0;
-    p.W = side ? p.H0 : p.W0; p.H = side ? p.W0 : p.H0;
-    p.white = null;
     update();
   }
 
@@ -310,7 +292,10 @@ function addForm(secs) {
   async function setCorners() {
     await busy('Getting the full-size view ready…');
     const r = await fullView(balanced().canvas, 'corners', pending.corners);
-    if (r) pending.corners = r;
+    if (r) {
+      const t = turnOf(r);
+      pending.corners = wholePhoto(r) && !t.r && !t.m ? null : r;    // the whole photo, as it is: nothing to do
+    }
     update();
   }
 
@@ -321,10 +306,11 @@ function addForm(secs) {
   }
   function shapeLine() {
     const size = sizeIn(f.details.value);
-    f.shapeRow.hidden = !(pending && pending.corners && size);
+    f.shapeRow.hidden = !(pending && cropped() && size);
     if (size) f.shapeText.textContent = `Squared up to the shape of the size in the details: ${size[0]} × ${size[1]} centimetres`;
-    return f.shape.checked ? size : null;
+    return f.shape.checked && cropped() ? size : null;
   }
+  const cropped = () => !!(pending && pending.corners && !wholePhoto(pending.corners));
   const busy = (text) => { f.progress.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
 
   /* Make the picture that will be uploaded from the choices, and show it beside the photo. */
@@ -334,8 +320,9 @@ function addForm(secs) {
     f.spotsBtn.hidden = f.white.value !== 'picks';
     f.sliders.hidden = f.white.value === 'none' || (f.white.value === 'picks' && !p.spots.length);
     f.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
-    f.wholeBtn.hidden = !p.corners;
-    f.cornersNote.textContent = p.corners ? 'Set: squared up' : 'Whole photo';
+    f.wholeBtn.hidden = !cropped();
+    const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
+    f.cornersNote.textContent = (cropped() ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '');
     const shape = shapeLine();
     await busy('Working…');
     const { canvas: wb, note } = balanced();
@@ -381,10 +368,8 @@ function addForm(secs) {
         await put(`images/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
       }
       const order = paintingsIn(f.section.value).length;
-      const shape = pending.corners ? shapeLine() : null;
-      const process = { original: `originals/${stemName}.${ext}`,
-        ...(pending.rotate ? { rotate: pending.rotate } : {}), ...(pending.mirror ? { mirror: true } : {}),
-        white: f.white.value,
+      const shape = shapeLine();
+      const process = { original: `originals/${stemName}.${ext}`, white: f.white.value,
         ...(f.white.value === 'picks' ? { spots: pending.spots } : {}),
         ...(f.white.value !== 'none' ? how() : {}),
         ...(pending.corners ? { corners: pending.corners } : {}), ...(shape ? { shape } : {}) };
