@@ -246,7 +246,7 @@ export function squaredUp(src, q, w, h) {
 // ---- the full-size view: picking spots and placing corners ------------------------------------------------
 
 /* Opens the picture full screen, to zoom into (pinch, or pinch on a trackpad, or the + and - buttons) and move
-   about (drag, or scroll). mode 'spots': tap a spot to add it, tap it again to take it away. mode 'corners': drag
+   about (drag, or scroll; double-tap zooms in where tapped, or back out). mode 'spots': tap a spot to add it, tap it again to take it away. mode 'corners': drag
    the four corners onto the painting's corners (a magnifier shows the spot under the finger). Each corner keeps
    its label wherever it's dragged (Christopher's design): put the ones labelled bottom left and bottom right on
    the painting's bottom corners, and the painting comes out that way up. Tapping an edge relabels them so it's
@@ -270,7 +270,8 @@ export function fullView(img, mode, start) {
         el('p', { className: 'dr-hint' }, hint),
         el('div', { className: 'dr-buttons' },
           btn('−', () => zoomBy(1 / 1.6)), btn('+', () => zoomBy(1.6)), btn('Fit', () => { fit(); draw(); }),
-          ...(mode === 'corners' ? [btn('⇋ Mirror', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }),
+          ...(mode === 'corners' ? [btn('Labels ↺', () => labelsRound(-1)), btn('Labels ↻', () => labelsRound(1)),
+            btn('⇋ Mirror', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }),
             btn('Reset', () => { pts = FRAME.map((p) => [p[0] * W, p[1] * H]); draw(); })]
             : [btn('Clear', () => { pts = []; draw(); })]),
           count, btn('Cancel', () => close(null)),
@@ -329,6 +330,14 @@ export function fullView(img, mode, start) {
       }));
       return out;
     };
+    /* Move every label on to the next corner round, clockwise (dir 1) or anticlockwise (-1) as seen on screen,
+       leaving the corners where they are: for when they're well placed but labelled the wrong way round. */
+    function labelsRound(dir) {
+      const q = pts.map(toScreen);
+      const area = q.reduce((a, p, i) => { const r = q[(i + 1) % 4]; return a + p[0] * r[1] - r[0] * p[1]; }, 0);
+      const k = (area > 0) === (dir > 0) ? 1 : 3;                 // label order runs clockwise on screen when area > 0
+      pts = [0, 1, 2, 3].map((i) => pts[(i + k) % 4]); draw();
+    }
     /* Do the corners, in label order, go round without the edges crossing? */
     const convex = (q) => {
       const z = q.map((p, i) => { const a = q[(i + 1) % 4], b = q[(i + 2) % 4]; return (a[0] - p[0]) * (b[1] - a[1]) - (a[1] - p[1]) * (b[0] - a[0]); });
@@ -354,7 +363,9 @@ export function fullView(img, mode, start) {
         ctx.moveTo(...q[0]); q.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath();
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill('evenodd');
         ctx.beginPath(); ctx.moveTo(...q[0]); q.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath();
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = ok ? '#fff' : '#f08c8c'; ctx.lineWidth = 1.2; ctx.stroke();
+        // The crop runs exactly along this line, through the centres of the crosshairs. Drawn one screen dot wide
+        // and half see-through, so it hides as little of the edge as possible; the shading shows which side is out.
+        ctx.strokeStyle = ok ? 'rgba(255,255,255,0.7)' : '#f08c8c'; ctx.lineWidth = ok ? 1 / dpr : 2; ctx.stroke();
         {                                                          // the painting's bottom edge, marked just outside it
           const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
           const ex = q[2][0] - q[3][0], ey = q[2][1] - q[3][1], n = Math.hypot(ex, ey) || 1;
@@ -367,7 +378,10 @@ export function fullView(img, mode, start) {
         const twice = (path, w) => { path(); ctx.strokeStyle = '#000'; ctx.lineWidth = w + 2; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = w; ctx.stroke(); };
         for (const { p, k } of K) {
           twice(() => { ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(k[0], k[1]); }, 1.2);              // the stick
-          twice(() => { ctx.beginPath(); ctx.moveTo(p[0] - 7, p[1]); ctx.lineTo(p[0] + 7, p[1]); ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0], p[1] + 7); }, 1.2);
+          twice(() => {                                            // a crosshair with a gap, leaving the corner itself in view
+            ctx.beginPath();
+            for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(p[0] + a * 4, p[1] + b * 4); ctx.lineTo(p[0] + a * 10, p[1] + b * 10); }
+          }, 1.2);
           ctx.beginPath(); ctx.arc(k[0], k[1], 14, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
           twice(() => { ctx.beginPath(); ctx.arc(k[0], k[1], 14, 0, 7); }, 1.5);
         }
@@ -463,7 +477,22 @@ export function fullView(img, mode, start) {
       if (down.size < 2) pinch = null;
       if (down.size === 0) {
         if (tap && tap.arrow) { goTo(pts[tap.arrow.to]); tap = null; }
-        if (tap && mode === 'corners' && performance.now() - tap.t < 500) {
+        if (tap && performance.now() - tap.t < 500) {
+          const t = tap, now = performance.now();
+          if (last && now - last.time < 300 && Math.hypot(t.p[0] - last.p[0], t.p[1] - last.p[1]) < 30) {
+            clearTimeout(last.timer); last = null;
+            if (s < fitScale() * 1.5) zoomAt(3, ...t.p); else { fit(); draw(); }
+          } else {
+            last = { time: now, p: t.p, timer: setTimeout(() => { last = null; single(t); }, 280) };
+          }
+        }
+        const was = drag && drag.dir; drag = null; tap = null; loupe.style.display = 'none';
+        if (was) draw();                                          // let the stick point outwards again
+      }
+    };
+    let last = null;                                              // the last single tap, while waiting to see if a second follows
+    function single(tap) {
+        if (mode === 'corners') {
           // A tap near an edge makes it the bottom. Edge j runs from corner j to j + 1: top, right, bottom, left.
           // Relabelling by k places keeps left and right as they are: the new bottom is edge j when k = j - 2.
           const g = pts.map(toScreen), [x, y] = tap.p;
@@ -471,16 +500,13 @@ export function fullView(img, mode, start) {
           const near = [0, 1, 2, 3].map((j) => [dist(g[j], g[(j + 1) % 4]), j]).sort((a, b) => a[0] - b[0])[0];
           if (near[0] < 28) { const k = near[1] + 2; pts = [0, 1, 2, 3].map((i) => pts[(i + k) % 4]); draw(); }
         }
-        if (tap && mode === 'spots' && performance.now() - tap.t < 500) {
+        if (mode === 'spots') {
           const near = pts.findIndex((q) => { const [x, y] = toScreen(q); return Math.max(Math.abs(x - tap.p[0]), Math.abs(y - tap.p[1])) < Math.max(28, spotR * s); });
           if (near >= 0) pts.splice(near, 1);
           else { const q = toImage(...tap.p); if (q[0] >= 0 && q[1] >= 0 && q[0] <= W && q[1] <= H) pts.push(q); }
           draw();
         }
-        const was = drag && drag.dir; drag = null; tap = null; loupe.style.display = 'none';
-        if (was) draw();                                          // let the stick point outwards again
-      }
-    };
+    }
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
