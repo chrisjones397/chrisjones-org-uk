@@ -46,7 +46,7 @@ function median(px, w, x0, y0, x1, y1) {
   return hist.map((counts) => { let t = 0, v = 0; while (v < 255 && (t += counts[v]) < half) v++; return Math.max(1, v); });
 }
 
-/* Divide every pixel by the paper's colour where it is. paperAt(i, j) gives the paper's colour at the centre of
+/* Divide every pixel by the paper's colour where it is (keeping the colour of anything brighter than the paper). paperAt(i, j) gives the paper's colour at the centre of
    cell (i, j) of an n x n grid over the picture; the gains in between are spread smoothly (bilinear, like the
    build's resize). Changes the canvas in place. */
 const N = 16;
@@ -66,9 +66,15 @@ function applyPaper(c, paperAt) {
     let i = y * W * 4;
     for (let x = 0; x < W; x++, i += 4) {
       const o = colA[x] * 3, s = colT[x];
-      d[i] = d[i] * (row[o] * (1 - s) + row[o + 3] * s);          // the array rounds, and stops at 255
-      d[i + 1] = d[i + 1] * (row[o + 1] * (1 - s) + row[o + 4] * s);
-      d[i + 2] = d[i + 2] * (row[o + 2] * (1 - s) + row[o + 5] * s);
+      let r = d[i] * (row[o] * (1 - s) + row[o + 3] * s);
+      let g = d[i + 1] * (row[o + 1] * (1 - s) + row[o + 4] * s);
+      let b = d[i + 2] * (row[o + 2] * (1 - s) + row[o + 5] * s);
+      // Anything brighter than the white comes out too bright for the screen. Cutting off only the colour that's
+      // too high would change its hue (a warm yellow whose red stops at 255 while its green keeps rising turns
+      // lemon), so the whole pixel is turned down together instead, keeping its colour.
+      const m = Math.max(r, g, b);
+      if (m > 255) { const k = 255 / m; r *= k; g *= k; b *= k; }
+      d[i] = r; d[i + 1] = g; d[i + 2] = b;                     // the array rounds
     }
   }
   ctx.putImageData(im, 0, 0);
