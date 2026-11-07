@@ -299,13 +299,30 @@ export function fullView(img, mode, start) {
       };
       requestAnimationFrame(step);
     }
+    /* Each corner is a small crosshair with a knob on a stick, pointing out from the painting, so a finger on
+       the knob doesn't hide the corner. Near the edge of the screen the stick points inwards instead. While a
+       corner is dragged its stick keeps its direction, so the knob stays under the finger. */
+    const STICK = 52;
+    const knobs = () => {
+      const q = pts.map(toScreen), cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+      const inside = (k) => k[0] > 20 && k[1] > 20 && k[0] < cw - 20 && k[1] < ch - 20;
+      return q.map((p, i) => {
+        let d = drag && drag.i === i && drag.dir;
+        if (!d) {
+          const dx = p[0] - cx, dy = p[1] - cy, n = Math.hypot(dx, dy) || 1;
+          d = [dx / n, dy / n];
+          if (!inside([p[0] + d[0] * STICK, p[1] + d[1] * STICK])) d = [-d[0], -d[1]];
+        }
+        return { p, d, k: [p[0] + d[0] * STICK, p[1] + d[1] * STICK] };
+      });
+    };
     /* Zoomed in, each corner has two arrows pointing along its edges; tapping one glides to the next corner. */
     const arrows = () => {
       if (mode !== 'corners' || s < fitScale() * 1.3) return [];
       const q = pts.map(toScreen), out = [];
       q.forEach((p, i) => [(i + 1) % 4, (i + 3) % 4].forEach((j) => {
         const dx = q[j][0] - p[0], dy = q[j][1] - p[1], d = Math.hypot(dx, dy) || 1;
-        out.push({ x: p[0] + dx / d * 40, y: p[1] + dy / d * 40, a: Math.atan2(dy, dx), to: j });
+        out.push({ x: p[0] + dx / d * 64, y: p[1] + dy / d * 64, a: Math.atan2(dy, dx), to: j });
       }));
       return out;
     };
@@ -337,21 +354,25 @@ export function fullView(img, mode, start) {
         ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = ok ? '#fff' : '#f08c8c'; ctx.lineWidth = 1.2; ctx.stroke();
         ctx.beginPath(); ctx.moveTo(...q[3]); ctx.lineTo(...q[2]);   // the painting's bottom edge
         ctx.strokeStyle = '#000'; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = '#f5c66b'; ctx.lineWidth = 4; ctx.stroke();
-        const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+        const K = knobs();
+        const twice = (path, w) => { path(); ctx.strokeStyle = '#000'; ctx.lineWidth = w + 2; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = w; ctx.stroke(); };
+        for (const { p, k } of K) {
+          twice(() => { ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(k[0], k[1]); }, 1.2);              // the stick
+          twice(() => { ctx.beginPath(); ctx.moveTo(p[0] - 7, p[1]); ctx.lineTo(p[0] + 7, p[1]); ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0], p[1] + 7); }, 1.2);
+          ctx.beginPath(); ctx.arc(k[0], k[1], 14, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+          twice(() => { ctx.beginPath(); ctx.arc(k[0], k[1], 14, 0, 7); }, 1.5);
+        }
         ctx.font = '600 13px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        for (const [p, text] of [[q[3], 'bottom left'], [q[2], 'bottom right']]) {
-          const dx = p[0] - cx, dy = p[1] - cy, d = Math.hypot(dx, dy) || 1, x = p[0] + dx / d * 30, y = p[1] + dy / d * 30;
+        for (const [i, text] of [[3, 'bottom left'], [2, 'bottom right']]) {
+          const { k, d } = K[i], x = k[0] + d[0] * 30, y = k[1] + d[1] * 30;
           ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeText(text, x, y); ctx.fillStyle = '#f5c66b'; ctx.fillText(text, x, y);
         }
         ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
-        for (const p of q) {
-          ctx.beginPath(); ctx.arc(p[0], p[1], 11, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
-          ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-        }
         for (const a of arrows()) {
           ctx.save(); ctx.translate(a.x, a.y);
-          ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill();
-          ctx.rotate(a.a); ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5.5); ctx.lineTo(-4, 5.5); ctx.closePath();
+          ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.rotate(a.a); ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-5, -7); ctx.lineTo(-5, 7); ctx.closePath();
           ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
         }
         done.disabled = !ok;
@@ -396,14 +417,19 @@ export function fullView(img, mode, start) {
       }
       if (down.size > 2) return;
       tap = { p, t: performance.now() };
-      const arrow = arrows().find((a) => Math.hypot(a.x - p[0], a.y - p[1]) < 16);
-      if (arrow) { tap.arrow = arrow; return; }
       if (mode === 'corners') {
-        const near = pts.map((q, i) => [Math.hypot(...toScreen(q).map((v, k) => v - p[k])), i]).sort((a, b) => a[0] - b[0])[0];
-        if (near[0] < 30) {
-          const q = toScreen(pts[near[1]]);
-          drag = { i: near[1], off: [q[0] - p[0], q[1] - p[1]] }; tap = null; showLoupe(pts[near[1]], q[0], q[1]); return;
-        }
+        // Grab a knob first (the easy target for a finger), then an arrow, then the corner's own crosshair.
+        const K = knobs(), grab = (i, d) => {
+          const q = K[i].p;
+          drag = { i, dir: K[i].d, off: [q[0] - p[0], q[1] - p[1]] }; tap = null; showLoupe(pts[i], q[0], q[1]);
+        };
+        const nearest = (pick) => K.map((c, i) => [Math.hypot(pick(c)[0] - p[0], pick(c)[1] - p[1]), i]).sort((a, b) => a[0] - b[0])[0];
+        const kn = nearest((c) => c.k);
+        if (kn[0] < 28) return grab(kn[1]);
+        const arrow = arrows().find((a) => Math.hypot(a.x - p[0], a.y - p[1]) < 26);
+        if (arrow) { tap.arrow = arrow; return; }
+        const cr = nearest((c) => c.p);
+        if (cr[0] < 16) return grab(cr[1]);
       }
       drag = { pan: p };
     });
