@@ -108,7 +108,8 @@ const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'dri
 
 /* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
    round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
-   width and height; shape is the size from its details [height, width] when the crop took that shape. Kept so
+   width and height; brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
+   colour kept, 0 to 1) go with any white balance; shape is the size from its details [height, width] when the crop took that shape. Kept so
    the images can be made again from the original. */
 function processOf(p) {
   if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
@@ -121,6 +122,11 @@ function processOf(p) {
   };
   const out = { original: p.original, white: p.white };
   if (p.white === 'picks') out.spots = points(p.spots, 1, 20, 'white spots');
+  if (p.white !== 'none') {
+    const share = (v, lo, what) => { num(v, what); if (v < lo || v > 1) throw new Bad(`Bad ${what}`); return Math.round(v * 100) / 100; };
+    out.brightness = share(p.brightness ?? 1, 0.5, 'brightness');
+    out.warmth = share(p.warmth ?? 0, 0, 'warmth');
+  }
   if (p.corners != null) out.corners = points(p.corners, 4, 4, 'corners');
   if (p.shape != null) {
     if (!Array.isArray(p.shape) || p.shape.length !== 2 || !p.shape.every((v) => num(v, 'Size') > 0 && v < 10000)) throw new Bad('Bad size');

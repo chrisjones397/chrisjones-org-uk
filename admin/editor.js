@@ -230,6 +230,11 @@ function addForm(secs) {
           h('option', { value: 'paper' }, 'Paper all round: a drawing on white paper'),
           h('option', { value: 'picks' }, 'From white I pick on the photo')),
         f.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
+      f.sliders = h('div', { class: 'sliders' },
+        h('label', {}, 'Brightness of the white ', f.brightOut = h('span', { class: 'muted' })),
+        f.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
+        h('label', {}, 'Keep the light\'s warmth ', f.warmOut = h('span', { class: 'muted' })),
+        f.warm = h('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, oninput: () => slid() })),
       h('label', {}, 'Corners'),
       h('div', { class: 'row' },
         f.cornersNote = h('span', { class: 'grow muted' }),
@@ -246,7 +251,14 @@ function addForm(secs) {
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
     f.progress = h('div', { id: 'upload-progress' }));
   let timer;
-  const later = (fn) => { clearTimeout(timer); timer = setTimeout(fn, 500); };
+  const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
+  const how = () => ({ brightness: +f.bright.value / 100, warmth: +f.warm.value / 100 });
+  function slid() {
+    f.brightOut.textContent = `${f.bright.value}%: ${+f.bright.value === 100 ? 'pure white' : 'a light grey'}`;
+    f.warmOut.textContent = `${f.warm.value}%${+f.warm.value === 0 ? ': cast fully removed' : ''}`;
+    later(update, 250);
+  }
+  slid(); clearTimeout(timer);
 
   async function pick() {
     pending = null; f.steps.hidden = true;
@@ -262,7 +274,7 @@ function addForm(secs) {
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
     pending = { file, W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
-    f.white.value = 'none';
+    f.white.value = 'none'; f.bright.value = 100; f.warm.value = 0; slid(); clearTimeout(timer);
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
     f.steps.hidden = false;
     update();
@@ -282,8 +294,8 @@ function addForm(secs) {
   }
 
   function balanced() {
-    const p = pending, key = `${f.white.value}|${JSON.stringify(p.spots)}`;
-    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, f.white.value, p.spots) };
+    const p = pending, key = `${f.white.value}|${JSON.stringify(p.spots)}|${f.bright.value}|${f.warm.value}`;
+    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, f.white.value, p.spots, how()) };
     return p.white;
   }
   function shapeLine() {
@@ -299,6 +311,7 @@ function addForm(secs) {
     const p = pending;
     if (!p) return;
     f.spotsBtn.hidden = f.white.value !== 'picks';
+    f.sliders.hidden = f.white.value === 'none' || (f.white.value === 'picks' && !p.spots.length);
     f.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
     f.wholeBtn.hidden = !p.corners;
     f.cornersNote.textContent = p.corners ? 'Set: squared up' : 'Whole photo';
@@ -350,6 +363,7 @@ function addForm(secs) {
       const shape = pending.corners ? shapeLine() : null;
       const process = { original: `originals/${stemName}.${ext}`, white: f.white.value,
         ...(f.white.value === 'picks' ? { spots: pending.spots } : {}),
+        ...(f.white.value !== 'none' ? how() : {}),
         ...(pending.corners ? { corners: pending.corners } : {}), ...(shape ? { shape } : {}) };
       const data = { name, title, details: f.details.value, section: f.section.value, order, wide: f.wide.checked,
         white_paper: f.white.value === 'paper', w: W, h: H, widths, base, ext: 'jpg',

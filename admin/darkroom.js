@@ -48,13 +48,19 @@ function median(px, w, x0, y0, x1, y1) {
 
 /* Divide every pixel by the paper's colour where it is (keeping the colour of anything brighter than the paper). paperAt(i, j) gives the paper's colour at the centre of
    cell (i, j) of an n x n grid over the picture; the gains in between are spread smoothly (bilinear, like the
-   build's resize). Changes the canvas in place. */
+   build's resize). Changes the canvas in place.
+   The full correction, 255 / paper for each colour, is split into a brightness part shared by all three
+   (255 / the paper's overall brightness, as the eye weighs red, green and blue) and a colour part (that
+   brightness / paper, for each colour). brightness (0.5 to 1) scales the first: how bright the white comes out.
+   warmth (0 to 1) keeps that share of the light's colour, by taking the colour part to the power 1 - warmth
+   (the gains are multipliers, so the halfway point between x1 and x1.2 is the square root of 1.2). */
 const N = 16;
-function applyPaper(c, paperAt) {
+function applyPaper(c, paperAt, { brightness = 1, warmth = 0 } = {}) {
   const W = c.width, H = c.height, n = N, gain = new Float32Array(n * n * 3);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const p = paperAt(i, j);
-    for (let k = 0; k < 3; k++) gain[(j * n + i) * 3 + k] = 255 / Math.max(p[k], 1);
+    const p = paperAt(i, j).map((v) => Math.max(v, 1));
+    const Y = 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+    for (let k = 0; k < 3; k++) gain[(j * n + i) * 3 + k] = brightness * 255 / Y * (Y / p[k]) ** (1 - warmth);
   }
   const where = (x, len) => { const g = Math.min(n - 1, Math.max(0, (x + 0.5) * n / len - 0.5)); const a = Math.min(n - 2, Math.floor(g)); return [a, g - a]; };
   const colA = new Int32Array(W), colT = new Float32Array(W);
@@ -149,12 +155,12 @@ function paperFromSpots(c, spots) {
   return { paperAt, note: `White read from ${P.length} ${P.length === 1 ? 'spot' : 'spots'}, on average RGB ${avg.map(Math.round).join(', ')}, made white.` };
 }
 
-/* The white-balanced copy of the working picture, and a line saying what was read. */
-export function whiteBalanced(src, white, spots) {
+/* The white-balanced copy of the working picture, and a line saying what was read. how: { brightness, warmth }. */
+export function whiteBalanced(src, white, spots, how) {
   if (white === 'none' || (white === 'picks' && !spots.length)) return { canvas: src, note: '' };
   const c = copy(src);
   const { paperAt, note } = white === 'paper' ? paperAllRound(c) : paperFromSpots(c, spots);
-  applyPaper(c, paperAt);
+  applyPaper(c, paperAt, how);
   return { canvas: c, note };
 }
 
