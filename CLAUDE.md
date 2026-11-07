@@ -122,8 +122,18 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   --persist-to /tmp/wr --port 8787` is the site, and a second one on --port 8788 is the editor, signed in as
   DEV_USER; load the tables with `npx wrangler d1 execute site-content-dev --env dev --local --persist-to
   /tmp/wr --file db/schema.sql` (then db/seed.sql). Headless Chrome with Playwright works here for the editor.
-- Later stages (agreed): image processing at upload, server-side (including white_paper); users and roles;
-  editing in place on the preview.
+
+## Next steps (agreed with Christopher, Nov 2026; start each in a new chat)
+
+1. Tidy git: remove masters/, the painting files in img/ and paintings.yaml (nothing uses them now; one commit,
+   undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
+2. Image processing at upload, server-side, including white balancing for drawings on white paper (the
+   white_paper tick; build_site.py's correction is the reference). Christopher wants to see the photo
+   before and after correction side by side in the editor, so he can judge it before adding/publishing.
+3. Users and roles.
+4. Editing in place on the editor's preview.
+5. Optional: a "change address" option, so a retitle can rename a painting's files and address (with the
+   old address sent on to the new one).
 
 ## Cloudflare account settings (set in the dashboard, not the repository)
 
