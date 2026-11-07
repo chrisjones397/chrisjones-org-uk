@@ -73,6 +73,7 @@ export async function api(request, env, url, who) {
     if (path === 'discard') return json(await discard(env, body.ids));
     if (path === 'publish') return json(await publish(env, who, body.ids, body.note));
     if (path === 'restore') return json(await restore(env, who, body.revision));
+    if (path === 'move-old') return json(await moveOld(env, who, url, body.id));
     throw new Bad('Not found', 404);
   } catch (e) {
     return json({ error: e.message || String(e) }, e.status || 500);
@@ -289,6 +290,41 @@ async function upload(request, env, url) {
   if (!original && !(b[0] === 0xff && b[1] === 0xd8)) throw new Bad('That file is not a JPEG');
   await env.MEDIA.put(key, body, { httpMetadata: { contentType: original ? type : 'image/jpeg' } });
   return { key };
+}
+
+/* ONE-OFF (remove once both sites are done, Nov 2026): move a painting imported from git into R2.
+   Copies its master (from the public repository on GitHub, as masters/ isn't published) to originals/<name>.<ext>
+   and its image sizes (from the site's own files, img/) to images/, then points its draft at them, so the change
+   is reviewed and published like any other, and History can undo it. Files already in R2 are left as they are. */
+const MASTERS = 'https://raw.githubusercontent.com/chrisjones397/chrisjones397.github.io/dev/masters/';
+async function moveOld(env, who, url, id) {
+  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
+  const r = await env.DB.prepare('SELECT * FROM entries WHERE id = ?').bind(String(id)).first();
+  if (!r || r.kind !== 'painting' || !r.draft) throw new Bad('No such painting');
+  const d = JSON.parse(r.draft);
+  if (d.base !== 'img/') throw new Bad('That painting is already in storage');
+  const put = async (key, res, type) => {
+    if (!res.ok) throw new Bad(`Couldn't read the file for ${key} (${res.status})`, 502);
+    await env.MEDIA.put(key, await res.arrayBuffer(), { httpMetadata: { contentType: type } });
+  };
+  const have = await env.MEDIA.list({ prefix: `originals/${d.name}.`, limit: 1 });
+  if (!have.objects.length) {
+    let found = false;
+    for (const [ext, type] of [['png', 'image/png'], ['jpg', 'image/jpeg'], ['webp', 'image/webp'], ['jpeg', 'image/jpeg']]) {
+      const res = await fetch(`${MASTERS}${d.name}.${ext}`);
+      if (res.status === 404) { await res.body?.cancel(); continue; }
+      await put(`originals/${d.name}.${ext}`, res, type);
+      found = true; break;
+    }
+    if (!found) throw new Bad(`No master for ${d.title} on GitHub`);
+  }
+  const files = [...new Set(d.widths)].map((w) => [`${d.name}-${w}.webp`, 'image/webp']).concat([[`${d.name}-preview.jpg`, 'image/jpeg']]);
+  for (const [f, type] of files) {
+    if (await env.MEDIA.head(`images/${f}`)) continue;
+    await put(`images/${f}`, await env.ASSETS.fetch(new URL(`/img/${f}`, url)), type);
+  }
+  return save(env, who, [{ id: r.id, kind: 'painting', data: { ...d, base: 'media/images/',
+    preview: { ...d.preview, src: `media/images/${d.name}-preview.jpg` } } }]);
 }
 
 export { slug };

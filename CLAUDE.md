@@ -114,10 +114,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original goes to originals/ in R2 for later processing. The GitHub Actions workflow
-  copy-paintings-to-r2 (started by hand; list from tools/copy_paintings_to_r2.py; R2 S3 key limited to these
-  buckets, secrets R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY) copies the imported paintings into R2 under the same
-  layout; Christopher prefers code run on GitHub rather than on his Mac; their entries then need base media/images/ (still to do, Nov 2026). R2 binding MEDIA: bucket site-media (live),
+  and the original goes to originals/ in R2 for later processing. ONE-OFF, to remove once both sites
+  are done: the editor's "Move the older paintings to storage" button (API move-old in editor.js) copies each
+  imported painting's master from the public repository on GitHub (raw.githubusercontent.com, dev branch) and its
+  sizes from img/ into R2, and sets its draft's base to media/images/; Christopher reviews and publishes. He
+  prefers no code run on his Mac, and the simplest route with no extra keys. R2 binding MEDIA: bucket site-media (live),
   site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.
   Local test: .dev.vars with DEV_USER="local test" (never committed); `npx wrangler dev --env dev --local
   --persist-to /tmp/wr --port 8787` is the site, and a second one on --port 8788 is the editor, signed in as
