@@ -247,19 +247,21 @@ export function squaredUp(src, q, w, h) {
 
 /* Opens the picture full screen, to zoom into (pinch, or pinch on a trackpad, or the + and - buttons) and move
    about (drag, or scroll). mode 'spots': tap a spot to add it, tap it again to take it away. mode 'corners': drag
-   the four corners onto the painting's corners (a magnifier shows the spot under the finger); tap an edge to
-   make it the painting's bottom, and Mirror swaps its left and right. They start on the photo's own corners.
+   the four corners onto the painting's corners (a magnifier shows the spot under the finger). Each corner keeps
+   its label wherever it's dragged (Christopher's design): put the ones labelled bottom left and bottom right on
+   the painting's bottom corners, and the painting comes out that way up. Tapping an edge relabels them so it's
+   the bottom, and Mirror swaps left and right. They start on the photo's own corners, the right way up.
    Resolves with the new spots, or the corners labelled top left, top right, bottom right, bottom left (fractions
    of the picture), or null if cancelled. */
 export function fullView(img, mode, start) {
   return new Promise((resolve) => {
     const W = img.width, H = img.height;
     let pts = (start && start.length ? start : mode === 'corners' ? FRAME : []).map((p) => [p[0] * W, p[1] * H]);
-    let turn = mode === 'corners' && start ? turnOf(start) : { r: 0, m: false };
     const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
     const hint = mode === 'corners'
-      ? 'Drag each corner onto a corner of the painting (pinch or use + and − to zoom in). Tap an edge to make it the painting\'s bottom; Mirror swaps left and right.'
+      ? 'Drag each corner onto the painting\'s matching corner: bottom left and bottom right onto its bottom corners (pinch or use + and − to zoom in). Or tap an edge to make it the bottom; Mirror swaps left and right.'
       : 'Tap spots that should be white or neutral grey (a white wall, card or paper). Tap a spot again to remove it. Two or more spots apart also even out the light.';
+    let done;
     const cv = el('canvas', { className: 'dr-canvas' }), loupe = el('canvas', { className: 'dr-loupe', width: 300, height: 300 });
     const count = el('span', { className: 'dr-count' });
     const btn = (text, fn, cls = '') => el('button', { type: 'button', className: cls, onclick: fn }, text);
@@ -268,11 +270,11 @@ export function fullView(img, mode, start) {
         el('p', { className: 'dr-hint' }, hint),
         el('div', { className: 'dr-buttons' },
           btn('−', () => zoomBy(1 / 1.6)), btn('+', () => zoomBy(1.6)), btn('Fit', () => { fit(); draw(); }),
-          ...(mode === 'corners' ? [btn('⇋ Mirror', () => { turn.m = !turn.m; draw(); }),
-            btn('Reset', () => { pts = FRAME.map((p) => [p[0] * W, p[1] * H]); turn = { r: 0, m: false }; draw(); })]
+          ...(mode === 'corners' ? [btn('⇋ Mirror', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }),
+            btn('Reset', () => { pts = FRAME.map((p) => [p[0] * W, p[1] * H]); draw(); })]
             : [btn('Clear', () => { pts = []; draw(); })]),
           count, btn('Cancel', () => close(null)),
-          btn('Done', () => close(mode === 'corners' ? labelled(ordered(pts), turn.r, turn.m) : pts), 'main'))),
+          done = btn('Done', () => close(pts), 'main'))),
       cv, loupe);
     document.body.append(box);
     document.body.style.overflow = 'hidden';
@@ -286,6 +288,11 @@ export function fullView(img, mode, start) {
       cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
     }
     function fit() { s = Math.min(cw / W, ch / H) * 0.94; tx = (cw - W * s) / 2; ty = (ch - H * s) / 2; }
+    /* Do the corners, in label order, go round without the edges crossing? */
+    const convex = (q) => {
+      const z = q.map((p, i) => { const a = q[(i + 1) % 4], b = q[(i + 2) % 4]; return (a[0] - p[0]) * (b[1] - a[1]) - (a[1] - p[1]) * (b[0] - a[0]); });
+      return z.every((v) => v > 0) || z.every((v) => v < 0);
+    };
     const toScreen = ([x, y]) => [tx + x * s, ty + y * s];
     const toImage = (x, y) => [(x - tx) / s, (y - ty) / s];
     function zoomAt(f, x, y) {
@@ -301,27 +308,27 @@ export function fullView(img, mode, start) {
       ctx.drawImage(img, tx, ty, W * s, H * s);
       ctx.lineWidth = 1.5;
       if (mode === 'corners') {
-        const q = ordered(pts).map(toScreen);
+        const q = pts.map(toScreen), ok = convex(q);                // q: top left, top right, bottom right, bottom left
         ctx.beginPath(); ctx.rect(0, 0, cw, ch);
         ctx.moveTo(...q[0]); q.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath();
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill('evenodd');
         ctx.beginPath(); ctx.moveTo(...q[0]); q.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath();
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.stroke();
-        const L = labelled(q, turn.r, turn.m);                   // the painting's bottom edge: from L[3] to L[2]
-        ctx.beginPath(); ctx.moveTo(...L[3]); ctx.lineTo(...L[2]);
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = ok ? '#fff' : '#f08c8c'; ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(...q[3]); ctx.lineTo(...q[2]);   // the painting's bottom edge
         ctx.strokeStyle = '#000'; ctx.lineWidth = 7; ctx.stroke(); ctx.strokeStyle = '#f5c66b'; ctx.lineWidth = 4; ctx.stroke();
         const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
         ctx.font = '600 13px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        for (const [p, text] of [[L[3], 'bottom left'], [L[2], 'bottom right']]) {
+        for (const [p, text] of [[q[3], 'bottom left'], [q[2], 'bottom right']]) {
           const dx = p[0] - cx, dy = p[1] - cy, d = Math.hypot(dx, dy) || 1, x = p[0] + dx / d * 30, y = p[1] + dy / d * 30;
           ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeText(text, x, y); ctx.fillStyle = '#f5c66b'; ctx.fillText(text, x, y);
         }
         ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
-        for (const p of pts.map(toScreen)) {
+        for (const p of q) {
           ctx.beginPath(); ctx.arc(p[0], p[1], 11, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
           ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
         }
-        count.textContent = '';
+        done.disabled = !ok;
+        count.textContent = ok ? '' : 'The edges cross: move the corners apart';
       } else {
         pts.forEach((p, i) => {
           const [x, y] = toScreen(p), r = Math.max(6, spotR * s);
@@ -392,11 +399,12 @@ export function fullView(img, mode, start) {
       if (down.size < 2) pinch = null;
       if (down.size === 0) {
         if (tap && mode === 'corners' && performance.now() - tap.t < 500) {
-          // A tap near an edge makes it the bottom. Edge j runs from corner j to j + 1 of ordered(): top, right, bottom, left.
-          const g = ordered(pts).map(toScreen), [x, y] = tap.p;
+          // A tap near an edge makes it the bottom. Edge j runs from corner j to j + 1: top, right, bottom, left.
+          // Relabelling by k places keeps left and right as they are: the new bottom is edge j when k = j - 2.
+          const g = pts.map(toScreen), [x, y] = tap.p;
           const dist = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy); };
           const near = [0, 1, 2, 3].map((j) => [dist(g[j], g[(j + 1) % 4]), j]).sort((a, b) => a[0] - b[0])[0];
-          if (near[0] < 28) { turn.r = (2 - near[1] + 4) % 4; draw(); }
+          if (near[0] < 28) { const k = near[1] + 2; pts = [0, 1, 2, 3].map((i) => pts[(i + k) % 4]); draw(); }
         }
         if (tap && mode === 'spots' && performance.now() - tap.t < 500) {
           const near = pts.findIndex((q) => { const [x, y] = toScreen(q); return Math.max(Math.abs(x - tap.p[0]), Math.abs(y - tap.p[1])) < Math.max(14, spotR * s); });

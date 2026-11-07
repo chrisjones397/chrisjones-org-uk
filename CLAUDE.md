@@ -123,7 +123,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   colour at a time, which turned a warm yellow lemon; sliders for the brightness of the white, 50 to 100%,
   and how much of the light's warmth to keep: the gain 255/paper splits into a shared brightness factor and a
   colour factor, the colour factor taken to the power 1 - warmth), then the corners: four, starting on the photo's own corners, dragged onto
-  the painting's, and labelled (tap an edge to make it the painting's bottom; Mirror swaps left and right), so
+  the painting's; each keeps its label wherever it's dragged (bottom left and bottom right go on the painting's
+  bottom corners; tapping an edge relabels so it's the bottom; Mirror swaps left and right; crossed edges hold
+  back Done), so
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of the
   "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, drag to move, magnifier while dragging a corner). Before and after are shown side by side; the sizes
