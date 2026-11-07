@@ -287,7 +287,28 @@ export function fullView(img, mode, start) {
       cw = cv.clientWidth; ch = cv.clientHeight;
       cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
     }
-    function fit() { s = Math.min(cw / W, ch / H) * 0.94; tx = (cw - W * s) / 2; ty = (ch - H * s) / 2; }
+    const fitScale = () => Math.min(cw / W, ch / H) * 0.94;
+    function fit() { s = fitScale(); tx = (cw - W * s) / 2; ty = (ch - H * s) / 2; }
+    /* Glide the view so photo point p is in the middle, at the same zoom. */
+    function goTo(p) {
+      const x0 = tx, y0 = ty, x1 = cw / 2 - p[0] * s, y1 = ch / 2 - p[1] * s, t0 = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / 350), e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+        tx = x0 + (x1 - x0) * e; ty = y0 + (y1 - y0) * e; draw();
+        if (t < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+    /* Zoomed in, each corner has two arrows pointing along its edges; tapping one glides to the next corner. */
+    const arrows = () => {
+      if (mode !== 'corners' || s < fitScale() * 1.3) return [];
+      const q = pts.map(toScreen), out = [];
+      q.forEach((p, i) => [(i + 1) % 4, (i + 3) % 4].forEach((j) => {
+        const dx = q[j][0] - p[0], dy = q[j][1] - p[1], d = Math.hypot(dx, dy) || 1;
+        out.push({ x: p[0] + dx / d * 40, y: p[1] + dy / d * 40, a: Math.atan2(dy, dx), to: j });
+      }));
+      return out;
+    };
     /* Do the corners, in label order, go round without the edges crossing? */
     const convex = (q) => {
       const z = q.map((p, i) => { const a = q[(i + 1) % 4], b = q[(i + 2) % 4]; return (a[0] - p[0]) * (b[1] - a[1]) - (a[1] - p[1]) * (b[0] - a[0]); });
@@ -326,6 +347,12 @@ export function fullView(img, mode, start) {
         for (const p of q) {
           ctx.beginPath(); ctx.arc(p[0], p[1], 11, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
           ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+        for (const a of arrows()) {
+          ctx.save(); ctx.translate(a.x, a.y);
+          ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill();
+          ctx.rotate(a.a); ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5.5); ctx.lineTo(-4, 5.5); ctx.closePath();
+          ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
         }
         done.disabled = !ok;
         count.textContent = ok ? '' : 'The edges cross: move the corners apart';
@@ -369,6 +396,8 @@ export function fullView(img, mode, start) {
       }
       if (down.size > 2) return;
       tap = { p, t: performance.now() };
+      const arrow = arrows().find((a) => Math.hypot(a.x - p[0], a.y - p[1]) < 16);
+      if (arrow) { tap.arrow = arrow; return; }
       if (mode === 'corners') {
         const near = pts.map((q, i) => [Math.hypot(...toScreen(q).map((v, k) => v - p[k])), i]).sort((a, b) => a[0] - b[0])[0];
         if (near[0] < 30) {
@@ -398,6 +427,7 @@ export function fullView(img, mode, start) {
       down.delete(e.pointerId);
       if (down.size < 2) pinch = null;
       if (down.size === 0) {
+        if (tap && tap.arrow) { goTo(pts[tap.arrow.to]); tap = null; }
         if (tap && mode === 'corners' && performance.now() - tap.t < 500) {
           // A tap near an edge makes it the bottom. Edge j runs from corner j to j + 1: top, right, bottom, left.
           // Relabelling by k places keeps left and right as they are: the new bottom is edge j when k = j - 2.

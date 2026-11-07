@@ -128,7 +128,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   back Done), so
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of the
   "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
-  zoom, drag to move, magnifier while dragging a corner). Before and after are shown side by side; the sizes
+  zoom, drag to move, magnifier while dragging a corner; zoomed in, two arrows at each corner glide the
+  view along its edges to the next corner). Thumbnails in the editor's lists show each painting's true shape. Before and after are shown side by side; the sizes
   are made from the result. The choices are saved with the painting as `process` (original, white, spots,
   brightness, warmth, corners, shape; fractions of the original's width and height as photographed; corners in the order the
   painting's top left, top right, bottom right, bottom left; checked by editor.js processOf()), so the
