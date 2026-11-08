@@ -174,7 +174,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   brightness, warmth, corners, shape; fractions of the original's width and height as photographed; corners in the order the
   painting's top left, top right, bottom right, bottom left; checked by editor.js processOf()), so the
   images can be made again from the original. These steps are one piece in admin/editor.js, darkroom(), used by
-  the add form and by a painting's Edit form: "Change white or corners…" reads the original back from R2 (GET
+  the add form and by a painting's Edit form: opening one of its sections reads the original back from R2 (GET
   /admin/api/original?key=, editor only; originals/<file> with no extension finds it, for paintings moved from
   git, which have no process record and reopen as the whole photo, with "paper all round" if white_paper) and
   starts from the saved choices. Saving makes new sizes only if the choices changed, under a fresh file name
@@ -198,11 +198,14 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
    a. Shared originals: done (Nov 2026), see the R2 layout above. The duplicates stored before it (the
       pentaptych's five identical 11 megabyte copies on dev; Small Composition in Yellow's four test uploads)
       are still there: merging them is optional, only if Christopher asks.
-   b. The editor's darkroom as sections that open with a tap (White balance, Corners), each with a summary line
-      while closed, open by default when adding; no "Change white or corners…" style buttons. Reopening shows
-      the photo small and the previous and new results side by side, large; press and hold the new result to
-      see the previous one in its place (blink comparison). Ghost marks for the saved settings: a faint mark on
-      each slider, faint previous corners and spots in the full-screen views, one "back to saved" button.
+   b. Darkroom sections: done (Nov 2026). White balance and Corners are <details> sections, each with a summary
+      line while closed (whiteText, cornersText), open once a photo is chosen when adding. A painting's Edit form
+      shows its darkroom at once, sections closed and summarising the saved choices (no "Change white or
+      corners…" button); opening a section fetches the original. Then the photo is shown small, with Previous
+      (the painting's current picture, pictureOf) and New side by side, large; pressing and holding New shows
+      Previous in its place (holdable; a short tap still enlarges). Ghosts of the saved choices: a faint mark on
+      each slider, dashed corners and spots in the full-screen views (fullView's ghost argument), and "Back to
+      saved", shown once anything differs.
    c. White balance without the drop-down: no spots = no white balance. A "find the paper" button places spots
       round the margins (cleared by the existing clear button). Spot fitting must follow a gentle curve with
       about six or more spots (now a flat slope from three), tested against the current paper method so

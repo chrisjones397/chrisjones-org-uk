@@ -299,7 +299,7 @@ function paintingRow(e, items, i, secs) {
   const f = {};
   const form = h('div', { class: 'edit' },
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
-    ...detailsFields(f, d),
+    ...detailsFields(f, d, () => { const re = reopened.get(e.id); if (re) re.dr.sizeChanged(); }),
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
     ...pictureFields(e, d, f),
@@ -317,7 +317,7 @@ function paintingRow(e, items, i, secs) {
           try {
             const { file: stem } = await call('GET', `free?name=${encodeURIComponent(d.name)}`);
             pic = { ...(await storeImages(stem, re.dr.result(), (t) => re.dr.say(t))),
-              white_paper: re.dr.white === 'paper', process: re.dr.record(re.original) };
+              white_paper: re.dr.white === 'paper', process: re.dr.record(re.dr.original) };
           } catch (err) { f.go.disabled = false; re.dr.say(''); return toast(err.message, true); }
         }
         const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
@@ -332,35 +332,34 @@ function paintingRow(e, items, i, secs) {
   return [row, form];
 }
 
-/* Reopening a painting's picture: its original is read back from R2 and the darkroom starts from the choices
-   saved with it (or, for paintings moved from git, which have none: the whole photo, with the paper's white
-   balance if it's a drawing on white paper). */
-const reopened = new Map();         // painting id -> { dr, original }, while its Edit form is open
+/* Reopening a painting's picture: its darkroom starts with the saved choices summarised, and opening a section
+   reads the original back from R2 and starts from those choices (or, for paintings moved from git, which have
+   none: the whole photo, with the paper's white balance if it's a drawing on white paper). */
+const reopened = new Map();         // painting id -> { dr }, while its Edit form is open
+const pictureOf = (d) => {          // the painting's current picture, at a size fit for comparing
+  const w = d.widths.find((x) => x >= 1024) || d.widths[d.widths.length - 1];
+  return `/${d.base}${d.file || d.name}-${w}.${d.ext}`;
+};
 function pictureFields(e, d, f) {
   if (!media) return [];
-  const re = reopened.get(e.id);
-  if (re) {
-    re.dr.attach(f);
-    return [h('label', {}, 'Picture'), re.dr.el,
-      h('div', { class: 'row' }, h('button', { type: 'button', onclick: () => { reopened.delete(e.id); render(); } }, 'Keep the picture as it was'))];
+  let re = reopened.get(e.id);
+  if (!re) {
+    const white = d.white_paper ? 'paper' : 'none';
+    re = { dr: darkroom({
+      previous: pictureOf(d),
+      saved: d.process || { white },
+      start: d.process ? { process: d.process } : { white, guess: false },
+      fetch: async () => {
+        const key = d.process ? d.process.original : `originals/${d.file || d.name}`;
+        const r = await fetchFor(`/admin/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
+        return { original: r.headers.get('x-original') || key, blob: await r.blob() };
+      },
+    }) };
+    reopened.set(e.id, re);
   }
-  const status = h('span', { class: 'grow muted' });
-  const btn = h('button', { type: 'button', onclick: async () => {
-    btn.disabled = true; status.textContent = 'Fetching the original…';
-    try {
-      const key = d.process ? d.process.original : `originals/${d.file || d.name}`;
-      const r = await fetchFor(`/admin/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
-      const original = r.headers.get('x-original') || key;
-      const dr = darkroom();
-      dr.attach(f);
-      reopened.set(e.id, { dr, original });
-      render();                                     // the form now shows the darkroom, which reads the photo
-      const ok = await dr.load(await r.blob(), d.process ? { process: d.process } : { white: d.white_paper ? 'paper' : 'none', guess: false });
-      if (!ok) { reopened.delete(e.id); toast('This browser can\'t read the original', true); render(); }
-    } catch (err) { btn.disabled = false; status.textContent = ''; toast(err.message, true); }
-  } }, 'Change white or corners…');
-  return [h('label', {}, 'Picture'), h('div', { class: 'row' }, status, btn)];
+  re.dr.attach(f);
+  return [h('label', {}, 'Picture'), re.dr.el];
 }
 
 function moveSection(secs, i, dir) {
@@ -401,43 +400,75 @@ function nameFor(title) {
   return n;
 }
 
-/* The steps that make a painting's picture from a photo: white balance, corners and shape, with the photo and
-   the result side by side. Used by the add form and by a painting's Edit form (to change the white or corners
-   of one already added, from its original in R2). Its element is kept across re-renders of the page; the form
-   it sits in gives it the details fields (height, width, measured or not) with attach(). */
-function darkroom() {
+/* The steps that make a painting's picture from a photo: white balance, then corners and shape, each a section
+   that opens with a tap and shows a summary line while closed, under the photo and the result side by side. Used
+   by the add form (sections open once a photo is chosen) and by a painting's Edit form (opts below), where the
+   sections start closed with the saved choices summarised, and opening one fetches the original from R2. Then the
+   photo is shown small, with the previous and the new results side by side, large; pressing and holding the new
+   one shows the previous in its place. The saved choices stay in view as ghosts: a faint mark on each slider,
+   faint corners and spots in the full-screen views, and "Back to saved". Its element is kept across re-renders
+   of the page; the form it sits in gives it the details fields (height, width, measured or not) with attach().
+   opts, for reopening: previous (address of the painting's current picture), saved (its choices, as summarised
+   before the original is read), start (load()'s options for those choices) and fetch (resolves with the
+   original's { blob, original key }). */
+const fieldsetOf = (...kids) => h('fieldset', { class: 'step-body', disabled: true }, ...kids);
+function whiteText(r) {
+  const n = (r.spots || []).length;
+  if (!r.white || r.white === 'none' || (r.white === 'picks' && !n)) return 'None: as photographed';
+  const b = Math.round((r.brightness ?? 1) * 100), w = Math.round((r.warmth ?? 0) * 100);
+  return (r.white === 'paper' ? 'Paper all round' : `From ${n} white ${n === 1 ? 'spot' : 'spots'}`)
+    + (b !== 100 ? `, white at ${b}%` : '') + (w ? `, keeping ${w}% of the warmth` : '');
+}
+function cornersText(r) {
+  const cropped = !!(r.corners && !wholePhoto(r.corners)), turned = r.corners ? describeTurn(turnOf(r.corners)) : '';
+  return (cropped ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '')
+    + (cropped ? (r.shape ? `, to ${r.shape[0]} × ${r.shape[1]} cm` : ', shape from the photo') : '');
+}
+function darkroom(opts = {}) {
+  const reopen = !!opts.fetch;
   const g = {};
-  let F = {}, p = null, baseline = '';
+  let F = {}, p = null, baseline = '', saved = null, startWith = {}, original = null, fetching = null;
   let timer;
   const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
   const how = () => ({ brightness: +g.bright.value / 100, warmth: +g.warm.value / 100 });
-  const el = h('div', {},
-    g.steps = h('div', { class: 'steps', hidden: true },
-      h('label', {}, 'White balance'),
-      h('div', { class: 'row' },
-        g.white = h('select', { class: 'grow', onchange: () => { if (g.white.value === 'picks' && !p.spots.length) pickSpots(); else update(); } },
-          h('option', { value: 'none' }, 'None: as photographed'),
-          h('option', { value: 'paper' }, 'Paper all round: a drawing on white paper'),
-          h('option', { value: 'picks' }, 'From white I pick on the photo')),
-        g.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
-      g.sliders = h('div', { class: 'sliders' },
-        h('label', {}, 'Brightness of the white ', g.brightOut = h('span', { class: 'muted' })),
-        g.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
-        h('label', {}, 'Keep the light\'s warmth ', g.warmOut = h('span', { class: 'muted' })),
-        g.warm = h('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, oninput: () => slid() })),
-      h('label', {}, 'Corners'),
-      h('div', { class: 'row' },
-        g.cornersNote = h('span', { class: 'grow muted' }),
-        h('button', { type: 'button', onclick: () => setCorners() }, 'Set corners…'),
-        g.wholeBtn = h('button', { type: 'button', onclick: () => {
-          const t = turnOf(p.corners);                                  // keep which way up, take in the whole photo
-          p.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
-        } }, 'Whole photo')),
-      g.shapeRow = h('label', { class: 'tick' }, g.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
-        g.shapeTick = h('span', {})),
-      g.shapeText = h('p', { class: 'hint shape-note' }),
-      g.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => g.compare.classList.toggle('big') })),
-    g.status = h('p', { class: 'hint' }));
+  const slider = (input, ghost) => h('div', { class: 'slider' }, input, ghost);
+  const step = (title, sum, body) => {
+    const d = h('details', { class: 'step', ontoggle: () => { if (d.open) need(); } },
+      h('summary', {}, h('span', { class: 'step-title' }, title), sum), body);
+    return d;
+  };
+  const el = h('div', { class: 'dr-form' },
+    g.compare = h('div', { class: 'compare', hidden: true, title: 'Tap to make bigger or smaller', onclick: () => g.compare.classList.toggle('big') }),
+    g.steps = h('div', { class: 'steps', hidden: !reopen },
+      g.whiteBox = step('White balance', g.whiteSum = h('span', { class: 'step-sum muted' }), g.whiteBody = fieldsetOf(
+        h('div', { class: 'row' },
+          g.white = h('select', { class: 'grow', onchange: () => { if (!p) return; if (g.white.value === 'picks' && !p.spots.length) pickSpots(); else update(); } },
+            h('option', { value: 'none' }, 'None: as photographed'),
+            h('option', { value: 'paper' }, 'Paper all round: a drawing on white paper'),
+            h('option', { value: 'picks' }, 'From white I pick on the photo')),
+          g.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
+        g.sliders = h('div', { class: 'sliders' },
+          h('label', {}, 'Brightness of the white ', g.brightOut = h('span', { class: 'muted' })),
+          slider(g.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
+            g.brightGhost = h('span', { class: 'ghost', hidden: true, title: 'As saved' })),
+          h('label', {}, 'Keep the light\'s warmth ', g.warmOut = h('span', { class: 'muted' })),
+          slider(g.warm = h('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, oninput: () => slid() }),
+            g.warmGhost = h('span', { class: 'ghost', hidden: true, title: 'As saved' }))))),
+      g.cornerBox = step('Corners', g.cornerSum = h('span', { class: 'step-sum muted' }), g.cornerBody = fieldsetOf(
+        h('div', { class: 'row' },
+          g.cornersNote = h('span', { class: 'grow muted' }),
+          h('button', { type: 'button', onclick: () => setCorners() }, 'Set corners…'),
+          g.wholeBtn = h('button', { type: 'button', onclick: () => {
+            if (!p) return;
+            const t = turnOf(p.corners);                                  // keep which way up, take in the whole photo
+            p.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
+          } }, 'Whole photo')),
+        g.shapeRow = h('label', { class: 'tick' }, g.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
+          g.shapeTick = h('span', {})),
+        g.shapeText = h('p', { class: 'hint shape-note' })))),
+    h('div', { class: 'row dr-foot' },
+      g.status = h('p', { class: 'hint grow' }),
+      g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was saved', onclick: () => { if (p) { apply(startWith); update(); } } }, 'Back to saved')));
   function slid() {
     g.brightOut.textContent = `${g.bright.value}%: ${+g.bright.value === 100 ? 'pure white' : 'a light grey'}`;
     g.warmOut.textContent = `${g.warm.value}%${+g.warm.value === 0 ? ': cast fully removed' : ''}`;
@@ -445,10 +476,34 @@ function darkroom() {
   }
   slid(); clearTimeout(timer);
 
+  /* The painting's picture as it is now (reopening), in a figure. */
+  const previous = () => h('img', { class: 'shot', src: opts.previous, alt: '', draggable: false });
+  if (reopen) {
+    g.whiteSum.textContent = whiteText(opts.saved); g.cornerSum.textContent = cornersText(opts.saved);
+    g.compare.hidden = false; g.compare.classList.add('one');
+    g.compare.append(h('figure', {}, previous(), h('figcaption', {}, 'As it is now')));
+  }
+
+  /* Reopening: the first section opened fetches the original and reads it. */
+  function need() {
+    if (!reopen || p || fetching) return;
+    fetching = (async () => {
+      g.status.textContent = 'Fetching the original…';
+      try {
+        const got = await opts.fetch();
+        original = got.original;
+        if (!(await load(got.blob, opts.start))) throw new Error('This browser can\'t read the original');
+      } catch (err) {
+        g.status.textContent = ''; g.whiteBox.open = g.cornerBox.open = false; toast(err.message, true);
+      } finally { fetching = null; }
+    })();
+  }
+
   /* Read a photo (a File, or the original's Blob from R2). With a process record, its choices are put back as
      they were; without one, it starts from the best guess at the painting's corners. */
-  async function load(blob, { process, white = 'none', guess = true } = {}) {
-    p = null; g.steps.hidden = true; baseline = '';
+  async function load(blob, start = {}) {
+    p = null; baseline = ''; saved = null;
+    if (!reopen) g.steps.hidden = true;
     g.status.textContent = 'Reading the photo…';
     const img = new Image();
     img.src = URL.createObjectURL(blob);
@@ -461,31 +516,51 @@ function darkroom() {
     p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
     URL.revokeObjectURL(img.src);
     p.guess = guessCorners(p.src);
+    startWith = start;
+    apply(start);
+    g.whiteBody.disabled = g.cornerBody.disabled = false;
+    g.steps.hidden = false;
+    if (!reopen) g.whiteBox.open = g.cornerBox.open = true;          // adding: both open
+    await update();
+    baseline = JSON.stringify(record(''));
+    if (reopen) { saved = JSON.parse(baseline); ghosts(); }
+    g.back.hidden = true;
+    return true;
+  }
+  /* Put the controls to the choices load() was given. */
+  function apply({ process, white = 'none', guess = true } = {}) {
     if (process) {
       g.white.value = process.white; p.spots = (process.spots || []).map((q) => q.slice());
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
       g.shape.checked = !!process.shape || !process.corners;      // as it was made
     } else {
-      g.white.value = white; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
-      if (guess && p.guess && !wholePhoto(p.guess)) p.corners = p.guess;     // a new photo: start from the guess
+      g.white.value = white; p.spots = []; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
+      p.corners = guess && p.guess && !wholePhoto(p.guess) ? p.guess : null;   // a new photo: start from the guess
     }
     slid(); clearTimeout(timer);
-    g.steps.hidden = false;
-    await update();
-    baseline = JSON.stringify(record(''));
-    return true;
+  }
+  /* Faint marks on the sliders where the saved choices have them (the range's thumb is about 16 pixels wide). */
+  function ghosts() {
+    const mark = (ghost, input, v) => {
+      const f = (v - +input.min) / (+input.max - +input.min);
+      ghost.style.left = `calc(8px + (100% - 16px) * ${f})`; ghost.hidden = false;
+    };
+    mark(g.brightGhost, g.bright, Math.round((saved.brightness ?? 1) * 100));
+    mark(g.warmGhost, g.warm, Math.round((saved.warmth ?? 0) * 100));
   }
 
   async function pickSpots() {
-    const r = await fullView(p.src, 'spots', p.spots);
+    if (!p) return;
+    const r = await fullView(p.src, 'spots', p.spots, null, saved && saved.spots);
     if (r) p.spots = r;
     if (!p.spots.length && g.white.value === 'picks') g.white.value = 'none';
     update();
   }
   async function setCorners() {
+    if (!p) return;
     await busy('Getting the full-size view ready…');
-    const r = await fullView(balanced().canvas, 'corners', p.corners, p.guess);
+    const r = await fullView(balanced().canvas, 'corners', p.corners, p.guess, saved && saved.corners);
     if (r) {
       const t = turnOf(r);
       p.corners = wholePhoto(r) && !t.r && !t.m ? null : r;          // the whole photo, as it is: nothing to do
@@ -512,6 +587,24 @@ function darkroom() {
   }
   const busy = (text) => { g.status.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
 
+  /* Pressing and holding the new result shows the previous one in its place (a blink comparison); a short tap
+     still makes the pictures bigger or smaller. */
+  function holdable(shot) {
+    const NEW = 'New: press and hold to see the previous', cap = h('figcaption', {}, NEW);
+    const over = h('img', { class: 'over', src: opts.previous, alt: '', draggable: false, hidden: true });
+    const wrap = h('div', { class: 'hold', title: 'Press and hold to see the previous picture here' }, shot, over);
+    let t = null, held = false;
+    wrap.addEventListener('pointerdown', () => {
+      held = false; clearTimeout(t);
+      t = setTimeout(() => { held = true; over.hidden = false; cap.textContent = 'Previous: let go to see the new one'; }, 180);
+    });
+    const end = () => { clearTimeout(t); over.hidden = true; cap.textContent = NEW; };
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) wrap.addEventListener(ev, end);
+    wrap.addEventListener('click', (e) => { if (held) { e.stopPropagation(); held = false; } });   // a hold isn't a tap
+    wrap.addEventListener('contextmenu', (e) => e.preventDefault());
+    return h('figure', {}, wrap, cap);
+  }
+
   /* Make the picture that will be uploaded from the choices, and show it beside the photo. */
   async function update() {
     if (!p) return;
@@ -529,6 +622,9 @@ function darkroom() {
       F.ratio = ratio; F.follow();
     }
     const shape = shapeLine();
+    const now = record('');
+    g.whiteSum.textContent = whiteText(now); g.cornerSum.textContent = cornersText(now);
+    if (saved) g.back.hidden = JSON.stringify(now) === baseline;
     await busy('Working…');
     const { canvas: wb, note } = balanced();
     let out, W = p.W, H = p.H;
@@ -543,7 +639,7 @@ function darkroom() {
     }
     Object.assign(p, { out, outW: W, outH: H });
     const shot = (c, quad) => {
-      const s = scaled(c, Math.min(c.width, 800)); s.className = 'shot';
+      const s = scaled(c, Math.min(c.width, reopen ? 1200 : 800)); s.className = 'shot';
       if (quad) {                                                    // the corners, outlined on the photo
         const x = s.getContext('2d'), q = quad.map(([u, v]) => [u * s.width, v * s.height]);
         x.beginPath(); x.moveTo(...q[0]); q.slice(1).forEach((pt) => x.lineTo(...pt)); x.closePath();
@@ -553,8 +649,15 @@ function darkroom() {
       }
       return s;
     };
-    g.compare.replaceChildren(h('figure', {}, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
-      h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be used')));
+    g.compare.hidden = false; g.compare.classList.remove('one');
+    if (reopen) {
+      g.compare.classList.add('reopen');
+      g.compare.replaceChildren(h('figure', { class: 'photo' }, shot(p.src, p.corners), h('figcaption', {}, 'Photo')),
+        h('figure', {}, previous(), h('figcaption', {}, 'Previous')), holdable(shot(out)));
+    } else {
+      g.compare.replaceChildren(h('figure', {}, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
+        h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be used')));
+    }
     g.status.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
   }
 
@@ -572,6 +675,7 @@ function darkroom() {
     sizeChanged() { if (p) later(update); else shapeLine(); },
     get ready() { return !!(p && p.out); },
     get white() { return g.white.value; },
+    get original() { return original; },
     result() { return { out: p.out, W: p.outW, H: p.outH }; },
     changed() { return !!p && JSON.stringify(record('')) !== baseline; },   // since it was loaded
     say(text) { g.status.textContent = text; },

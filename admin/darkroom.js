@@ -393,8 +393,9 @@ function icon(name, box = name === 'clear' ? 24 : 20) {
    the painting's corners (guessCorners), or the photo's own corners; ⎌ goes back to that. No instructions on
    screen, by Christopher's choice: buttons have tooltips.
    Resolves with the new spots, or the corners labelled top left, top right, bottom right, bottom left (fractions
-   of the picture), or null if cancelled. */
-export function fullView(img, mode, start, guess) {
+   of the picture), or null if cancelled. ghost: the saved spots or corners (fractions), when reopening a
+   painting: drawn faintly, dashed, under the ones being placed, so the saved choice stays in view. */
+export function fullView(img, mode, start, guess, ghost) {
   return new Promise((resolve) => {
     const W = img.width, H = img.height, first = mode === 'corners' ? guess || FRAME : [];
     let pts = (start && start.length ? start : first).map((p) => [p[0] * W, p[1] * H]);
@@ -424,6 +425,7 @@ export function fullView(img, mode, start, guess) {
     const ctx = cv.getContext('2d'), lctx = loupe.getContext('2d');
     let s = 1, tx = 0, ty = 0, cw = 0, ch = 0, dpr = 1;
     const spotR = Math.max(2, SPOT * Math.max(W, H));
+    const ghosts = (ghost || []).map((p) => [p[0] * W, p[1] * H]);
 
     function size() {
       dpr = window.devicePixelRatio || 1;
@@ -495,6 +497,19 @@ export function fullView(img, mode, start, guess) {
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
       ctx.imageSmoothingEnabled = s < 2; ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, tx, ty, W * s, H * s);
+      if (ghosts.length) {                                         // the saved choice, faint and dashed
+        ctx.save(); ctx.setLineDash([5, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        const g = ghosts.map(toScreen);
+        if (mode === 'corners' && g.length === 4) {
+          ctx.beginPath(); ctx.moveTo(...g[0]); g.slice(1).forEach((p) => ctx.lineTo(...p)); ctx.closePath(); ctx.stroke();
+          ctx.setLineDash([]);
+          for (const p of g) { ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, 7); ctx.stroke(); }
+        } else if (mode === 'spots') {
+          const r = Math.max(6, spotR * s);
+          for (const [x, y] of g) ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
+        }
+        ctx.restore();
+      }
       ctx.lineWidth = 1.5;
       if (mode === 'corners') {
         const q = pts.map(toScreen), ok = convex(q);                // q: top left, top right, bottom right, bottom left
