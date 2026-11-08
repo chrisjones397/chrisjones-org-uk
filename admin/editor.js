@@ -316,14 +316,16 @@ function paintingRow(e, items, i, secs) {
           f.go.disabled = true;
           try {
             const { file: stem } = await call('GET', `free?name=${encodeURIComponent(d.name)}`);
+            let orig = re.dr.original;                   // a replaced photo becomes the original (if not already stored)
+            if (re.dr.replacement) orig = (await keepOriginal(re.dr.replacement, d.name, null, (t) => re.dr.say(t))).key;
             pic = { ...(await storeImages(stem, re.dr.result(), (t) => re.dr.say(t))),
-              white_paper: re.dr.white === 'paper', process: re.dr.record(re.dr.original) };
+              white_paper: re.dr.white === 'paper', process: re.dr.record(orig) };
           } catch (err) { f.go.disabled = false; re.dr.say(''); return toast(err.message, true); }
         }
         const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
           section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order, ...pic };
         open.delete(e.id); reopened.delete(e.id);
-        save([{ id: e.id, kind: 'painting', data }], pic.file ? 'Saved, with the new picture' : undefined);
+        save([{ id: e.id, kind: 'painting', data }], pic.file ? (re && re.dr.replacement ? 'Saved, with the new photo' : 'Saved, with the new picture') : undefined);
       } }, 'Save draft'),
       changed(e) ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
       h('button', { class: 'danger', onclick: () => { if (confirm(`Delete "${d.title}"? It stays on the site until you publish.`)) { open.delete(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Deleted in the draft'); } } }, 'Delete')));
@@ -410,7 +412,12 @@ function nameFor(title) {
    of the page; the form it sits in gives it the details fields (height, width, measured or not) with attach().
    opts, for reopening: previous (address of the painting's current picture), saved (its choices, as summarised
    before the original is read), start (load()'s options for those choices) and fetch (resolves with the
-   original's { blob, original key }). */
+   original's { blob, original key }).
+   Reopening also offers "Replace photo…", for a better photo or a higher-resolution copy: if its proportions match
+   the old original's (the same photo), the corners and white spots carry over (they're fractions of the photo);
+   otherwise only the sliders are kept, the corners are guessed afresh and the spots cleared. It says which. The
+   new photo is stored as an original when the painting is saved (replacement); "Back to saved" returns to the
+   old photo and its choices. */
 const fieldsetOf = (...kids) => h('fieldset', { class: 'step-body', disabled: true }, ...kids);
 function whiteText(r) {
   const n = (r.spots || []).length;
@@ -428,6 +435,7 @@ function darkroom(opts = {}) {
   const reopen = !!opts.fetch;
   const g = {};
   let F = {}, p = null, baseline = '', saved = null, startWith = {}, original = null, fetching = null;
+  let replacement = null, oldBlob = null, ghost = null;     // ghost: the saved choices that still apply to the photo shown
   let timer;
   const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
   const how = () => ({ brightness: +g.bright.value / 100, warmth: +g.warm.value / 100 });
@@ -467,7 +475,10 @@ function darkroom(opts = {}) {
         g.shapeText = h('p', { class: 'hint shape-note' })))),
     h('div', { class: 'row dr-foot' },
       g.status = h('p', { class: 'hint grow' }),
-      g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was saved', onclick: () => { if (p) { apply(startWith); update(); } } }, 'Back to saved')));
+      g.pickFile = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => replace(g.pickFile.files[0]) }),
+      g.replaceBtn = h('button', { type: 'button', hidden: !reopen, title: 'Use a better photo, or a higher-resolution copy, of this painting', onclick: () => g.pickFile.click() }, 'Replace photo…'),
+      g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was saved (and the saved photo, if replaced)', onclick: () => backToSaved() }, 'Back to saved')),
+    g.replaceNote = h('p', { class: 'hint stored-note' }));
   function slid() {
     g.brightOut.textContent = `${g.bright.value}%: ${+g.bright.value === 100 ? 'pure white' : 'a light grey'}`;
     g.warmOut.textContent = `${g.warm.value}%${+g.warm.value === 0 ? ': cast fully removed' : ''}`;
@@ -485,23 +496,65 @@ function darkroom(opts = {}) {
 
   /* Reopening: the first section opened fetches the original and reads it. */
   function need() {
-    if (!reopen || p || fetching) return;
+    if (!reopen || p || fetching) return fetching;
     fetching = (async () => {
       g.status.textContent = 'Fetching the original…';
       try {
         const got = await opts.fetch();
-        original = got.original;
+        original = got.original; oldBlob = got.blob;
         if (!(await load(got.blob, opts.start))) throw new Error('This browser can\'t read the original');
       } catch (err) {
         g.status.textContent = ''; g.whiteBox.open = g.cornerBox.open = false; toast(err.message, true);
       } finally { fetching = null; }
     })();
+    return fetching;
+  }
+
+  /* Replace the photo (see above). The old original is read first, if it hasn't been, to compare proportions. */
+  async function replace(file) {
+    g.pickFile.value = '';
+    if (!file) return;
+    g.replaceBtn.disabled = true;
+    try {
+      if (!p && !replacement) await need();
+      const before = p ? { W: p.W, H: p.H, rec: record('') } : null;
+      const was = before ? before.rec : (opts.start.process || { white: opts.saved.white });
+      const sliders = was.white && was.white !== 'none' ? { brightness: was.brightness ?? 1, warmth: was.warmth ?? 0 } : {};
+      let same = false;
+      const ok = await load(file, (q) => {
+        same = !!before && Math.abs(Math.log((q.W / q.H) / (before.W / before.H))) < 0.005;   // within half a per cent
+        return same ? { process: was } : { ...sliders, guess: true };
+      }, true);
+      if (!ok) {                                           // unreadable: back to what was there
+        if (oldBlob) { replacement = null; await load(oldBlob, opts.start); }
+        return;
+      }
+      replacement = file;
+      ghost = same ? saved : saved && { brightness: saved.brightness, warmth: saved.warmth };
+      const had = (was.spots || []).length, hadCrop = !!(was.corners && !wholePhoto(was.corners));
+      const kept = [hadCrop && 'the corners', had && 'the white spots', sliders.brightness != null && 'the sliders'].filter(Boolean);
+      const and = (a) => a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}` : a[0];
+      g.replaceNote.textContent = !before
+        ? 'The old photo couldn\'t be read, so nothing was compared: the corners are a fresh guess.'
+        : same
+          ? `Same proportions as the old photo${kept.length ? `: kept ${and(kept)}` : ''}. It's stored when you save.`
+          : `Different proportions from the old photo: ${sliders.brightness != null ? 'kept the sliders, ' : ''}guessed the corners afresh${had ? ' and cleared the white spots' : ''}. It's stored when you save.`;
+      await update();
+    } finally { g.replaceBtn.disabled = false; }
+  }
+  async function backToSaved() {
+    if (!p) return;
+    if (!replacement) { apply(startWith); update(); return; }
+    if (!oldBlob) return;
+    replacement = null; g.replaceNote.textContent = '';
+    await load(oldBlob, opts.start);
   }
 
   /* Read a photo (a File, or the original's Blob from R2). With a process record, its choices are put back as
      they were; without one, it starts from the best guess at the painting's corners. */
-  async function load(blob, start = {}) {
-    p = null; baseline = ''; saved = null;
+  async function load(blob, start = {}, replacing = false) {
+    p = null;
+    if (!replacing) { baseline = ''; saved = null; ghost = null; replacement = null; g.replaceNote.textContent = ''; }
     if (!reopen) g.steps.hidden = true;
     g.status.textContent = 'Reading the photo…';
     const img = new Image();
@@ -515,26 +568,29 @@ function darkroom(opts = {}) {
     p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null, paper: false };
     URL.revokeObjectURL(img.src);
     p.guess = guessCorners(p.src);
-    startWith = start;
-    apply(start);
+    const choices = typeof start === 'function' ? start(p) : start;
+    if (!replacing) startWith = choices;
+    apply(choices);
     g.whiteBody.disabled = g.cornerBody.disabled = false;
     g.steps.hidden = false;
     if (!reopen) g.whiteBox.open = g.cornerBox.open = true;          // adding: both open
     await update();
+    if (replacing) return true;                                      // the saved choices stay as they were
     baseline = JSON.stringify(record(''));
-    if (reopen) { saved = JSON.parse(baseline); ghosts(); }
+    if (reopen) { saved = ghost = JSON.parse(baseline); ghosts(); }
     g.back.hidden = true;
     return true;
   }
   /* Put the controls to the choices load() was given. */
-  function apply({ process, white = 'none', guess = true } = {}) {
+  function apply({ process, white = 'none', guess = true, brightness = 1, warmth = 0 } = {}) {
     if (process) {
       p.paper = process.white === 'paper'; p.spots = process.white === 'picks' ? (process.spots || []).map((q) => q.slice()) : [];
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
       g.shape.checked = !!process.shape || !process.corners;      // as it was made
     } else {
-      p.paper = white === 'paper'; p.spots = []; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
+      p.paper = white === 'paper'; p.spots = []; g.shape.checked = true;
+      g.bright.value = Math.round(brightness * 100); g.warm.value = Math.round(warmth * 100);
       p.corners = guess && p.guess && !wholePhoto(p.guess) ? p.guess : null;   // a new photo: start from the guess
     }
     slid(); clearTimeout(timer);
@@ -551,7 +607,7 @@ function darkroom(opts = {}) {
 
   async function pickSpots() {
     if (!p) return;
-    const r = await fullView(p.src, 'spots', p.spots, null, saved && saved.spots, () => findPaper(p.src, p.corners));
+    const r = await fullView(p.src, 'spots', p.spots, null, ghost && ghost.spots, () => findPaper(p.src, p.corners));
     if (r) { p.spots = r; p.paper = false; }          // done: the spots decide (none = no white balance)
     update();
   }
@@ -567,7 +623,7 @@ function darkroom(opts = {}) {
   async function setCorners() {
     if (!p) return;
     await busy('Getting the full-size view ready…');
-    const r = await fullView(balanced().canvas, 'corners', p.corners, p.guess, saved && saved.corners);
+    const r = await fullView(balanced().canvas, 'corners', p.corners, p.guess, ghost && ghost.corners);
     if (r) {
       const t = turnOf(r);
       p.corners = wholePhoto(r) && !t.r && !t.m ? null : r;          // the whole photo, as it is: nothing to do
@@ -631,7 +687,7 @@ function darkroom(opts = {}) {
     const shape = shapeLine();
     const now = record('');
     g.whiteSum.textContent = whiteText(now); g.cornerSum.textContent = cornersText(now);
-    if (saved) g.back.hidden = JSON.stringify(now) === baseline;
+    g.back.hidden = replacement ? !oldBlob : !saved || JSON.stringify(now) === baseline;
     await busy('Working…');
     const { canvas: wb, note } = balanced();
     let out, W = p.W, H = p.H;
@@ -684,8 +740,9 @@ function darkroom(opts = {}) {
     get ready() { return !!(p && p.out); },
     get white() { return white(); },
     get original() { return original; },
+    get replacement() { return replacement; },        // a new photo, to be stored as the original on saving
     result() { return { out: p.out, W: p.outW, H: p.outH }; },
-    changed() { return !!p && JSON.stringify(record('')) !== baseline; },   // since it was loaded
+    changed() { return !!p && (!!replacement || JSON.stringify(record('')) !== baseline); },   // since it was loaded
     say(text) { g.status.textContent = text; },
   };
 }

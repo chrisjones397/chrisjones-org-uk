@@ -214,9 +214,13 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
       saved", shown once anything differs.
    c. White balance without the drop-down: done (Nov 2026), see the darkroom above. Known weak spot:
       guessCorners on a photo that is all paper (the life drawings) finds the drawing, not the sheet.
-   d. Replacing a painting's photo (a better photo or a higher-resolution copy): if the proportions match the
-      old original (same photo), keep corners and spots; otherwise keep only the sliders, guess the corners
-      afresh and clear the spots, and say what was kept.
+   d. Replacing a painting's photo: done (Nov 2026). "Replace photo…" in a painting's Edit form (darkroom
+      replace(); reads the old original first if no section was opened). Proportions within half a per cent of
+      the photo it replaces (same photo, e.g. a higher-resolution copy): the corners, spots and sliders carry
+      over; otherwise only the sliders, corners guessed afresh, spots cleared (and ghosts of the old corners and
+      spots dropped). A note under the darkroom says which. The new photo goes to originals/ on Save (keepOriginal,
+      so an already-stored one is reused) and the process points at it; the old original stays for History.
+      "Back to saved" goes back to the old photo and its choices.
    e. Moving one edge at a time (Christopher's idea, Nov 2026): at each corner, besides the knob that moves the
       corner, a smaller circle on each of its two edges, extended a little past the corner. Dragging one moves
       only that edge, pivoting on its far corner (the line runs through the far corner and the finger), so the
