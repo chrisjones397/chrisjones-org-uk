@@ -1,7 +1,8 @@
 /* Preparing a photo of a painting in the browser before it's uploaded (used by admin/editor.js):
-     1. white balance: none; "paper all round" (the build's method, for drawings on white paper); or from spots
-        picked on the photo that should be white or neutral grey (one spot evens out the colour; two or more
-        also follow the light's fall-off across the photo);
+     1. white balance from spots on the photo that should be white or neutral grey (none: no white balance; one
+        spot evens out the colour; two or more also follow the light's fall-off across the photo, six or more
+        along a gentle curve). "Find the paper" places them round a drawing's margins. Older records may say
+        "paper all round" (the build's method), which is still followed so they come out the same;
      2. crop: four corners dragged onto the painting's corners, and the picture squared up (perspective
         corrected), optionally to the shape of the size given in its details.
    The choices are kept with the painting (its "process"), as fractions of the untouched original's width and
@@ -111,8 +112,24 @@ function paperAllRound(c) {
 
 /* Picked spots: each spot's colour (the median of a small square) is what white looks like there. One spot: that
    colour everywhere. Two: it changes evenly along the line between them (and stays as it is beyond them). Three
-   or more: the flat slope that fits them best (least squares), kept within the range of the spots' colours so it
-   never runs away beyond them. */
+   to five: the flat slope that fits them best (least squares). Six or more (CURVE): a gentle curve, a quadratic
+   surface held back towards the flat slope (ridge regression), which follows the light's fall-off across a
+   sheet as "paper all round" did. Either way it's kept within the range of the spots' colours so it never runs
+   away beyond them. */
+export const CURVE = 6;
+/* Solve the n x n system A x = b (Gaussian elimination with partial pivoting); A and b are changed. */
+function solve(A, b) {
+  const n = b.length;
+  for (let c = 0; c < n; c++) {
+    let m = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[m][c])) m = r;
+    [A[c], A[m]] = [A[m], A[c]]; [b[c], b[m]] = [b[m], b[c]];
+    if (Math.abs(A[c][c]) < 1e-12) return null;
+    for (let r = c + 1; r < n; r++) { const f = A[r][c] / A[c][c]; for (let k = c; k < n; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c]; }
+  }
+  const x = new Array(n).fill(0);
+  for (let r = n - 1; r >= 0; r--) { let v = b[r]; for (let k = r + 1; k < n; k++) v -= A[r][k] * x[k]; x[r] = v / A[r][r]; }
+  return x;
+}
 function paperFromSpots(c, spots) {
   const W = c.width, H = c.height, px = pixels(c), r = Math.max(2, Math.round(SPOT * Math.max(W, H)));
   const P = spots.map(([u, v]) => {
@@ -140,7 +157,20 @@ function paperFromSpots(c, spots) {
     for (const p of P) { const x = p.x - mx, y = p.y - my; sxx += x * x; sxy += x * y; syy += y * y; }
     const det = sxx * syy - sxy * sxy;
     if (det <= 1e-9 * (sxx + syy) ** 2) at = line(...farthest());                       // all in a line
-    else {
+    else if (P.length >= CURVE) {
+      // colour = a + b x + c y + d x² + e xy + f y², x and y from the spots' centre in half the photo's longer
+      // side; the curved terms are held back (RIDGE times the number of spots), so a few spots give a gentle bend.
+      const S = Math.max(W, H) / 2, RIDGE = 0.005;
+      const basis = (x, y) => { x = (x - mx) / S; y = (y - my) / S; return [1, x, y, x * x, x * y, y * y]; };
+      const B = P.map((p) => basis(p.x, p.y));
+      const coef = [0, 1, 2].map((k) => {
+        const A = [0, 1, 2, 3, 4, 5].map((i) => [0, 1, 2, 3, 4, 5].map((j) => B.reduce((s, r) => s + r[i] * r[j], 0) + (i === j && i >= 3 ? RIDGE * P.length : 0)));
+        const v = [0, 1, 2, 3, 4, 5].map((i) => B.reduce((s, r, q) => s + r[i] * P[q].c[k], 0));
+        return solve(A, v);
+      });
+      if (coef.every(Boolean)) at = (x, y) => { const r = basis(x, y); return coef.map((cf, k) => Math.min(hi[k], Math.max(lo[k], cf.reduce((s, v, i) => s + v * r[i], 0)))); };
+    }
+    if (!at) {
       const fit = [0, 1, 2].map((k) => {
         const mean = P.reduce((s, p) => s + p.c[k], 0) / P.length;
         let sxv = 0, syv = 0;
@@ -153,6 +183,31 @@ function paperFromSpots(c, spots) {
   const paperAt = (i, j) => at((i + 0.5) / N * W, (j + 0.5) / N * H);
   const avg = P.map((p) => p.c).reduce((s, c) => s.map((v, k) => v + c[k] / P.length), [0, 0, 0]);
   return { paperAt, note: `White read from ${P.length} ${P.length === 1 ? 'spot' : 'spots'}, on average RGB ${avg.map(Math.round).join(', ')}, made white.` };
+}
+
+/* "Find the paper": white spots placed round the margins of the painting (inside its corners, or the photo's
+   edges if it isn't cropped), for a drawing on white paper: six along the top and bottom (two of them by the
+   corners) and four down each side, 3.5% in from the edge, so each spot's square lies on the paper. A spot that
+   falls on a mark (much darker than the spots nearest it) is left out. corners: fractions, in any labelled order;
+   returns spots as fractions of the photo. */
+export function findPaper(src, corners) {
+  const q = corners || FRAME, e = 0.035, cuts = [0.2, 0.4, 0.6, 0.8];
+  const at = (s, t) => [0, 1].map((k) => (1 - t) * ((1 - s) * q[0][k] + s * q[1][k]) + t * ((1 - s) * q[3][k] + s * q[2][k]));
+  const st = [...[e, ...cuts, 1 - e].flatMap((s) => [[s, e], [s, 1 - e]]), ...cuts.flatMap((t) => [[e, t], [1 - e, t]])];
+  const spots = st.map(([s, t]) => at(s, t).map((v) => Math.min(1, Math.max(0, v))));
+  const small = scaled(src, Math.max(1, Math.round(src.width * Math.min(1, 1024 / Math.max(src.width, src.height)))));
+  const w = small.width, h = small.height, px = pixels(small), r = Math.max(2, Math.round(SPOT * Math.max(w, h)));
+  const L = spots.map(([u, v]) => {
+    const x = Math.round(u * w), y = Math.round(v * h);
+    const m = median(px, w, Math.max(0, x - r), Math.max(0, y - r), Math.min(w, x + r + 1), Math.min(h, y + r + 1));
+    return 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2];
+  });
+  const kept = spots.filter((p, i) => {
+    const near = spots.map((o, j) => [Math.hypot(o[0] - p[0], o[1] - p[1]), j]).filter(([, j]) => j !== i)
+      .sort((a, b) => a[0] - b[0]).slice(0, 4).map(([, j]) => L[j]).sort((a, b) => a - b);
+    return L[i] >= 0.85 * (near[1] + near[2]) / 2;
+  });
+  return kept.length >= CURVE ? kept : spots;
 }
 
 /* The white-balanced copy of the working picture, and a line saying what was read. how: { brightness, warmth }. */
@@ -375,12 +430,13 @@ const ICONS = {
   clear: 'M9.5 2.5Q10.28 8.22 16.0 9Q10.28 9.78 9.5 15.5Q8.72 9.78 3.0 9Q8.72 8.22 9.5 2.5ZM17 12.9Q17.43 16.07 20.6 16.5Q17.43 16.93 17 20.1Q16.57 16.93 13.4 16.5Q16.57 16.07 17 12.9ZM5 15.0Q5.3 17.2 7.5 17.5Q5.3 17.8 5 20.0Q4.7 17.8 2.5 17.5Q4.7 17.2 5 15.0ZM17.5 2.8v3.4M15.8 4.5h3.4M11 19.4v2.2M9.9 20.5h2.2',  // sparkles: wipe clean
   cancel: 'M5 5l10 10M15 5 5 15',
   done: 'M3.5 10.5l4.5 4.5L16.5 5.5',
+  paper: 'M3 3h14v14H3zM6 6h.01M10 6h.01M14 6h.01M6 10h.01M14 10h.01M6 14h.01M10 14h.01M14 14h.01',   // a sheet with spots round its margins
 };
 function icon(name, box = name === 'clear' ? 24 : 20) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', `0 0 ${box} ${box}`); svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
   svg.setAttribute('aria-hidden', 'true'); svg.style.display = 'block';
-  svg.innerHTML = `<path d="${ICONS[name]}" fill="none" stroke="currentColor" stroke-width="${name === 'clear' ? 1.7 : 1.8}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  svg.innerHTML = `<path d="${ICONS[name]}" fill="none" stroke="currentColor" stroke-width="${name === 'clear' ? 1.7 : name === 'paper' ? 1.5 : 1.8}" stroke-linecap="round" stroke-linejoin="round"/>`;
   return svg;
 }
 
@@ -394,8 +450,9 @@ function icon(name, box = name === 'clear' ? 24 : 20) {
    screen, by Christopher's choice: buttons have tooltips.
    Resolves with the new spots, or the corners labelled top left, top right, bottom right, bottom left (fractions
    of the picture), or null if cancelled. ghost: the saved spots or corners (fractions), when reopening a
-   painting: drawn faintly, dashed, under the ones being placed, so the saved choice stays in view. */
-export function fullView(img, mode, start, guess, ghost) {
+   painting: drawn faintly, dashed, under the ones being placed, so the saved choice stays in view. find (spots
+   mode): gives spots round the painting's margins (findPaper), for the "find the paper" button. */
+export function fullView(img, mode, start, guess, ghost, find) {
   return new Promise((resolve) => {
     const W = img.width, H = img.height, first = mode === 'corners' ? guess || FRAME : [];
     let pts = (start && start.length ? start : first).map((p) => [p[0] * W, p[1] * H]);
@@ -413,7 +470,9 @@ export function fullView(img, mode, start, guess, ghost) {
             btn('↻', () => labelsRound(1), '', 'Move the corner labels round clockwise'),
             btn('⇋', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }, '', 'Mirror: swap left and right'),
             btn('⎌', () => { pts = (guess || FRAME).map((p) => [p[0] * W, p[1] * H]); fit(); draw(); }, '', 'Start again: the best guess, whole picture in view')]
-            : [btn(icon('fit'), () => { fit(); draw(); }, '', 'Show the whole picture'), btn(icon('clear'), () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
+            : [btn(icon('fit'), () => { fit(); draw(); }, '', 'Show the whole picture'),
+              ...(find ? [btn(icon('paper'), () => { pts = find().map((q) => [q[0] * W, q[1] * H]); draw(); }, '', 'Find the paper: white spots round the margins')] : []),
+              btn(icon('clear'), () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
           count, btn(icon('cancel'), () => close(null), 'dr-cancel', 'Cancel'),
           done = btn(icon('done'), () => close(pts), 'main', 'Done'))),
       cv, loupe);

@@ -146,10 +146,16 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   converges; tested within 1% on simulated photos, where averaging the side lengths was up to 17% out).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
   and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
-  from a working copy (at most 4096 pixels along its longer side): white balance (none; "paper all round", a
-  port of build_site.py's white_paper() matching it to within 3 levels in 255; or spots picked as white: one
-  evens the colour, two follow the light along their line, three or more fit a flat slope, kept within the
-  spots' range; a pixel brighter than the white is turned down as a whole, keeping its hue, not cut off one
+  from a working copy (at most 4096 pixels along its longer side): white balance from spots (no drop-down since
+  step 2c: no spots = none; process white 'picks'): one evens the colour, two follow the light along their line,
+  three to five fit a flat slope, six or more (CURVE) a gentle curve (quadratic, ridge 0.005 x spots on the
+  curved terms), kept within the spots' range. "Find the paper" (findPaper; a button in the section and a sheet
+  icon in the spots view) places 20 spots 3.5% in from the margins inside the corners (the photo's edges if not
+  cropped), leaving out any much darker than their neighbours (marks). Tested on the three life drawings against
+  "paper all round": on average 1.4 to 1.6 levels in 255 apart, at most 8. Older records with white 'paper'
+  ("paper all round", a port of build_site.py's white_paper() matching it to within 3 levels) still reproduce;
+  reopened, they say so, and spots replace it (the picture may change slightly). The spot fit uses the current
+  corners, so a wrong corner guess puts spots on the drawing: set the corners first; a pixel brighter than the white is turned down as a whole, keeping its hue, not cut off one
   colour at a time, which turned a warm yellow lemon; sliders for the brightness of the white, 50 to 100%,
   and how much of the light's warmth to keep: the gain 255/paper splits into a shared brightness factor and a
   colour factor, the colour factor taken to the power 1 - warmth), then the corners: four, starting on a best guess at the painting's (guessCorners: background evened out,
@@ -206,11 +212,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
       Previous in its place (holdable; a short tap still enlarges). Ghosts of the saved choices: a faint mark on
       each slider, dashed corners and spots in the full-screen views (fullView's ghost argument), and "Back to
       saved", shown once anything differs.
-   c. White balance without the drop-down: no spots = no white balance. A "find the paper" button places spots
-      round the margins (cleared by the existing clear button). Spot fitting must follow a gentle curve with
-      about six or more spots (now a flat slope from three), tested against the current paper method so
-      drawings don't shift; old 'paper' records must still reproduce. Reprocessing old drawings may change
-      them slightly: say so.
+   c. White balance without the drop-down: done (Nov 2026), see the darkroom above. Known weak spot:
+      guessCorners on a photo that is all paper (the life drawings) finds the drawing, not the sheet.
    d. Replacing a painting's photo (a better photo or a higher-resolution copy): if the proportions match the
       old original (same photo), keep corners and spots; otherwise keep only the sliders, guess the corners
       afresh and clear the spots, and say what was kept.

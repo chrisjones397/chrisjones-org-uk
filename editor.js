@@ -127,7 +127,7 @@ function processOf(p) {
     return a.map((q) => { if (!Array.isArray(q) || q.length !== 2) throw new Bad(`Bad ${what}`); return q.map(frac); });
   };
   const out = { original: p.original, white: p.white };
-  if (p.white === 'picks') out.spots = points(p.spots, 1, 20, 'white spots');
+  if (p.white === 'picks') out.spots = points(p.spots, 1, 40, 'white spots');
   if (p.white !== 'none') {
     const share = (v, lo, what) => { num(v, what); if (v < lo || v > 1) throw new Bad(`Bad ${what}`); return Math.round(v * 100) / 100; };
     out.brightness = share(p.brightness ?? 1, 0.5, 'brightness');

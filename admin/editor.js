@@ -7,7 +7,7 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
-import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
+import { SOURCE_MAX, scaled, resized, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
 function h(tag, props = {}, ...kids) {
@@ -442,11 +442,10 @@ function darkroom(opts = {}) {
     g.steps = h('div', { class: 'steps', hidden: !reopen },
       g.whiteBox = step('White balance', g.whiteSum = h('span', { class: 'step-sum muted' }), g.whiteBody = fieldsetOf(
         h('div', { class: 'row' },
-          g.white = h('select', { class: 'grow', onchange: () => { if (!p) return; if (g.white.value === 'picks' && !p.spots.length) pickSpots(); else update(); } },
-            h('option', { value: 'none' }, 'None: as photographed'),
-            h('option', { value: 'paper' }, 'Paper all round: a drawing on white paper'),
-            h('option', { value: 'picks' }, 'From white I pick on the photo')),
+          h('span', { class: 'grow' }),
+          h('button', { type: 'button', title: 'Place white spots round the margins of a drawing on white paper', onclick: () => findSpots() }, 'Find the paper'),
           g.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
+        g.legacyNote = h('p', { class: 'hint', hidden: true }, 'Made with the older "paper all round" method. Finding the paper or picking white replaces it, and the picture may change slightly.'),
         g.sliders = h('div', { class: 'sliders' },
           h('label', {}, 'Brightness of the white ', g.brightOut = h('span', { class: 'muted' })),
           slider(g.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
@@ -513,7 +512,7 @@ function darkroom(opts = {}) {
     }
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
-    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
+    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null, paper: false };
     URL.revokeObjectURL(img.src);
     p.guess = guessCorners(p.src);
     startWith = start;
@@ -530,12 +529,12 @@ function darkroom(opts = {}) {
   /* Put the controls to the choices load() was given. */
   function apply({ process, white = 'none', guess = true } = {}) {
     if (process) {
-      g.white.value = process.white; p.spots = (process.spots || []).map((q) => q.slice());
+      p.paper = process.white === 'paper'; p.spots = process.white === 'picks' ? (process.spots || []).map((q) => q.slice()) : [];
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
       g.shape.checked = !!process.shape || !process.corners;      // as it was made
     } else {
-      g.white.value = white; p.spots = []; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
+      p.paper = white === 'paper'; p.spots = []; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
       p.corners = guess && p.guess && !wholePhoto(p.guess) ? p.guess : null;   // a new photo: start from the guess
     }
     slid(); clearTimeout(timer);
@@ -552,11 +551,19 @@ function darkroom(opts = {}) {
 
   async function pickSpots() {
     if (!p) return;
-    const r = await fullView(p.src, 'spots', p.spots, null, saved && saved.spots);
-    if (r) p.spots = r;
-    if (!p.spots.length && g.white.value === 'picks') g.white.value = 'none';
+    const r = await fullView(p.src, 'spots', p.spots, null, saved && saved.spots, () => findPaper(p.src, p.corners));
+    if (r) { p.spots = r; p.paper = false; }          // done: the spots decide (none = no white balance)
     update();
   }
+  /* Spots round the painting's margins, for a drawing on white paper (darkroom.js findPaper). */
+  function findSpots() {
+    if (!p) return;
+    p.spots = findPaper(p.src, p.corners); p.paper = false;
+    update();
+  }
+  /* The white balance follows from the spots: none without any. 'paper' only for an older record made with
+     "paper all round", until spots replace it. */
+  const white = () => (p && p.spots.length ? 'picks' : p && p.paper ? 'paper' : 'none');
   async function setCorners() {
     if (!p) return;
     await busy('Getting the full-size view ready…');
@@ -568,8 +575,8 @@ function darkroom(opts = {}) {
     update();
   }
   function balanced() {
-    const key = `${g.white.value}|${JSON.stringify(p.spots)}|${g.bright.value}|${g.warm.value}`;
-    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, g.white.value, p.spots, how()) };
+    const key = `${white()}|${JSON.stringify(p.spots)}|${g.bright.value}|${g.warm.value}`;
+    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, white(), p.spots, how()) };
     return p.white;
   }
   const cropped = () => !!(p && p.corners && !wholePhoto(p.corners));
@@ -608,8 +615,8 @@ function darkroom(opts = {}) {
   /* Make the picture that will be uploaded from the choices, and show it beside the photo. */
   async function update() {
     if (!p) return;
-    g.spotsBtn.hidden = g.white.value !== 'picks';
-    g.sliders.hidden = g.white.value === 'none' || (g.white.value === 'picks' && !p.spots.length);
+    g.sliders.hidden = white() === 'none';
+    g.legacyNote.hidden = white() !== 'paper';
     g.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
     g.wholeBtn.hidden = !cropped();
     const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
@@ -664,9 +671,10 @@ function darkroom(opts = {}) {
   /* The choices, as saved with the painting (editor.js processOf on the server). */
   function record(original) {
     const shape = shapeLine();
-    return { original, white: g.white.value,
-      ...(g.white.value === 'picks' ? { spots: p.spots } : {}),
-      ...(g.white.value !== 'none' ? how() : {}),
+    const w = white();
+    return { original, white: w,
+      ...(w === 'picks' ? { spots: p.spots } : {}),
+      ...(w !== 'none' ? how() : {}),
       ...(p.corners ? { corners: p.corners } : {}), ...(shape ? { shape } : {}) };
   }
   return {
@@ -674,7 +682,7 @@ function darkroom(opts = {}) {
     attach(f) { F = f; },
     sizeChanged() { if (p) later(update); else shapeLine(); },
     get ready() { return !!(p && p.out); },
-    get white() { return g.white.value; },
+    get white() { return white(); },
     get original() { return original; },
     result() { return { out: p.out, W: p.outW, H: p.outH }; },
     changed() { return !!p && JSON.stringify(record('')) !== baseline; },   // since it was loaded
