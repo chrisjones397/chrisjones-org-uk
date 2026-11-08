@@ -1,5 +1,6 @@
 /* The editor page (admin/index.html). Three views:
-     #content  change the page text, sections and paintings; add a painting. Every change is saved as a draft
+     #gallery  add a painting (at the top), and change the genres and paintings
+     #content  change the page's words, section by section. Every change is saved as a draft
                at once; the preview (the site at this address) shows drafts in place.
      #review   every unpublished change, each with a tick: publish the ticked ones, or all, or discard them.
      #history  each publication, and every earlier version of anything, which can be brought back as a draft.
@@ -24,11 +25,18 @@ function h(tag, props = {}, ...kids) {
 
 let entries = [], media = false, who = '';
 const open = new Set();             // paintings whose edit form is open
-const TEXTS = [
-  ['t-hero-title', 'Opening title'], ['t-gallery-title', 'Gallery heading'], ['t-gallery-button', 'Gallery button'],
-  ['t-contact-title', 'Contact heading'], ['t-profile-title', 'Profile heading'],
-  ['t-profile', 'Profile text (a blank line between paragraphs)', true],
+/* The page's sections, each with its heading, any other words, and its paragraphs (one text entry per section,
+   paragraphs separated by a blank line; site.js puts them into the page's data-paragraphs="key" block). */
+const PAGE = [
+  { name: 'Hero', heading: 't-hero-title', paras: 't-hero' },
+  { name: 'Gallery', heading: 't-gallery-title', extra: [['t-gallery-button', 'Button']], paras: 't-gallery' },
+  { name: 'Contact', heading: 't-contact-title', paras: 't-contact' },
+  { name: 'Profile', heading: 't-profile-title', paras: 't-profile' },
+  { name: 'Footer', paras: 't-footer' },
 ];
+const TEXTS = PAGE.flatMap((p) => [
+  ...(p.heading ? [[p.heading, `${p.name} heading`]] : []), ...(p.extra || []).map(([id, n]) => [id, `${p.name} ${n.toLowerCase()}`]),
+  [p.paras, `${p.name} paragraphs`]]);
 const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
 
 // ---- talking to the server ---------------------------------------------------------------------------------
@@ -82,14 +90,14 @@ const thumb = (d) => `/${d.base}${d.file || d.name}-${d.widths[0]}.${d.ext}`;
 const label = (e) => {
   const d = current(e) || {};
   if (e.kind === 'painting') return d.title;
-  if (e.kind === 'section') return `Section: ${d.title}`;
+  if (e.kind === 'section') return `Genre: ${d.title}`;
   if (e.kind === 'text') return (TEXTS.find((t) => t[0] === e.id) || [0, e.id])[1].replace(/ \(.*/, '');
   return e.id === 'settings-gallery' ? 'Gallery settings' : 'Gallery invitation';
 };
 
 // ---- the views ---------------------------------------------------------------------------------------------
 
-function view() { return (location.hash.slice(1) || 'content'); }
+function view() { return (location.hash.slice(1) || 'gallery'); }
 window.addEventListener('hashchange', () => { if (view() === 'history') historyData = null; render(); });
 
 function render() {
@@ -98,57 +106,89 @@ function render() {
   document.querySelectorAll('.bar a[data-view]').forEach((a) => a.classList.toggle('on', a.dataset.view === view()));
   const main = $('#main');
   const y = scrollY;
-  main.replaceChildren(...({ content: contentView, review: reviewView, history: historyView }[view()] || contentView)());
+  main.replaceChildren(...({ gallery: galleryView, content: contentView, review: reviewView, history: historyView }[view()] || galleryView)());
   if (view() !== 'history') scrollTo(0, y);
 }
 
-function contentView() {
-  const out = [h('h1', {}, 'Content'),
-    h('p', { class: 'hint' }, 'Changes are saved as drafts straight away. Visitors see them only once you publish them under Review.')];
+const HINT = 'Changes are saved as drafts straight away. Visitors see them only once you publish them under Review.';
 
-  out.push(h('h2', {}, 'Page text'));
-  for (const [id, name, long] of TEXTS) {
-    const e = byId(id);
-    if (!e) continue;
-    const d = current(e);
-    const field = h(long ? 'textarea' : 'input', { type: long ? null : 'text', value: d.text, onchange: (ev) => {
-      save([{ id, kind: 'text', data: { text: ev.target.value } }]);
-    } });
-    out.push(h('div', {}, h('label', {}, name, ' ', badge(e)), field,
-      changed(e) ? h('div', { class: 'actions' }, h('button', { onclick: () => discard([id]) }, 'Undo change')) : null));
-  }
-
-  out.push(h('h2', {}, 'Paintings'));
+function galleryView() {
+  const out = [h('h1', {}, 'Gallery'), h('p', { class: 'hint' }, HINT)];
   const secs = sections();
+  out.push(h('h2', {}, 'Add a painting'));
+  out.push(addForm(secs));
+  out.push(h('h2', {}, 'Genres'));
   secs.forEach((s, si) => {
     const se = byId(s.id);
     const items = paintingsIn(s.id);
     const card = h('div', { class: 'card' });
     card.append(h('div', { class: 'row' },
-      h('input', { type: 'text', class: 'grow', value: s.title, 'aria-label': 'Section title', onchange: (ev) => {
+      h('input', { type: 'text', class: 'grow', value: s.title, 'aria-label': 'Genre name', onchange: (ev) => {
         save([{ id: s.id, kind: 'section', data: { title: ev.target.value, order: s.order } }]);
       } }),
       badge(se),
       h('span', { class: 'move' },
-        h('button', { title: 'Move section up', disabled: si === 0, onclick: () => moveSection(secs, si, -1) }, '↑'),
-        h('button', { title: 'Move section down', disabled: si === secs.length - 1, onclick: () => moveSection(secs, si, 1) }, '↓')),
-      h('button', { class: 'danger', title: 'Delete section', disabled: items.some((e) => e.draft != null),
-        onclick: () => { if (confirm(`Delete the section "${s.title}"?`)) save([{ id: s.id, kind: 'section', data: null }], 'Section deleted in the draft'); } }, 'Delete'),
+        h('button', { title: 'Move genre up', disabled: si === 0, onclick: () => moveSection(secs, si, -1) }, '↑'),
+        h('button', { title: 'Move genre down', disabled: si === secs.length - 1, onclick: () => moveSection(secs, si, 1) }, '↓')),
+      h('button', { class: 'danger', title: 'Delete genre', disabled: items.some((e) => e.draft != null),
+        onclick: () => { if (confirm(`Delete the genre "${s.title}"?`)) save([{ id: s.id, kind: 'section', data: null }], 'Genre deleted in the draft'); } }, 'Delete'),
     ));
-    if (!items.length) card.append(h('p', { class: 'hint' }, 'No paintings in this section.'));
+    if (!items.length) card.append(h('p', { class: 'hint' }, 'No paintings in this genre.'));
     items.forEach((e, i) => card.append(...paintingRow(e, items, i, secs)));
     out.push(card);
   });
-  // sections deleted in the draft but still live
+  // genres deleted in the draft but still live
   for (const e of entries.filter((x) => x.kind === 'section' && x.draft == null)) {
     out.push(h('div', { class: 'card row' }, h('span', { class: 'grow muted' }, `${liveOf(e).title} (deleted in the draft)`), badge(e),
       h('button', { onclick: () => discard([e.id]) }, 'Keep it')));
   }
-  out.push(h('div', { class: 'actions' }, h('button', { onclick: addSection }, 'Add a section')));
+  out.push(h('div', { class: 'actions' }, h('button', { onclick: addSection }, 'Add a genre')));
 
-  out.push(h('h2', {}, 'Add a painting'));
-  out.push(addForm(secs));
+  return out;
+}
 
+/* The page's words, a box for each section: its heading, then a box for each paragraph. */
+const extraParas = {};               // section -> empty paragraph boxes added but not yet typed in
+function contentView() {
+  const out = [h('h1', {}, 'Content'), h('p', { class: 'hint' }, HINT)];
+  for (const sec of PAGE) {
+    const card = h('div', { class: 'card' }, h('h2', { class: 'card-title' }, sec.name));
+    const field = (id, name) => {
+      const e = byId(id), text = e ? (current(e) || {}).text || '' : '';
+      return h('div', { class: 'box' }, h('label', {}, name, ' ', e ? badge(e) : null),
+        h('input', { type: 'text', value: text, onchange: (ev) => save([{ id, kind: 'text', data: { text: ev.target.value } }]) }),
+        e && changed(e) ? h('div', { class: 'actions' }, h('button', { onclick: () => discard([id]) }, 'Undo change')) : null);
+    };
+    if (sec.heading) card.append(field(sec.heading, 'Heading'));
+    for (const [id, name] of sec.extra || []) card.append(field(id, name));
+    // Paragraphs: stored as one text, a blank line between paragraphs.
+    const e = byId(sec.paras);
+    const paras = (e ? (current(e) || {}).text || '' : '').split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+    const all = paras.concat(Array(extraParas[sec.paras] || 0).fill(''));
+    const store = (list) => {
+      extraParas[sec.paras] = list.filter((x) => !x.trim()).length;
+      save([{ id: sec.paras, kind: 'text', data: { text: list.map((x) => x.trim().replace(/\n\s*\n/g, '\n')).filter(Boolean).join('\n\n') } }]);
+    };
+    all.forEach((text, i) => {
+      const ta = h('textarea', { rows: Math.min(8, Math.max(2, Math.ceil(text.length / 60))), value: text,
+        onchange: (ev) => { const list = all.slice(); list[i] = ev.target.value; store(list); } });
+      card.append(h('div', { class: 'box' },
+        h('div', { class: 'row' }, h('label', { class: 'grow' }, `Paragraph ${i + 1}`),
+          h('span', { class: 'move' },
+            h('button', { title: 'Move up', disabled: i === 0, onclick: () => { const l = all.slice(); [l[i - 1], l[i]] = [l[i], l[i - 1]]; store(l); } }, '↑'),
+            h('button', { title: 'Move down', disabled: i === all.length - 1, onclick: () => { const l = all.slice(); [l[i + 1], l[i]] = [l[i], l[i + 1]]; store(l); } }, '↓')),
+          h('button', { class: 'danger', title: 'Delete paragraph', onclick: () => {
+            if (!text.trim()) { extraParas[sec.paras]--; render(); return; }
+            if (confirm('Delete this paragraph?')) store(all.filter((_, j) => j !== i));
+          } }, 'Delete')),
+        ta));
+    });
+    card.append(h('div', { class: 'actions' },
+      e ? badge(e) : null,
+      e && changed(e) ? h('button', { onclick: () => { extraParas[sec.paras] = 0; discard([sec.paras]); } }, 'Undo paragraph changes') : null,
+      h('button', { onclick: () => { extraParas[sec.paras] = (extraParas[sec.paras] || 0) + 1; render(); } }, 'Add a paragraph')));
+    out.push(card);
+  }
   return out;
 }
 
@@ -170,7 +210,7 @@ function paintingRow(e, items, i, secs) {
   const form = h('div', { class: 'edit' },
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
     h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', value: d.details }),
-    h('label', {}, 'Section'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
+    h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
     h('p', { class: 'hint' }, `Address: /paintings/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
@@ -202,10 +242,10 @@ function movePainting(items, i, dir) {
   save(changes, 'Moved');
 }
 function addSection() {
-  const title = (prompt('Name of the new section') || '').trim();
+  const title = (prompt('Name of the new genre') || '').trim();
   if (!title) return;
   const id = 's-' + Math.random().toString(36).slice(2, 10);
-  save([{ id, kind: 'section', data: { title, order: sections().length } }], 'Section added');
+  save([{ id, kind: 'section', data: { title, order: sections().length } }], 'Genre added');
 }
 const discard = (ids) => act(() => call('POST', 'discard', { ids }), 'Back to the published version');
 
@@ -258,7 +298,7 @@ function addForm(secs) {
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
     h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', autocomplete: 'off',
       value: localStorage.getItem('editor-medium') || '', oninput: () => { if (pending && pending.corners) later(update); else shapeLine(); } }),
-    h('label', {}, 'Section'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
+    h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
     f.progress = h('div', { id: 'upload-progress' }));
@@ -360,7 +400,7 @@ function addForm(secs) {
     if (!pending || !pending.out) return toast('Choose a photo first', true);
     const title = f.title.value.trim();
     if (!title) return toast('Give it a title', true);
-    if (!f.section.value) return toast('Add a section first', true);
+    if (!f.section.value) return toast('Add a genre first', true);
     f.go.disabled = true;
     try {
       const { file, out, outW: W, outH: H } = pending;
@@ -409,7 +449,7 @@ async function put(key, blob, type) {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { title: 'Title', details: 'Details', section: 'Section', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { title: 'Title', details: 'Details', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
@@ -467,7 +507,7 @@ function historyView() {
       ...r.revisions.map((v) => {
         const d = parse(v.data), p = parse(v.previous);
         const what = d || p || {};
-        const name = v.kind === 'painting' ? what.title : v.kind === 'section' ? `Section: ${what.title}` : label({ id: v.entry_id, kind: v.kind, draft: v.data, published: v.previous });
+        const name = v.kind === 'painting' ? what.title : v.kind === 'section' ? `Genre: ${what.title}` : label({ id: v.entry_id, kind: v.kind, draft: v.data, published: v.previous });
         const kind = !p ? 'new' : !d ? 'gone' : 'changed';
         const mine = byId(v.entry_id);
         const same = mine && mine.draft === v.data;

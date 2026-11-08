@@ -508,7 +508,7 @@ export function fullView(img, mode, start, guess) {
           ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
         }
         done.disabled = !ok;
-        count.textContent = ok ? '' : 'The edges cross: move the corners apart';
+        count.textContent = '';                                    // a dimmed tick is enough
       } else {
         pts.forEach((p, i) => {
           const [x, y] = toScreen(p), r = Math.max(6, spotR * s);

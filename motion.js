@@ -21,7 +21,7 @@
   const isTall = () => VW < VH;
 
   const pieces = [];
-  const title = document.querySelector('.hero-title'), hero = document.querySelector('.hero');
+  const title = document.querySelector('.hero-words') || document.querySelector('.hero-title'), hero = document.querySelector('.hero');   // the title with any paragraphs under it
   if (title && hero) pieces.push({ el: title, wait: 0, fade: false,
     target: () => TITLE_DRIFT * Math.max(-hero.getBoundingClientRect().top, 0) });
   const heading = document.querySelector('.gallery-3d .invite-title'), gallery = document.querySelector('.invite');

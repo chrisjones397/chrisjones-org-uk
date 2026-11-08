@@ -31,6 +31,7 @@ INSERT INTO entries (id, kind, draft) VALUES ('t-gallery-title', 'text', '{"text
 INSERT INTO entries (id, kind, draft) VALUES ('t-gallery-button', 'text', '{"text":"See the paintings"}');
 INSERT INTO entries (id, kind, draft) VALUES ('t-contact-title', 'text', '{"text":"Get in touch"}');
 INSERT INTO entries (id, kind, draft) VALUES ('t-profile-title', 'text', '{"text":"Profile"}');
+INSERT INTO entries (id, kind, draft) VALUES ('t-footer', 'text', '{"text":"©2026 Christopher Jones"}');
 INSERT INTO entries (id, kind, draft) VALUES ('t-profile', 'text', '{"text":"I paint in oils, watercolours, and pastels, from observation, and into abstraction. I work between London, Hertfordshire, and Bedfordshire.\n\nAway from the easel, I studied mathematics at the University of Warwick and then the University of Cambridge before embarking on a career in data analysis. I volunteer for the RSPB and spend as much time at their reserves as possible.\n\nI''m passionate about progressive, experimental, alternative comedy."}');
 UPDATE entries SET published = draft, draft_at = '2026-11-07T00:00:00Z', draft_by = 'import', published_at = '2026-11-07T00:00:00Z';
 INSERT INTO revisions (release_id, entry_id, kind, data) SELECT 1, id, kind, draft FROM entries;

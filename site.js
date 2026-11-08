@@ -95,18 +95,22 @@ function listHtml(c, prefix) {
 
 /* The rewriter for any page: the marked text, plus whatever extra handlers the page needs. */
 export function rewriter(c) {
-  return new HTMLRewriter()
+  const r = new HTMLRewriter()
     .on('[data-text]', { element(el) {
       const t = c.texts[el.getAttribute('data-text')];
       if (t != null) el.setInnerContent(t);
     } })
-    .on('[data-paragraphs] p', { element(el) { el.remove(); } })
     .on('[data-paragraphs]', { element(el) {
       const t = c.texts[el.getAttribute('data-paragraphs')];
       if (t == null) return;
       const paras = t.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
       el.append(paras.map((x) => `\n          <p>${esc(x)}</p>`).join('') + '\n        ', { html: true });
     } });
+  // A block's own paragraphs are replaced only when the database has text for it; otherwise the page's stay.
+  for (const key of Object.keys(c.texts)) {
+    if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-paragraphs="${key}"] p`, { element(el) { el.remove(); } });
+  }
+  return r;
 }
 
 export function homeRewriter(c) {

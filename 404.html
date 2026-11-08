@@ -209,7 +209,8 @@
       display: none !important;
       -webkit-appearance: none;
     }
-    .hero-title {
+    /* The opening title and any paragraphs under it (edited as the Hero section) */
+    .hero-words {
       position: absolute;
       left: 0;
       right: 0;
@@ -217,6 +218,16 @@
       padding: 0 5vw;
       text-align: center;
     }
+    /* Paragraphs added in the editor under a section's heading: styled like the contact lines */
+    .hero-words p, .words-paras p {
+      font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+      font-weight: 300;
+      line-height: 1.4;
+      margin-top: 0.4em;
+    }
+    .words-paras:empty { display: none; }
+    .footer-words { text-align: center; }
+    .footer-words p + p { margin-top: 0.4em; }
 
     /* The menu's Profile link lands at the end of the profile animation, on the finished head and text
        (with smooth scrolling, the animation fast-forwards on the way there) */

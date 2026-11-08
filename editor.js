@@ -106,6 +106,9 @@ const num = (v, what) => { if (typeof v !== 'number' || !isFinite(v)) throw new 
 const int = (v, what) => { if (!Number.isInteger(v) || v < 0 || v > 100000) throw new Bad(`${what} must be a whole number`); return v; };
 const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'drift', 'seed'];
 
+/* The page sections' paragraph entries (admin/editor.js PAGE), which may be created by the first paragraph typed. */
+const PARAGRAPHS = ['t-hero', 't-gallery', 't-contact', 't-profile', 't-footer'];
+
 /* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
    round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
    width and height; brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
@@ -185,8 +188,9 @@ async function save(env, who, items) {
     if (!/^[a-z0-9-]{1,100}$/.test(it.id || '')) throw new Bad('Bad id');
     const old = byId[it.id];
     if (old && old.kind !== it.kind) throw new Bad('That entry is a different kind');
-    if (!old && !((it.kind === 'painting' && it.id.startsWith('p-')) || (it.kind === 'section' && it.id.startsWith('s-')))) {
-      throw new Bad('Only paintings and sections can be added');
+    if (!old && !((it.kind === 'painting' && it.id.startsWith('p-')) || (it.kind === 'section' && it.id.startsWith('s-'))
+        || (it.kind === 'text' && PARAGRAPHS.includes(it.id)))) {
+      throw new Bad('Only paintings, genres and the sections\' paragraphs can be added');
     }
     if (it.data === null) {
       if (!old) continue;

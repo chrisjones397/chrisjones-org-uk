@@ -100,7 +100,10 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 - **worker.js** runs first (wrangler.jsonc run_worker_first) for /, /paintings/*, /gallery/list/, /media/* and
   /admin*. It fills the pages from the database with HTMLRewriter (site.js): the gallery-data JSON, the
   invitation wall, the list page's grid, `data-text="key"` elements and `data-paragraphs="key"` blocks in
-  index.html (entries t-<key>). A painting's address is the home page with that painting brought forward (its
+  index.html (entries t-<key>). Each page section has a data-paragraphs block (hero, gallery, contact,
+  profile, footer; entries t-hero etc., a blank line between paragraphs; the server lets those five be created
+  by the first paragraph typed, PARAGRAPHS in editor.js); a block's own <p>s are replaced only when the database
+  has text for it. The opening title and its paragraphs drift together (.hero-words). A painting's address is the home page with that painting brought forward (its
   title, og:image from `preview`, canonical link, `<base href="/">`). Painting images are
   `<base><file>-<width>.<ext>` (file = name, or name-v2... if R2 already had that name; stored only when it
   differs): base img/ + webp (from the build) or media/images/ + jpg (uploaded) or webp (moved from img/). R2
@@ -112,7 +115,10 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
   ACCESS_AUD per Worker). There the site shows drafts, with a bar; /admin/ is the editor (admin/index.html,
-  admin/editor.js: Content, Review with ticks, History with "Bring back"); its API is /admin/api/* in
+  admin/editor.js: Gallery (add a painting at the top, then the genres and their paintings; the gallery's
+  groupings are "genres" in the editor, kind 'section' in the data), Content (a box per page section, Hero,
+  Gallery, Contact, Profile, Footer: its heading, then a box per paragraph, added, moved and deleted there;
+  PAGE in admin/editor.js), Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
   and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
@@ -128,7 +134,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   the painting's; each keeps its label wherever it's dragged (bottom left and bottom right go on the painting's
   bottom corners; tapping an edge relabels so it's the bottom; ↺ ↻ move every label one corner round; ⇋ swaps
   left and right; crossed edges hold
-  back Done), so
+  back Done, dimmed, with no message), so
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of the
   "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
