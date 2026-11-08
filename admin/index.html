@@ -50,6 +50,9 @@
   .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
   .row .grow { flex: 1; min-width: 8rem; }
   .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
+  .actions.top { margin: 0 0 1rem; }
+  p.stored-note { margin: 0.4rem 0 0; }
+  p.stored-note:empty { display: none; }
   .badge { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
   .badge.new { color: var(--new); } .badge.changed { color: var(--changed); } .badge.gone { color: var(--gone); }
   .painting { display: flex; gap: 0.7rem; align-items: center; padding: 0.5rem 0; border-top: 1px solid var(--line); }

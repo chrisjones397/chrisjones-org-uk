@@ -113,7 +113,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   originals/ (as uploaded, never served). Originals are named by content: originals/<hash>-<name>.<ext>, hash
   the first 12 hex digits of the file's SHA-256, worked out in the browser (keepOriginal in admin/editor.js;
   hashing in the Worker would overrun the free plan's CPU), name the painting it was first uploaded for. GET
-  /admin/api/stored?hash= finds one already stored, so choosing the same photo again skips the upload and the
+  /admin/api/stored?hash= finds one already stored (the add form says so, and which paintings use it, as soon as
+  the photo is chosen), so choosing the same photo again skips the upload and the
   new painting points at it (one photo, several paintings, each with its own corners); the upload itself also
   answers with the existing key rather than storing a second copy. Older originals (originals/<file>.<ext>,
   before Nov 2026, and those moved from git) keep their names and still work. Image uploads never overwrite
@@ -122,7 +123,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
   ACCESS_AUD per Worker). There the site shows drafts, with a bar; /admin/ is the editor (admin/index.html,
-  admin/editor.js: Gallery (add a painting at the top, then the genres and their paintings; the gallery's
+  admin/editor.js: Gallery (add a painting at the top, then the genres and their paintings, with "Add a genre" under the Genres heading; the gallery's
   groupings are "genres" in the editor, kind 'section' in the data), Content (a box per page section, Hero,
   Gallery, Contact, Profile, Footer: its heading, then a box per paragraph, added, moved and deleted there;
   PAGE in admin/editor.js), Review with ticks, History with "Bring back"); its API is /admin/api/* in

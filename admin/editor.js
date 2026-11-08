@@ -118,6 +118,7 @@ function galleryView() {
   out.push(h('h2', {}, 'Add a painting'));
   out.push(addForm(secs));
   out.push(h('h2', {}, 'Genres'));
+  out.push(h('div', { class: 'actions top' }, h('button', { onclick: addSection }, 'Add a genre')));
   secs.forEach((s, si) => {
     const se = byId(s.id);
     const items = paintingsIn(s.id);
@@ -142,7 +143,6 @@ function galleryView() {
     out.push(h('div', { class: 'card row' }, h('span', { class: 'grow muted' }, `${liveOf(e).title} (deleted in the draft)`), badge(e),
       h('button', { onclick: () => discard([e.id]) }, 'Keep it')));
   }
-  out.push(h('div', { class: 'actions' }, h('button', { onclick: addSection }, 'Add a genre')));
 
   return out;
 }
@@ -325,7 +325,7 @@ function addSection() {
   const title = (prompt('Name of the new genre') || '').trim();
   if (!title) return;
   const id = 's-' + Math.random().toString(36).slice(2, 10);
-  save([{ id, kind: 'section', data: { title, order: sections().length } }], 'Genre added');
+  save([{ id, kind: 'section', data: { title, order: sections().length } }], `"${title}" added at the bottom`);
 }
 const discard = (ids) => act(() => call('POST', 'discard', { ids }), 'Back to the published version');
 
@@ -538,6 +538,7 @@ function addForm(secs) {
   const dr = adding || (adding = darkroom());
   const form = h('div', { class: 'card' },
     h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
+    dr.note || (dr.note = h('p', { class: 'hint stored-note' })),
     dr.el,
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
     ...detailsFields(f, {}, () => {
@@ -554,9 +555,26 @@ function addForm(secs) {
 
   async function pick() {
     const file = dr.file = f.file.files[0] || null;
+    dr.known = null; dr.note.textContent = '';
     if (!file) return;
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+    lookUp(file);                                    // alongside preparing the picture
     await dr.load(file);
+  }
+
+  /* Say straight away whether this photo is already stored (and for which paintings), so it won't be uploaded
+     again; add() reuses the answer. */
+  async function lookUp(file) {
+    dr.note.textContent = 'Checking whether this photo is already stored…';
+    try {
+      const known = await storedFor(file);
+      if (dr.file !== file) return;                  // another photo was chosen meanwhile
+      dr.known = known;
+      if (!known.key) { dr.note.textContent = 'A new photo: it will be uploaded when you add the painting.'; return; }
+      const users = entries.filter((e) => e.kind === 'painting' && current(e) && current(e).process
+        && current(e).process.original === known.key).map((e) => `"${current(e).title}"`);
+      dr.note.textContent = `Already stored${users.length ? ` (used by ${users.join(', ')})` : ''}: it won't be uploaded again.`;
+    } catch { if (dr.file === file) dr.note.textContent = ''; }   // add() checks again
   }
 
   async function add() {
@@ -571,13 +589,13 @@ function addForm(secs) {
     try {
       const name = nameFor(title);
       const { file: stem } = await call('GET', `free?name=${encodeURIComponent(name)}`);
-      const { key: original, shared } = await keepOriginal(file, name, (t) => { f.progress.textContent = t; });
+      const { key: original, shared } = await keepOriginal(file, name, dr.known && dr.known.file === file ? dr.known : null, (t) => { f.progress.textContent = t; });
       const pic = await storeImages(stem, dr.result(), (t) => { f.progress.textContent = t; });
       const data = { name, title, ...det, section: f.section.value, order: paintingsIn(f.section.value).length, wide: f.wide.checked,
         white_paper: dr.white === 'paper', ...pic, process: dr.record(original) };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
       try { localStorage.setItem('editor-medium', det.medium); localStorage.setItem('editor-height', String(det.cm[0])); } catch { /* private browsing */ }
-      adding = null;
+      adding = null;                                 // a fresh form, and a fresh note
       toast(`"${title}" added as a draft${shared ? ', sharing a photo already stored' : ''}`);
       render();
     } catch (e) {
@@ -595,13 +613,18 @@ async function put(key, blob, type) {
 
 /* Store a photo as an original, named by its content (originals/<hash>-<name>.<ext>, see stored() in editor.js):
    if the same photo is already stored, for this painting or another, it isn't uploaded again and that one is
-   used. Returns the original's key (for the painting's process record) and whether it was already stored. */
-async function keepOriginal(file, name, say) {
-  say('Checking whether this photo is already stored…');
+   used. known: storedFor's answer, if already asked. Returns the original's key (for the painting's process
+   record) and whether it was already stored. */
+async function storedFor(file) {
   const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))]
     .map((b) => b.toString(16).padStart(2, '0')).join('');
   const hash = hex.slice(0, 12);
-  const { key: have } = await call('GET', `stored?hash=${hash}`);
+  const { key } = await call('GET', `stored?hash=${hash}`);
+  return { file, hash, key };
+}
+async function keepOriginal(file, name, known, say) {
+  if (!known) { say('Checking whether this photo is already stored…'); known = await storedFor(file); }
+  const { hash, key: have } = known;
   if (have) return { key: have, shared: true };
   const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase().replace(/^jpeg$/, 'jpg');
   say('Keeping the original…');
