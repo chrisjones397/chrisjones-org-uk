@@ -338,6 +338,18 @@ export function squaredUp(src, q, w, h) {
 
 // ---- the full-size view: picking spots and placing corners ------------------------------------------------
 
+/* The "show the whole picture" icon: four arrows from the centre out to the corners, drawn rather than a
+   character, so it looks the same in every browser's fonts. */
+function fitIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+  svg.setAttribute('aria-hidden', 'true'); svg.style.display = 'block';
+  svg.innerHTML = '<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M8 8 2.5 2.5M2.5 7V2.5H7"/><path d="M12 8l5.5-5.5M13 2.5h4.5V7"/>'
+    + '<path d="M8 12l-5.5 5.5M2.5 13v4.5H7"/><path d="M12 12l5.5 5.5M17.5 13v4.5H13"/></g>';
+  return svg;
+}
+
 /* Opens the picture full screen, to zoom into (pinch, or pinch on a trackpad, or the + and - buttons) and move
    about (drag, or scroll; double-tap zooms in where tapped, or back out). mode 'spots': tap a spot to add it, tap it again to take it away. mode 'corners': drag
    the four corners onto the painting's corners (a magnifier shows the spot under the finger). Each corner keeps
@@ -361,7 +373,7 @@ export function fullView(img, mode, start, guess) {
       el('div', { className: 'dr-bar' },
         el('div', { className: 'dr-buttons' },
           btn('−', () => zoomBy(1 / 1.6), '', 'Zoom out'), btn('+', () => zoomBy(1.6), '', 'Zoom in'),
-          btn('Fit', () => { fit(); draw(); }, '', 'Show the whole picture'),
+          btn(fitIcon(), () => { fit(); draw(); }, '', 'Show the whole picture'),
           ...(mode === 'corners' ? [
             btn('↺', () => labelsRound(-1), '', 'Move the corner labels round anticlockwise'),
             btn('↻', () => labelsRound(1), '', 'Move the corner labels round clockwise'),
