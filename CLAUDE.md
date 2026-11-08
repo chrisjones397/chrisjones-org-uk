@@ -4,6 +4,12 @@ Christopher's site: hand-written HTML, CSS and JavaScript, no framework. Paintin
 database (Cloudflare D1), edited at admin.chrisjones.org.uk: see "Content is in D1" below.
 The README covers the workflow for people; this file adds what a new Claude session needs.
 Always: British English; links are never underlined; give Christopher the commands so he can do things himself.
+Christopher's standing principle (Nov 2026): build everything the way it's properly done in this setup,
+Cloudflare (Workers, D1, R2, Access) with GitHub, following current best practice, because he's learning web
+development through this site (and may build for clients) and wants to learn the right way, not LAMP or Drupal
+habits, nor workarounds. Anything that exists only because of an earlier setup (static pages on GitHub Pages,
+Namecheap, a local Apache copy) is vestigial: don't build on it or patch around it; point it out, propose the
+proper replacement, and redesign it. When choosing an approach, say what the standard way is and why.
 Consistency matters to him: all text below the header shares one shadow (`--shadow` on body; the header has its
 own lighter one), links glow when pointed at, and all titles (h1, section h2) share one size and weight, set
 once at the top of index.html's styles. Section headings mirror the opening title's position (22%).
@@ -202,8 +208,21 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
 ## Next steps (agreed with Christopher, Nov 2026; start each in a new chat)
 
 1. Tidy git: done (Nov 2026), see build_site.py above.
-   Christopher's principle for all of this (Nov 2026): work towards best practice, the way it's meant to be
-   done, so he learns it properly; nothing vestigial left from when the site was static pages on GitHub.
+   See Christopher's standing principle at the top. build_site.py (1b) is one example of something vestigial,
+   not the only one. Candidates found so far, to go through with him (each: what it was for, the proper
+   Cloudflare way, then replace or remove), as part of 1b or straight after:
+   - CNAME (chrisjones.org.uk.): GitHub Pages' custom-domain file; Cloudflare's Workers custom domains do this.
+   - The names: repository chrisjones397.github.io and Workers chrisjones397-github-io(-dev) follow GitHub
+     Pages' naming. Renaming (repository, Workers, wrangler.jsonc, his Mac's remote, the notes) is possible;
+     weigh it with him.
+   - .github/workflows/ssl-monitor.yml: weekly certificate-expiry check from when certificates weren't managed
+     for him; Cloudflare issues and renews them itself.
+   - Local Apache copy on his Mac (/Library/WebServer/Documents/prd/sync) as a way to view the site: LAMP-era;
+     it can't run the Worker, database or R2. The proper local preview is `npx wrangler dev` (or just dev);
+     his clone stays for git. Mind his preference not to run code locally he hasn't vetted.
+   - gallery/index.html forwarding page and other leftovers of old addresses (covered in 1b).
+   Keep looking for more as work goes on (e.g. anything in index.html, worker.js or the README written for
+   the static or Apache setup) and add them here.
 1b. Retire build_site.py (agreed Nov 2026, next; before detail images). It's a leftover from static hosting,
    where pages had to be put together in advance. Now the Worker runs for every visit, so nothing should need
    building and the repository should hold only what's served, plus the Worker's code. Plan:
