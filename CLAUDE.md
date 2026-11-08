@@ -168,11 +168,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of its
   height and width if measured. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
-  corner, as big as half the screen's shorter side (220 at most), showing the corner's two edges: with a mouse or
-  trackpad inside the corner, on the line halfway between its edges and 20 pixels clear of both (smaller if the
-  painting is small on screen; Christopher's choice, as on a computer it covered an edge); with a finger (or no
-  room inside) kept 64 pixels clear of both corner and finger (above, else below, else beside, staying on its
-  side for the drag); besides
+  corner, as big as half the screen's shorter side (220 at most), showing the corner's two edges, and never
+  covering them (placeLoupe: 24 directions round the corner, each as near as it can be 16 pixels clear of the
+  corner's edges and on screen; with a finger also clear of it and not below it, where the hand is; the nearest
+  wins, leaning inside the corner with a mouse or trackpad (Christopher's choice) or away from the other edges
+  with a finger; kept during a drag while it works; smaller if nothing fits); besides
   the knob, each corner has a small circle on each of its edges, carried 34 pixels past the corner (inside,
   along the edge, if off screen): dragging one moves only that edge, pivoting on its far corner, so the other
   edge stays put and the corner slides along it (step 2e); the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the

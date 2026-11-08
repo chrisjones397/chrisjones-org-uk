@@ -659,45 +659,56 @@ export function fullView(img, mode, start, guess, ghost, find) {
     }
 
     /* The magnifier: a circle showing corner i close up, with its two edges (the one being moved, if an edge
-       handle is dragged, brighter). With a mouse or trackpad, nothing hides the corner, so it sits inside the
-       corner, on the line halfway between its two edges, clear of both (Christopher's choice), made smaller if
-       the painting is small on screen. With a finger (or if there's no room inside), it sits well clear of both
-       the corner and the finger f (screen point): above them if there's room, else below, else beside, and
-       keeps to its side for the whole drag. */
+       handle is dragged, brighter). Where it goes: tried at 24 directions round the corner, each as close as it
+       can be while staying 16 pixels clear of the corner's two edges and of the corner itself, and on screen;
+       with a finger, also clear of the finger and not below it, where the hand is. Of those, the nearest wins,
+       with a lean towards inside the corner (with a mouse or trackpad, where nothing hides it; Christopher's
+       choice) or away from the other two edges, and it keeps to its direction during a drag unless that no
+       longer works. Smaller if nothing fits; the old above/below rule only as a last resort. */
+    const segGap = (x, y, a, b) => {                              // distance from (x, y) to the segment a-b
+      const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+    };
+    function placeLoupe(i, f, L) {
+      const q = pts.map(toScreen), c = q[i], r = L / 2, g = 16, edge = 8, touch = pointer !== 'mouse';
+      const mine = [[(i + 1) % 4, i], [(i + 3) % 4, i]].map(([j]) => [c, q[j]]);
+      const others = [[(i + 1) % 4, (i + 2) % 4], [(i + 2) % 4, (i + 3) % 4]].map(([a, b]) => [q[a], q[b]]);
+      const u = [(i + 1) % 4, (i + 3) % 4].map((j) => { const dx = q[j][0] - c[0], dy = q[j][1] - c[1], n = Math.hypot(dx, dy) || 1; return [dx / n, dy / n]; });
+      const inward = Math.atan2(u[0][1] + u[1][1], u[0][0] + u[1][0]);
+      let best = null;
+      for (let k = 0; k < 24; k++) {
+        const ang = k / 24 * 2 * Math.PI, ux = Math.cos(ang), uy = Math.sin(ang);
+        for (let d = r + g; d < r + g + 400; d += 8) {
+          const x = c[0] + ux * d, y = c[1] + uy * d;
+          if (x - r < edge || y - r < edge || x + r > cw - edge || y + r > ch - edge) continue;
+          if (mine.some(([a, b]) => segGap(x, y, a, b) < r + g)) continue;
+          if (touch && (Math.hypot(x - f[0], y - f[1]) < r + 40 || y > f[1] - r * 0.3)) continue;
+          if (!touch && Math.hypot(x - f[0], y - f[1]) < r + 8) continue;
+          const turn = Math.abs(Math.atan2(Math.sin(ang - inward), Math.cos(ang - inward)));
+          const crosses = others.some(([a, b]) => segGap(x, y, a, b) < r) ? 1 : 0;
+          const kept = drag && drag.loupeAt === k ? -60 : 0;
+          const score = d + (touch ? crosses * 80 : turn * 60) + kept;
+          if (!best || score < best.score) best = { score, k, x: x - r, y: y - r };
+          break;                                                   // the nearest workable distance in this direction
+        }
+      }
+      if (best && drag) drag.loupeAt = best.k;
+      return best && [best.x, best.y];
+    }
     function showLoupe(i, f) {
       let L = Math.round(Math.min(220, Math.min(cw, ch) * 0.5));
       const m = Math.max(4, s * 4), gap = 64, edge = 8;
       const p = pts[i], c = toScreen(p);
-      let inner = null;
-      if (pointer === 'mouse') {
-        const q = pts.map(toScreen), u = [(i + 1) % 4, (i + 3) % 4].map((j) => {
-          const dx = q[j][0] - c[0], dy = q[j][1] - c[1], n = Math.hypot(dx, dy) || 1;
-          return [dx / n, dy / n, n];
-        });
-        const bx = u[0][0] + u[1][0], by = u[0][1] + u[1][1], bn = Math.hypot(bx, by);
-        const sin = Math.sqrt(Math.max(0, (1 - (u[0][0] * u[1][0] + u[0][1] * u[1][1])) / 2));   // sine of half the angle
-        if (bn > 0.2 && sin > 0.2) {
-          // A circle of radius r, its centre d along the halfway line, stays margin g clear of both edges when
-          // d = (r + g) / sin; and its far side, d + r, within 90% of the shorter edge.
-          const g = 20, room = 0.9 * Math.min(u[0][2], u[1][2]);
-          const r = Math.min(L / 2, (room * sin - g) / (1 + sin));
-          if (r >= 60) {
-            const d = (r + g) / sin;
-            L = Math.round(2 * r);
-            inner = [c[0] + bx / bn * d - r, c[1] + by / bn * d - r];
-          }
-        }
+      let spot = placeLoupe(i, f, L);
+      if (!spot) { const l2 = Math.round(L * 0.7); spot = placeLoupe(i, f, l2); if (spot) L = l2; }
+      if (!spot) {
+        const spots = {
+          above: Math.min(c[1], f[1]) - gap - L >= edge && [c[0] - L / 2, Math.min(c[1], f[1]) - gap - L],
+          below: Math.max(c[1], f[1]) + gap + L <= ch - edge && [c[0] - L / 2, Math.max(c[1], f[1]) + gap],
+        };
+        spot = spots.above || spots.below || [edge, edge];
       }
-      const spots = {
-        above: Math.min(c[1], f[1]) - gap - L >= edge && [c[0] - L / 2, Math.min(c[1], f[1]) - gap - L],
-        below: Math.max(c[1], f[1]) + gap + L <= ch - edge && [c[0] - L / 2, Math.max(c[1], f[1]) + gap],
-        left: Math.min(c[0], f[0]) - gap - L >= edge && [Math.min(c[0], f[0]) - gap - L, c[1] - L / 2],
-        right: Math.max(c[0], f[0]) + gap + L <= cw - edge && [Math.max(c[0], f[0]) + gap, c[1] - L / 2],
-      };
-      let side = drag && drag.side;
-      if (!side || !spots[side]) side = ['above', 'below', 'left', 'right'].find((k) => spots[k]);
-      if (drag) drag.side = side;
-      const [x, y] = inner || (side ? spots[side] : [edge, edge]);
+      const [x, y] = spot;
       loupe.style.display = 'block'; loupe.style.width = loupe.style.height = `${L}px`;
       loupe.style.left = `${Math.min(cw - L - edge, Math.max(edge, x))}px`;
       loupe.style.top = `${cv.offsetTop + Math.min(ch - L - edge, Math.max(edge, y))}px`;
