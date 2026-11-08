@@ -122,22 +122,26 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   spots' range; a pixel brighter than the white is turned down as a whole, keeping its hue, not cut off one
   colour at a time, which turned a warm yellow lemon; sliders for the brightness of the white, 50 to 100%,
   and how much of the light's warmth to keep: the gain 255/paper splits into a shared brightness factor and a
-  colour factor, the colour factor taken to the power 1 - warmth), then the corners: four, starting on the photo's own corners, dragged onto
+  colour factor, the colour factor taken to the power 1 - warmth), then the corners: four, starting on a best guess at the painting's (guessCorners: background evened out,
+  Otsu split, largest patch, four lines fitted to its outline; a tenth of a second; the photo's own corners
+  if nothing convincing), dragged onto
   the painting's; each keeps its label wherever it's dragged (bottom left and bottom right go on the painting's
-  bottom corners; tapping an edge relabels so it's the bottom; Labels ↺ ↻ move every label one corner round; Mirror swaps
+  bottom corners; tapping an edge relabels so it's the bottom; ↺ ↻ move every label one corner round; ⇋ swaps
   left and right; crossed edges hold
   back Done), so
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of the
   "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
   corner; the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
-  bottom edge marked by an amber line just outside it; no selection or long-press menu in there;
+  bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions on screen (Christopher's choice: symbol
+  buttons with tooltips; ⎌ goes back to the guess);
   a tap within about 28 screen pixels removes a white spot; zoomed in, two arrows at each corner glide the
   view along its edges to the next corner). Thumbnails in the editor's lists show each painting's true shape. Before and after are shown side by side; the sizes
   are made from the result. The choices are saved with the painting as `process` (original, white, spots,
   brightness, warmth, corners, shape; fractions of the original's width and height as photographed; corners in the order the
   painting's top left, top right, bottom right, bottom left; checked by editor.js processOf()), so the
-  images can be made again from the original. In the browser, not a Worker: the free plan allows Workers 10 ms
+  images can be made again from the original. Editor requests give up after 30 seconds (uploads 2 minutes) with
+  a message, so a dropped signal can't leave a button disabled. In the browser, not a Worker: the free plan allows Workers 10 ms
   of CPU per request. Every painting on both sites is now in
   R2 (moved Nov 2026 by a one-off editor button, since removed: see the history). R2 binding MEDIA: bucket site-media (live),
   site-media-dev (dev); without a binding the editor says adding paintings isn't available. On other hosts /admin is not found.

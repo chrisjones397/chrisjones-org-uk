@@ -196,6 +196,99 @@ export const FRAME = [[0, 0], [1, 0], [1, 1], [0, 1]];
 /* Do these corners (fractions) take in the whole photo? */
 export const wholePhoto = (q) => ordered(q).every((p, i) => Math.abs(p[0] - FRAME[i][0]) < 1e-4 && Math.abs(p[1] - FRAME[i][1]) < 1e-4);
 
+/* A best guess at the painting's corners in a photo of it against a plainer background, as fractions, in the
+   order top left, top right, bottom right, bottom left; or null if nothing convincing is found. On a copy about
+   800 pixels across (a fraction of a second):
+     1. the background is evened out to white with "paper all round" (so the light's fall-off doesn't count);
+     2. each pixel's distance from white is measured, and split into background and painting at the level that
+        best separates the two (Otsu's method);
+     3. the largest connected patch of "painting" is taken;
+     4. a first four-sided shape: the four points of its outline furthest out in four directions at right
+        angles, trying every turn of those directions a degree apart and keeping the largest;
+     5. each side is then refined by fitting a straight line through the outline's points near it (leaving out
+        the rounded bits by the corners), and the corners are where those lines meet. */
+export function guessCorners(src) {
+  const small = scaled(src, Math.max(1, Math.round(src.width * Math.min(1, 800 / Math.max(src.width, src.height)))));
+  const w = small.width, h = small.height;
+  applyPaper(small, paperAllRound(small).paperAt);
+  const px = pixels(small), n = w * h, d = new Uint8Array(n), hist = new Float64Array(256);
+  for (let i = 0; i < n; i++) {
+    const r = 255 - px[i * 4], g = 255 - px[i * 4 + 1], b = 255 - px[i * 4 + 2];
+    d[i] = Math.min(255, Math.round(Math.sqrt(r * r + g * g + b * b))); hist[d[i]]++;
+  }
+  let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let best = 0, thr = 40, wB = 0, sB = 0;                       // Otsu: the level with most variance between the two sides
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]; if (!wB || wB === n) continue; sB += t * hist[t];
+    const mB = sB / wB, mF = (sum - sB) / (n - wB), v = wB * (n - wB) * (mB - mF) ** 2;
+    if (v > best) { best = v; thr = t; }
+  }
+  thr = Math.max(thr, 25);                                      // never call faint shading on the wall "painting"
+  const mask = new Uint8Array(n); for (let i = 0; i < n; i++) mask[i] = d[i] > thr ? 1 : 0;
+  // The largest patch (4-connected).
+  const label = new Int32Array(n), stack = new Int32Array(n); let bestLab = 0, bestSize = 0, lab = 0;
+  for (let i = 0; i < n; i++) {
+    if (!mask[i] || label[i]) continue;
+    lab++; let top = 0, size = 0; stack[top++] = i; label[i] = lab;
+    while (top) {
+      const j = stack[--top]; size++;
+      const x = j % w, y = (j / w) | 0;
+      for (const k of [x > 0 ? j - 1 : -1, x < w - 1 ? j + 1 : -1, y > 0 ? j - w : -1, y < h - 1 ? j + w : -1]) {
+        if (k >= 0 && mask[k] && !label[k]) { label[k] = lab; stack[top++] = k; }
+      }
+    }
+    if (size > bestSize) { bestSize = size; bestLab = lab; }
+  }
+  if (bestSize < n * 0.03 || bestSize > n * 0.97) return null;
+  // Its outline: patch pixels with a neighbour outside it.
+  const edge = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    if (label[i] !== bestLab) continue;
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || label[i - 1] !== bestLab || label[i + 1] !== bestLab || label[i - w] !== bestLab || label[i + w] !== bestLab) edge.push([x + 0.5, y + 0.5]);
+  }
+  const area = (q) => Math.abs(q.reduce((a, p, i) => { const r = q[(i + 1) % 4]; return a + p[0] * r[1] - r[0] * p[1]; }, 0)) / 2;
+  let quad = null, qa = -1;
+  for (let deg = 0; deg < 90; deg++) {
+    const q = [0, 1, 2, 3].map((k) => {
+      const a = (deg + 45 + 90 * k) * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a);
+      let bp = edge[0], bv = -Infinity;
+      for (const p of edge) { const v = p[0] * ux + p[1] * uy; if (v > bv) { bv = v; bp = p; } }
+      return bp;
+    });
+    const A = area(q); if (A > qa) { qa = A; quad = q; }
+  }
+  quad = ordered(quad);
+  // Refine each side with a straight line through the outline points near it.
+  const diag = Math.hypot(w, h), tol = diag * 0.02, lines = [];
+  for (let k = 0; k < 4; k++) {
+    const a = quad[k], b = quad[(k + 1) % 4], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+    const near = edge.filter((p) => {
+      const t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (L * L), off = Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / L;
+      return t > 0.1 && t < 0.9 && off < tol;
+    });
+    if (near.length < 10) { lines.push(null); continue; }
+    const mx = near.reduce((s, p) => s + p[0], 0) / near.length, my = near.reduce((s, p) => s + p[1], 0) / near.length;
+    let sxx = 0, sxy = 0, syy = 0;
+    for (const p of near) { const x = p[0] - mx, y = p[1] - my; sxx += x * x; sxy += x * y; syy += y * y; }
+    const th = 0.5 * Math.atan2(2 * sxy, sxx - syy);           // the line's direction (principal axis)
+    lines.push({ p: [mx, my], d: [Math.cos(th), Math.sin(th)] });
+  }
+  const meet = (l1, l2) => {
+    const den = l1.d[0] * l2.d[1] - l1.d[1] * l2.d[0];
+    if (Math.abs(den) < 1e-6) return null;
+    const t = ((l2.p[0] - l1.p[0]) * l2.d[1] - (l2.p[1] - l1.p[1]) * l2.d[0]) / den;
+    return [l1.p[0] + t * l1.d[0], l1.p[1] + t * l1.d[1]];
+  };
+  let refined = lines.every(Boolean) && [0, 1, 2, 3].map((k) => meet(lines[(k + 3) % 4], lines[k]));
+  if (refined && refined.every(Boolean)) {
+    const A = area(refined);
+    const inside = refined.every((p) => p[0] > -0.02 * w && p[1] > -0.02 * h && p[0] < 1.02 * w && p[1] < 1.02 * h);
+    if (inside && A > qa * 0.85 && A < qa * 1.3) quad = refined;
+  }
+  return quad.map(([x, y]) => [Math.min(1, Math.max(0, x / w)), Math.min(1, Math.max(0, y / h))]);
+}
+
 /* "Oil on canvas, 60 x 90 cm, 2020" -> [60, 90] (height, width), or null. */
 export function sizeIn(details) {
   const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i.exec(details || '');
@@ -250,30 +343,31 @@ export function squaredUp(src, q, w, h) {
    the four corners onto the painting's corners (a magnifier shows the spot under the finger). Each corner keeps
    its label wherever it's dragged (Christopher's design): put the ones labelled bottom left and bottom right on
    the painting's bottom corners, and the painting comes out that way up. Tapping an edge relabels them so it's
-   the bottom, and Mirror swaps left and right. They start on the photo's own corners, the right way up.
+   the bottom, the ↺ ↻ buttons move every label one corner round, and ⇋ mirrors. They start on the best guess at
+   the painting's corners (guessCorners), or the photo's own corners; ⎌ goes back to that. No instructions on
+   screen, by Christopher's choice: buttons have tooltips.
    Resolves with the new spots, or the corners labelled top left, top right, bottom right, bottom left (fractions
    of the picture), or null if cancelled. */
-export function fullView(img, mode, start) {
+export function fullView(img, mode, start, guess) {
   return new Promise((resolve) => {
-    const W = img.width, H = img.height;
-    let pts = (start && start.length ? start : mode === 'corners' ? FRAME : []).map((p) => [p[0] * W, p[1] * H]);
+    const W = img.width, H = img.height, first = mode === 'corners' ? guess || FRAME : [];
+    let pts = (start && start.length ? start : first).map((p) => [p[0] * W, p[1] * H]);
     const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
-    const hint = mode === 'corners'
-      ? 'Drag each corner onto the painting\'s matching corner: bottom left and bottom right onto its bottom corners (pinch or use + and − to zoom in). Or tap an edge to make it the bottom; Mirror swaps left and right.'
-      : 'Tap spots that should be white or neutral grey (a white wall, card or paper). Tap a spot again to remove it. Two or more spots apart also even out the light.';
     let done;
     const cv = el('canvas', { className: 'dr-canvas' }), loupe = el('canvas', { className: 'dr-loupe', width: 300, height: 300 });
     const count = el('span', { className: 'dr-count' });
-    const btn = (text, fn, cls = '') => el('button', { type: 'button', className: cls, onclick: fn }, text);
+    const btn = (text, fn, cls = '', tip = '') => el('button', { type: 'button', className: cls, onclick: fn, title: tip, ariaLabel: tip || text }, text);
     const box = el('div', { className: 'darkroom' },
       el('div', { className: 'dr-bar' },
-        el('p', { className: 'dr-hint' }, hint),
         el('div', { className: 'dr-buttons' },
-          btn('−', () => zoomBy(1 / 1.6)), btn('+', () => zoomBy(1.6)), btn('Fit', () => { fit(); draw(); }),
-          ...(mode === 'corners' ? [btn('Labels ↺', () => labelsRound(-1)), btn('Labels ↻', () => labelsRound(1)),
-            btn('⇋ Mirror', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }),
-            btn('Reset', () => { pts = FRAME.map((p) => [p[0] * W, p[1] * H]); draw(); })]
-            : [btn('Clear', () => { pts = []; draw(); })]),
+          btn('−', () => zoomBy(1 / 1.6), '', 'Zoom out'), btn('+', () => zoomBy(1.6), '', 'Zoom in'),
+          btn('Fit', () => { fit(); draw(); }, '', 'Show the whole picture'),
+          ...(mode === 'corners' ? [
+            btn('↺', () => labelsRound(-1), '', 'Move the corner labels round anticlockwise'),
+            btn('↻', () => labelsRound(1), '', 'Move the corner labels round clockwise'),
+            btn('⇋', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }, '', 'Mirror: swap left and right'),
+            btn('⎌', () => { pts = (guess || FRAME).map((p) => [p[0] * W, p[1] * H]); draw(); }, '', 'Back to the best guess')]
+            : [btn('Clear', () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
           count, btn('Cancel', () => close(null)),
           done = btn('Done', () => close(pts), 'main'))),
       cv, loupe);
@@ -387,7 +481,8 @@ export function fullView(img, mode, start) {
         }
         ctx.font = '600 13px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         for (const [i, text] of [[3, 'bottom left'], [2, 'bottom right']]) {
-          const { k, d } = K[i], x = k[0] + d[0] * 30, y = k[1] + d[1] * 30;
+          const { k, d } = K[i], half = ctx.measureText(text).width / 2 + 4;     // kept on screen
+          const x = Math.min(cw - half, Math.max(half, k[0] + d[0] * 30)), y = Math.min(ch - 10, Math.max(10, k[1] + d[1] * 30));
           ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeText(text, x, y); ctx.fillStyle = '#f5c66b'; ctx.fillText(text, x, y);
         }
         ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';

@@ -6,7 +6,7 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
-import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
+import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
 function h(tag, props = {}, ...kids) {
@@ -33,10 +33,19 @@ const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
 
 // ---- talking to the server ---------------------------------------------------------------------------------
 
+/* fetch, giving up after ms (a dropped phone signal can otherwise leave a request, and a disabled button,
+   waiting for ever). */
+async function fetchFor(url, opts, ms) {
+  try { return await fetch(url, { ...opts, signal: AbortSignal.timeout(ms) }); }
+  catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') throw new Error('No answer from the server: check the signal and try again');
+    throw new Error('Couldn\'t reach the server: check the signal and try again');
+  }
+}
 async function call(method, path, body) {
-  const r = await fetch(`/admin/api/${path}`, {
+  const r = await fetchFor(`/admin/api/${path}`, {
     method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined,
-  });
+  }, 30000);
   const data = await r.json().catch(() => ({ error: `The server answered ${r.status}` }));
   if (!r.ok) throw new Error(data.error || `The server answered ${r.status}`);
   if (data.entries) entries = data.entries;
@@ -291,7 +300,8 @@ function addForm(secs) {
   }
   async function setCorners() {
     await busy('Getting the full-size view ready…');
-    const r = await fullView(balanced().canvas, 'corners', pending.corners);
+    if (pending.guess === undefined) pending.guess = guessCorners(pending.src);   // once per photo
+    const r = await fullView(balanced().canvas, 'corners', pending.corners, pending.guess);
     if (r) {
       const t = turnOf(r);
       pending.corners = wholePhoto(r) && !t.r && !t.m ? null : r;    // the whole photo, as it is: nothing to do
@@ -390,7 +400,7 @@ function addForm(secs) {
 }
 
 async function put(key, blob, type) {
-  const r = await fetch(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob });
+  const r = await fetchFor(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, 120000);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
 }
 
