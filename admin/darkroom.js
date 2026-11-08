@@ -295,12 +295,43 @@ export function sizeIn(details) {
   return m && +m[1] > 0 && +m[2] > 0 ? [+m[1], +m[2]] : null;
 }
 
-/* The squared-up picture's width and height in the corners' pixels: the average lengths of opposite sides, or,
-   given the painting's size, the same area in its shape. */
-export function cropSize(q, shape) {
+/* The painting's true proportions (width / height) from where its corners appear in a photo, or null.
+   A rectangle photographed at an angle: extend each pair of opposite edges until they meet (the vanishing points
+   of the real, parallel edges). The real edges meet at right angles, which holds for only one focal length of the
+   camera, so the photo itself gives the focal length, taking the lens's centre to be the photo's centre (true of
+   an uncropped phone photo); and from that, the rectangle's true proportions. This is Zhang and He's method for
+   photographed whiteboards (2006). q: corners in the order top left, top right, bottom right, bottom left (as the
+   painting goes); c: the photo's centre, in the same pixels. When the photo is taken square-on the edges don't
+   meet and the focal length can't be found; nor when only one pair of edges meets (tilted one way only). Then a
+   typical phone camera's is assumed: an iPhone's main lens is about 26 mm in 35 mm film terms, a focal length of
+   26/36 of the photo's longer side. Found focal lengths far from that are taken as noise and replaced by it. */
+export function trueRatio(q, c) {
+  const P = (p) => [p[0] - c[0], p[1] - c[1], 1];
+  const [m1, m2, m4, m3] = q.map(P);                 // Zhang's order: m1 top left, m2 top right, m3 bottom left, m4 bottom right
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const k2 = dot(cross(m1, m4), m3) / dot(cross(m2, m4), m3);
+  const k3 = dot(cross(m1, m4), m2) / dot(cross(m3, m4), m2);
+  if (!isFinite(k2) || !isFinite(k3)) return null;
+  const n2 = m2.map((v, i) => k2 * v - m1[i]), n3 = m3.map((v, i) => k3 * v - m1[i]);
+  const typical = (26 / 36 * 2 * Math.max(c[0], c[1])) ** 2;          // c is the centre, so the photo is 2c across
+  const flat = (n) => Math.abs(n[2]) < 1e-6 * Math.hypot(n[0], n[1]);
+  let f2 = flat(n2) || flat(n3) ? typical : -(n2[0] * n3[0] + n2[1] * n3[1]) / (n2[2] * n3[2]);
+  if (!(f2 > typical * 0.16 && f2 < typical * 6.25)) f2 = typical;   // focal length within 0.4 to 2.5 times typical
+  const r2 = ((n2[0] ** 2 + n2[1] ** 2) / f2 + n2[2] ** 2) / ((n3[0] ** 2 + n3[1] ** 2) / f2 + n3[2] ** 2);
+  return r2 > 0 ? Math.sqrt(r2) : null;
+}
+
+/* The squared-up picture's width and height in the corners' pixels: the same area as the corners' average side
+   lengths give, in the painting's shape: its measured size if given (shape: [height, width]), otherwise its true
+   proportions worked out from the photo's perspective (c: the photo's centre), or failing that the side lengths. */
+export function cropSize(q, shape, c) {
   const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
   let w = (len(q[0], q[1]) + len(q[3], q[2])) / 2, h = (len(q[0], q[3]) + len(q[1], q[2])) / 2;
-  if (shape) { const s = Math.sqrt(w * h / (shape[0] * shape[1])); w = shape[1] * s; h = shape[0] * s; }
+  let ratio = shape ? shape[1] / shape[0] : c ? trueRatio(q, c) : null;
+  // an estimate far from the plain side lengths means something's off (a cropped photo, say): don't trust it
+  if (!shape && ratio && (ratio / (w / h) > 1.6 || ratio / (w / h) < 1 / 1.6)) ratio = null;
+  if (ratio) { const area = w * h; h = Math.sqrt(area / ratio); w = ratio * h; }
   return [w, h];
 }
 

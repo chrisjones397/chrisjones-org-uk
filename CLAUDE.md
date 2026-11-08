@@ -126,6 +126,12 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   gallery `cm` (older entries with only a details line still work; all were converted Nov 2026). The add form
   starts with the last medium and height used (60 at first) and this year; the width is suggested, in grey, from
   the height and the cropped picture's proportions until a width is typed; height and width are required.
+  "Size estimated" (estimated: true; ticked automatically with a suggested width, unticked when a width is typed):
+  the size still shapes the crop and scales the gallery, but the details line leaves it out until measured; the
+  editor's painting rows say "(size estimated: H × W cm)". A photo's proportions come from its perspective
+  (darkroom.js trueRatio, Zhang and He's whiteboard method: the vanishing points of the edges give the focal
+  length, so the true width/height; a typical phone lens, 26/36 of the longer side, when only one pair of edges
+  converges; tested within 1% on simulated photos, where averaging the side lengths was up to 17% out).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
   and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
   from a working copy (at most 4096 pixels along its longer side): white balance (none; "paper all round", a
@@ -150,8 +156,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   spots, a cross to cancel, a tick for done; the corners view has no fit button, its ⎌ goes back to the guess
   and zooms out, so its buttons fit one row on a phone);
   a tap within about 28 screen pixels removes a white spot; zoomed in, two arrows at each corner glide the
-  view along its edges to the next corner). Thumbnails in the editor's lists show each painting's true shape. Before and after are shown side by side; the sizes
-  are made from the result. The choices are saved with the painting as `process` (original, white, spots,
+  view along its edges to the next corner). Thumbnails in the editor's lists show each painting's true shape. On choosing a photo the guessed corners are
+  applied at once. Before (with the corners outlined, the bottom in amber) and after are always shown side by
+  side, at most 38% of the window's height (tap to enlarge); the sizes are made from the result. The choices are saved with the painting as `process` (original, white, spots,
   brightness, warmth, corners, shape; fractions of the original's width and height as photographed; corners in the order the
   painting's top left, top right, bottom right, bottom left; checked by editor.js processOf()), so the
   images can be made again from the original. Editor requests give up after 30 seconds (uploads 2 minutes) with

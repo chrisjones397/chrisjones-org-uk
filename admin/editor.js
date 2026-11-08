@@ -212,6 +212,8 @@ function detailsFields(f, d, onSize) {
       f.wBox = num(d.cm ? d.cm[1] : old ? old[3] : '', 'Width (cm)'),
       f.yBox = h('label', { class: 'num' }, 'Year', h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off',
         value: d.year ?? (old ? old[4] || '' : isNew ? String(new Date().getFullYear()) : '') }))),
+    h('label', { class: 'tick' }, f.estimated = h('input', { type: 'checkbox', checked: !!d.estimated, onchange: onSize }),
+      'Size estimated: used for the shape and the gallery, not shown to visitors until measured'),
   ];
   f.height = f.hBox.querySelector('input'); f.width = f.wBox.querySelector('input'); f.year = f.yBox.querySelector('input');
   return out;
@@ -220,7 +222,8 @@ function detailsFields(f, d, onSize) {
 function detailsOf(f) {
   const hgt = parseFloat(f.height.value), wid = parseFloat(f.width.value);
   if (!(hgt > 0) || !(wid > 0)) return { error: 'Give the height and width in centimetres' };
-  return { medium: f.medium.value.trim(), cm: [Math.round(hgt * 10) / 10, Math.round(wid * 10) / 10], year: f.year.value.trim() };
+  return { medium: f.medium.value.trim(), cm: [Math.round(hgt * 10) / 10, Math.round(wid * 10) / 10], year: f.year.value.trim(),
+    ...(f.estimated.checked ? { estimated: true } : {}) };
 }
 
 function paintingRow(e, items, i, secs) {
@@ -228,7 +231,8 @@ function paintingRow(e, items, i, secs) {
   const gone = e.draft == null;
   const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') },
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
-    h('div', { class: 'what' }, h('span', { class: 't' }, d.title), h('span', { class: 'd' }, d.details || ' ')),
+    h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
+      h('span', { class: 'd' }, d.details || ' ', d.estimated ? h('span', { class: 'muted' }, ` (size estimated: ${d.cm[0]} × ${d.cm[1]} cm)`) : null)),
     badge(e),
     gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
       : h('span', { class: 'move' },
@@ -248,7 +252,8 @@ function paintingRow(e, items, i, secs) {
       h('button', { class: 'main', onclick: () => {
         const moved = f.section.value !== d.section, det = detailsOf(f);
         if (det.error) return toast(det.error, true);
-        const data = { ...d, title: f.title.value, ...det, wide: f.wide.checked,
+        const { estimated, ...rest } = d;                // dropped unless still ticked
+        const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
           section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order };
         open.delete(e.id);
         save([{ id: e.id, kind: 'painting', data }]);
@@ -329,7 +334,9 @@ function addForm(secs) {
       f.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') })),
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
     ...detailsFields(f, {}, () => {
-      if (document.activeElement === f.width) f.width.classList.remove('suggested');     // typed: no longer a suggestion
+      if (document.activeElement === f.width && f.width.classList.contains('suggested')) {   // typed: measured, not a suggestion
+        f.width.classList.remove('suggested'); f.estimated.checked = false;
+      }
       if (pending) later(update); else shapeLine();
     }),
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
@@ -360,6 +367,9 @@ function addForm(secs) {
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
     pending = { file, W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
+    // Start from the best guess at the painting's corners, so the result shows straight away as it will be.
+    pending.guess = guessCorners(pending.src);
+    if (pending.guess && !wholePhoto(pending.guess)) pending.corners = pending.guess;
     f.white.value = 'none'; f.bright.value = 100; f.warm.value = 0; slid(); clearTimeout(timer);
     if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
     f.steps.hidden = false;
@@ -374,7 +384,6 @@ function addForm(secs) {
   }
   async function setCorners() {
     await busy('Getting the full-size view ready…');
-    if (pending.guess === undefined) pending.guess = guessCorners(pending.src);   // once per photo
     const r = await fullView(balanced().canvas, 'corners', pending.corners, pending.guess);
     if (r) {
       const t = turnOf(r);
@@ -412,8 +421,8 @@ function addForm(secs) {
     const hgt = parseFloat(f.height.value);
     if (hgt > 0 && (!f.width.value || f.width.classList.contains('suggested'))) {
       let ratio = p.W / p.H;
-      if (p.corners) { const [a, b] = cropSize(p.corners.map(([u, v]) => [u * p.W, v * p.H]), null); ratio = a / b; }
-      f.width.value = String(Math.round(hgt * ratio)); f.width.classList.add('suggested');
+      if (p.corners) { const [a, b] = cropSize(p.corners.map(([u, v]) => [u * p.W, v * p.H]), null, [p.W / 2, p.H / 2]); ratio = a / b; }
+      f.width.value = String(Math.round(hgt * ratio)); f.width.classList.add('suggested'); f.estimated.checked = true;
     }
     const shape = shapeLine();
     await busy('Working…');
@@ -421,7 +430,7 @@ function addForm(secs) {
     let out, W = p.W, H = p.H;
     if (p.corners) {
       const q = p.corners.map(([u, v]) => [u * wb.width, v * wb.height]);
-      const [cw, chh] = cropSize(q, shape), k = wb.width / p.W;      // k: working copy's pixels per original pixel
+      const [cw, chh] = cropSize(q, shape, [wb.width / 2, wb.height / 2]), k = wb.width / p.W;      // k: working copy's pixels per original pixel
       W = Math.round(cw / k); H = Math.round(chh / k);                 // the cropped picture at the original's resolution
       const ow = Math.min(W, WIDTHS[WIDTHS.length - 1]);
       out = squaredUp(wb, q, ow, Math.max(1, Math.round(H * ow / W)));
@@ -429,12 +438,20 @@ function addForm(secs) {
       out = scaled(wb, Math.min(W, WIDTHS[WIDTHS.length - 1]));
     }
     Object.assign(p, { out, outW: W, outH: H });
-    const shot = (c) => { const s = scaled(c, Math.min(c.width, 1000)); s.className = 'shot'; return s; };
-    const changed = f.white.value !== 'none' && p.white.canvas !== p.src || p.corners;
-    f.compare.replaceChildren(...(changed
-      ? [h('figure', {}, shot(p.src), h('figcaption', {}, 'Before')), h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be added'))]
-      : [h('figure', {}, shot(out), h('figcaption', {}, 'As it will be added'))]));
-    f.compare.classList.toggle('one', !changed);
+    const shot = (c, quad) => {
+      const s = scaled(c, Math.min(c.width, 800)); s.className = 'shot';
+      if (quad) {                                                    // the corners, outlined on the photo
+        const x = s.getContext('2d'), q = quad.map(([u, v]) => [u * s.width, v * s.height]);
+        x.beginPath(); x.moveTo(...q[0]); q.slice(1).forEach((pt) => x.lineTo(...pt)); x.closePath();
+        x.lineWidth = Math.max(2, s.width / 300); x.strokeStyle = 'rgba(0,0,0,0.6)'; x.stroke();
+        x.lineWidth /= 2; x.strokeStyle = '#fff'; x.stroke();
+        x.beginPath(); x.moveTo(...q[3]); x.lineTo(...q[2]); x.lineWidth *= 2; x.strokeStyle = '#f5c66b'; x.stroke();   // the bottom
+      }
+      return s;
+    };
+    f.compare.replaceChildren(h('figure', {}, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
+      h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be added')));
+    f.compare.classList.remove('one');
     f.progress.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
   }
 
@@ -493,7 +510,7 @@ async function put(key, blob, type) {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Size estimated', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
