@@ -659,11 +659,35 @@ export function fullView(img, mode, start, guess, ghost, find) {
     }
 
     /* The magnifier: a circle showing corner i close up, with its two edges (the one being moved, if an edge
-       handle is dragged, brighter). It sits well clear of both the corner and the finger f (screen point):
-       above them if there's room, else below, else beside, and keeps to its side for the whole drag. */
+       handle is dragged, brighter). With a mouse or trackpad, nothing hides the corner, so it sits inside the
+       corner, on the line halfway between its two edges, clear of both (Christopher's choice), made smaller if
+       the painting is small on screen. With a finger (or if there's no room inside), it sits well clear of both
+       the corner and the finger f (screen point): above them if there's room, else below, else beside, and
+       keeps to its side for the whole drag. */
     function showLoupe(i, f) {
-      const L = Math.round(Math.min(220, Math.min(cw, ch) * 0.5)), m = Math.max(4, s * 4), gap = 64, edge = 8;
+      let L = Math.round(Math.min(220, Math.min(cw, ch) * 0.5));
+      const m = Math.max(4, s * 4), gap = 64, edge = 8;
       const p = pts[i], c = toScreen(p);
+      let inner = null;
+      if (pointer === 'mouse') {
+        const q = pts.map(toScreen), u = [(i + 1) % 4, (i + 3) % 4].map((j) => {
+          const dx = q[j][0] - c[0], dy = q[j][1] - c[1], n = Math.hypot(dx, dy) || 1;
+          return [dx / n, dy / n, n];
+        });
+        const bx = u[0][0] + u[1][0], by = u[0][1] + u[1][1], bn = Math.hypot(bx, by);
+        const sin = Math.sqrt(Math.max(0, (1 - (u[0][0] * u[1][0] + u[0][1] * u[1][1])) / 2));   // sine of half the angle
+        if (bn > 0.2 && sin > 0.2) {
+          // A circle of radius r, its centre d along the halfway line, stays margin g clear of both edges when
+          // d = (r + g) / sin; and its far side, d + r, within 90% of the shorter edge.
+          const g = 20, room = 0.9 * Math.min(u[0][2], u[1][2]);
+          const r = Math.min(L / 2, (room * sin - g) / (1 + sin));
+          if (r >= 60) {
+            const d = (r + g) / sin;
+            L = Math.round(2 * r);
+            inner = [c[0] + bx / bn * d - r, c[1] + by / bn * d - r];
+          }
+        }
+      }
       const spots = {
         above: Math.min(c[1], f[1]) - gap - L >= edge && [c[0] - L / 2, Math.min(c[1], f[1]) - gap - L],
         below: Math.max(c[1], f[1]) + gap + L <= ch - edge && [c[0] - L / 2, Math.max(c[1], f[1]) + gap],
@@ -673,7 +697,7 @@ export function fullView(img, mode, start, guess, ghost, find) {
       let side = drag && drag.side;
       if (!side || !spots[side]) side = ['above', 'below', 'left', 'right'].find((k) => spots[k]);
       if (drag) drag.side = side;
-      const [x, y] = side ? spots[side] : [edge, edge];
+      const [x, y] = inner || (side ? spots[side] : [edge, edge]);
       loupe.style.display = 'block'; loupe.style.width = loupe.style.height = `${L}px`;
       loupe.style.left = `${Math.min(cw - L - edge, Math.max(edge, x))}px`;
       loupe.style.top = `${cv.offsetTop + Math.min(ch - L - edge, Math.max(edge, y))}px`;
@@ -696,10 +720,10 @@ export function fullView(img, mode, start, guess, ghost, find) {
     }
 
     const down = new Map();
-    let drag = null, pinch = null, tap = null;
+    let drag = null, pinch = null, tap = null, pointer = 'touch';   // pointer: the kind that last pressed (mouse covers trackpads)
     const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     cv.addEventListener('pointerdown', (e) => {
-      cv.setPointerCapture(e.pointerId);
+      cv.setPointerCapture(e.pointerId); pointer = e.pointerType;
       const p = pos(e); down.set(e.pointerId, p);
       if (down.size === 2) {
         const [a, b] = [...down.values()];
