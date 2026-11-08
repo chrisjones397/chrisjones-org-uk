@@ -123,7 +123,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
   ACCESS_AUD per Worker). There the site shows drafts, with a bar; /admin/ is the editor (admin/index.html,
-  admin/editor.js: Gallery (add a painting at the top, then the genres and their paintings, with "Add a genre" under the Genres heading; the gallery's
+  admin/editor.js: Gallery (add a painting at the top, then the genres and their paintings, with "Add a genre" under the Genres heading (a genre just added is picked in the add form; forms are rebuilt on every re-render, so carry() brings over what was typed in the add form and open Edit forms); the gallery's
   groupings are "genres" in the editor, kind 'section' in the data), Content (a box per page section, Hero,
   Gallery, Contact, Profile, Footer: its heading, then a box per paragraph, added, moved and deleted there;
   PAGE in admin/editor.js), Review with ticks, History with "Bring back"); its API is /admin/api/* in

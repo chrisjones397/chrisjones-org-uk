@@ -226,6 +226,19 @@ function detailsOf(f) {
     ...(f.estimated.checked ? { estimated: true } : {}) };
 }
 
+/* Forms are rebuilt whenever the page re-renders (after any save, e.g. adding a genre mid-way), so what has been
+   typed into an open form is carried over from its previous copy: the add form's on its darkroom (dr.fields),
+   each open Edit form's in editFields. */
+const editFields = new Map();       // painting id -> its Edit form's fields, while open
+let newGenre = null;                // a genre just added, for the add form to pick
+function carry(from, to) {
+  if (!from) return;
+  for (const k of ['title', 'medium', 'height', 'width', 'year']) if (from[k] && to[k]) to[k].value = from[k].value;
+  for (const k of ['estimated', 'wide']) if (from[k] && to[k]) to[k].checked = from[k].checked;
+  if (from.width && to.width) to.width.classList.toggle('suggested', from.width.classList.contains('suggested'));
+  if (from.section && to.section && [...to.section.options].some((o) => o.value === from.section.value)) to.section.value = from.section.value;
+}
+
 function paintingRow(e, items, i, secs) {
   const d = current(e);
   const gone = e.draft == null;
@@ -239,7 +252,7 @@ function paintingRow(e, items, i, secs) {
         h('button', { title: 'Move up', disabled: i === 0, onclick: () => movePainting(items, i, -1) }, '↑'),
         h('button', { title: 'Move down', disabled: i === items.length - 1, onclick: () => movePainting(items, i, 1) }, '↓'),
         h('button', { onclick: () => { if (open.has(e.id)) { open.delete(e.id); reopened.delete(e.id); } else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
-  if (gone || !open.has(e.id)) return [row];
+  if (gone || !open.has(e.id)) { editFields.delete(e.id); return [row]; }
 
   const f = {};
   const form = h('div', { class: 'edit' },
@@ -272,6 +285,8 @@ function paintingRow(e, items, i, secs) {
       } }, 'Save draft'),
       changed(e) ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
       h('button', { class: 'danger', onclick: () => { if (confirm(`Delete "${d.title}"? It stays on the site until you publish.`)) { open.delete(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Deleted in the draft'); } } }, 'Delete')));
+  carry(editFields.get(e.id), f);
+  editFields.set(e.id, f);
   return [row, form];
 }
 
@@ -325,6 +340,7 @@ function addSection() {
   const title = (prompt('Name of the new genre') || '').trim();
   if (!title) return;
   const id = 's-' + Math.random().toString(36).slice(2, 10);
+  newGenre = id;
   save([{ id, kind: 'section', data: { title, order: sections().length } }], `"${title}" added at the bottom`);
 }
 const discard = (ids) => act(() => call('POST', 'discard', { ids }), 'Back to the published version');
@@ -551,6 +567,12 @@ function addForm(secs) {
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
     f.progress = h('div', { id: 'upload-progress' }));
+  carry(dr.fields, f);
+  dr.fields = f;
+  if (newGenre && [...f.section.options].some((o) => o.value === newGenre)) { f.section.value = newGenre; newGenre = null; }
+  if (dr.file) {                                     // show the chosen photo's name again (add() uses dr.file)
+    try { const t = new DataTransfer(); t.items.add(dr.file); f.file.files = t.files; } catch { /* older browsers */ }
+  }
   dr.attach(f);
 
   async function pick() {
