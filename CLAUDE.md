@@ -202,6 +202,35 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
 ## Next steps (agreed with Christopher, Nov 2026; start each in a new chat)
 
 1. Tidy git: done (Nov 2026), see build_site.py above.
+   Christopher's principle for all of this (Nov 2026): work towards best practice, the way it's meant to be
+   done, so he learns it properly; nothing vestigial left from when the site was static pages on GitHub.
+1b. Retire build_site.py (agreed Nov 2026, next; before detail images). It's a leftover from static hosting,
+   where pages had to be put together in advance. Now the Worker runs for every visit, so nothing should need
+   building and the repository should hold only what's served, plus the Worker's code. Plan:
+   - Shared styles: index.html's <style> becomes one stylesheet (e.g. site.css) that every page links to;
+     FLOAT_UI_CSS and the extras block go into it too. No copies of styles in any page.
+   - Shared header: one copy. The Worker adds it to the other pages (list page, 404) as it serves them, the
+     way it already fills in content, e.g. from a partial imported into worker.js as text (wrangler rules), or
+     taken from index.html. Choose the standard way and explain the choice to Christopher.
+   - The gallery section's markup (invitation wall, float stage, gallery-data, script tag) is written once in
+     index.html by hand, with no built-block markers; likewise the contact picture's <img>.
+   - Script version stamps (?v=<hash>): replace with the standard Cloudflare approach (check what caching
+     headers and ETags Workers static assets send by default, and whether that alone ensures browsers fetch
+     a changed script; if not, set headers or fingerprint file names in the proper way). Explain it.
+   - gallery/index.html (forwarding page): becomes a redirect (worker.js, or a _redirects file if static
+     assets support it), not a page.
+   - 404.html: a plain hand-written page linking the stylesheet; header added by the Worker.
+   - Contact picture: keep its four sizes in med/ as plain files for now (they go to R2 in step 1c).
+   - Then delete tools/build_site.py and tools/cloudflare_build.sh, and remove the build command from both
+     Workers' build settings (Cloudflare API; leave the deploy commands). Update README and these notes.
+   - Test: the home page, list page, a painting's address, a missing address (404) and the old /gallery/
+     address on dev, after Cloudflare's build; and on admin-dev, that the editor's preview still works.
+1c. Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
+   content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
+   sizes made at upload like the paintings, published through Review like everything else. What stays in git
+   is only design (e.g. the head animation's model and textures). Video needs thought: sizes/encodings made
+   where (the browser can't easily re-encode video; maybe upload each size, or one file), and R2 serving with
+   range requests for video. Order relative to detail images (2, below) is Christopher's choice, not yet made.
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
    a. Shared originals: done (Nov 2026), see the R2 layout above. The duplicates stored before it (the
