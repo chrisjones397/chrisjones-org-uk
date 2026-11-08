@@ -606,59 +606,8 @@
 
     <!-- The gallery: an invitation, with a few paintings hung around it -->
     <section id="paintings" class="invite">
-      <!-- gallery invitation: start (built by tools/build_site.py from gallery_invitation: in paintings.yaml) -->
+      <!-- gallery invitation: start (built by tools/build_site.py; filled from the database by worker.js) -->
       <div class="invite-wall" aria-hidden="true">
-        <a class="invite-pic" href="paintings/apple-2/" tabindex="-1">
-          <img src="img/apple-2-480.webp"
-               srcset="img/apple-2-300.webp 300w,
-                  img/apple-2-480.webp 480w,
-                  img/apple-2-768.webp 768w,
-                  img/apple-2-1024.webp 1024w,
-                  img/apple-2-1536.webp 1536w,
-                  img/apple-2-2560.webp 2560w,
-                  img/apple-2-2560.webp 2560w"
-               sizes="(max-width: 700px) 40vw, 24vw"
-               width="3523" height="2340" alt="Apple #2" loading="lazy">
-        </a>
-        <a class="invite-pic" href="paintings/green-background-with-seven-figures/" tabindex="-1">
-          <img src="img/green-background-with-seven-figures-480.webp"
-               srcset="img/green-background-with-seven-figures-300.webp 300w,
-                  img/green-background-with-seven-figures-480.webp 480w,
-                  img/green-background-with-seven-figures-768.webp 768w,
-                  img/green-background-with-seven-figures-1024.webp 1024w,
-                  img/green-background-with-seven-figures-1536.webp 1536w"
-               sizes="(max-width: 700px) 40vw, 24vw"
-               width="1536" height="1024" alt="Green Background with Seven Figures" loading="lazy">
-        </a>
-        <a class="invite-pic" href="paintings/collaboration-with-teo-1/" tabindex="-1">
-          <img src="img/collaboration-with-teo-1-480.webp"
-               srcset="img/collaboration-with-teo-1-300.webp 300w,
-                  img/collaboration-with-teo-1-480.webp 480w,
-                  img/collaboration-with-teo-1-768.webp 768w,
-                  img/collaboration-with-teo-1-1024.webp 1024w,
-                  img/collaboration-with-teo-1-1536.webp 1536w"
-               sizes="(max-width: 700px) 40vw, 24vw"
-               width="1536" height="1152" alt="Collaboration with Teo #1" loading="lazy">
-        </a>
-        <a class="invite-pic" href="paintings/nighttime-brussels/" tabindex="-1">
-          <img src="img/nighttime-brussels-480.webp"
-               srcset="img/nighttime-brussels-300.webp 300w,
-                  img/nighttime-brussels-480.webp 480w,
-                  img/nighttime-brussels-768.webp 768w,
-                  img/nighttime-brussels-1024.webp 1024w"
-               sizes="(max-width: 700px) 40vw, 24vw"
-               width="1024" height="1536" alt="Nighttime, Brussels" loading="lazy">
-        </a>
-        <a class="invite-pic" href="paintings/seascape-1/" tabindex="-1">
-          <img src="img/seascape-1-480.webp"
-               srcset="img/seascape-1-300.webp 300w,
-                  img/seascape-1-480.webp 480w,
-                  img/seascape-1-768.webp 768w,
-                  img/seascape-1-1024.webp 1024w,
-                  img/seascape-1-1536.webp 1536w"
-               sizes="(max-width: 700px) 40vw, 24vw"
-               width="1536" height="1024" alt="Seascape #1" loading="lazy">
-        </a>
       </div>
       <div id="float-stage" class="float-stage float-section" data-base="">
         <div class="float-text">
@@ -703,8 +652,8 @@
       .float-caption .t { font-size: 1.25rem; }
     }
   </style>
-      <script type="application/json" id="gallery-data">{"settings": {"size": 1.5, "spacing": 1, "spread": 1, "depth": 1, "nearness": 0.5, "drift": 0, "seed": 1}, "paintings": [{"name": "green-background-with-seven-figures", "title": "Green Background with Seven Figures", "details": "Oil on canvas, 60 x 90 cm, 2023", "wide": true, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-blue-with-border", "title": "Composition in Blue with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-red-with-border", "title": "Composition in Red with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-green-with-border", "title": "Composition in Green with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "composition-in-yellow-with-border", "title": "Composition in Yellow with Border", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "collaboration-with-teo-1", "title": "Collaboration with Teo #1", "details": "Soft pastel on paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "collaboration-with-teo-2", "title": "Collaboration with Teo #2", "details": "Soft pastel on paper, 30 x 42 cm, 2025", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "collaboration-with-teo-3", "title": "Collaboration with Teo #3", "details": "Watercolour on cotton paper, 30 x 42 cm, 2026", "wide": false, "w": 1536, "h": 1152, "widths": [300, 480, 768, 1024, 1536], "cm": [30.0, 42.0]}, {"name": "seascape-1", "title": "Seascape #1", "details": "Oil on board, 15 x 21 cm, 2024", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [15.0, 21.0]}, {"name": "mont-sainte-victoire-after-cezanne", "title": "Mont Sainte-Victoire, after Cézanne", "details": "Oil on canvas, 60 x 90 cm, 2020", "wide": false, "w": 1536, "h": 1024, "widths": [300, 480, 768, 1024, 1536], "cm": [60.0, 90.0]}, {"name": "cjon-de-las-tomasas-albaicin-granada", "title": "Cjón. de las Tomasas, Albaicín, Granada", "details": "Oil on canvas, 21 x 15 cm, 2002", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "ponte-alda-merini-milan", "title": "Ponte Alda Merini, Milan", "details": "Oil on canvas, 21 x 15 cm, 2004", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "nighttime-brussels", "title": "Nighttime, Brussels", "details": "Oil on canvas, 21 x 15 cm, 2013", "wide": false, "w": 1024, "h": 1536, "widths": [300, 480, 768, 1024], "cm": [21.0, 15.0]}, {"name": "apple-1", "title": "Apple #1", "details": "Oil on canvas paper, 15 x 21 cm, 2023", "wide": false, "w": 1734, "h": 1186, "widths": [300, 480, 768, 1024, 1536, 1734], "cm": [15.0, 21.0]}, {"name": "apple-2", "title": "Apple #2", "details": "Oil on canvas paper, 15 x 21 cm, 2023", "wide": false, "w": 3523, "h": 2340, "widths": [300, 480, 768, 1024, 1536, 2560, 2560], "cm": [15.0, 21.0]}, {"name": "life-drawing-1", "title": "Life Drawing #1", "details": "Charcoal and chalk on paper, 21 x 15 cm, 2026", "wide": false, "w": 4284, "h": 5712, "widths": [300, 480, 768, 1024, 1536, 2560, 2560], "cm": [21.0, 15.0]}, {"name": "life-drawing-2", "title": "Life Drawing #2", "details": "Charcoal and chalk on paper, 21 x 15 cm, 2026", "wide": false, "w": 4284, "h": 5712, "widths": [300, 480, 768, 1024, 1536, 2560, 2560], "cm": [21.0, 15.0]}, {"name": "life-drawing-3", "title": "Life Drawing #3", "details": "Charcoal and chalk on paper, 21 x 15 cm, 2026", "wide": false, "w": 4284, "h": 5712, "widths": [300, 480, 768, 1024, 1536, 2560, 2560], "cm": [21.0, 15.0]}]}</script>
-      <script type="module" src="gallery/gallery.js?v=e1b083c5"></script>
+      <script type="application/json" id="gallery-data">{"settings": {}, "paintings": []}</script>
+      <script type="module" src="gallery/gallery.js?v=15c7a68b"></script>
       <!-- gallery invitation: end -->
       <div class="invite-words">
         <h2 class="invite-title" data-text="gallery-title">Gallery</h2>
@@ -716,7 +665,7 @@
 
     <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
     <section id="contact" class="contact parallax">
-      <!-- contact picture: start (built by tools/build_site.py from contact_picture: in paintings.yaml) -->
+      <!-- contact picture: start (built by tools/build_site.py from CONTACT_SOURCE) -->
       <img class="contact-pic" src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w, med/contact-2560.webp 2560w, med/contact-3840.webp 3840w" sizes="100vw" width="3840" height="2560" alt="" loading="lazy">
       <!-- contact picture: end -->
       <div class="contact-words">

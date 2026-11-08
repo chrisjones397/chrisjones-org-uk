@@ -152,7 +152,7 @@ function normalise(id, kind, d) {
     const title = str(d.title, 200, 'A title');
     if (!title) throw new Bad('A painting needs a title');
     if (!/^[a-z0-9-]{1,100}$/.test(d.name || '')) throw new Bad('Bad painting name');
-    if (!['img/', 'media/images/'].includes(d.base)) throw new Bad('Bad image location');
+    if (d.base !== 'media/images/') throw new Bad('Bad image location');
     if (!['webp', 'jpg'].includes(d.ext)) throw new Bad('Bad image type');
     const file = d.file || d.name;
     if (!/^[a-z0-9-]{1,110}$/.test(file) || !(file === d.name || file.startsWith(`${d.name}-v`))) throw new Bad('Bad file name');

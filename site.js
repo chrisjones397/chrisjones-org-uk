@@ -10,8 +10,8 @@
 
    A painting's images are <base><file>-<width>.<ext> (and <base><file>-preview.jpg), from the site's top
    folder, where <file> is the painting's name, or name-v2, -v3... when a name's files already exist in R2:
-     base "img/",          ext "webp": made by tools/build_site.py from masters/, in the site's files;
-     base "media/images/", ext "jpg" (or "webp" for paintings moved from img/): in R2, served by worker.js.
+     base "media/images/", ext "jpg" (uploaded through the editor) or "webp" (paintings moved out of git,
+     Nov 2026): in R2, served by worker.js.
    R2 holds images/ (what the site shows) and originals/ (each painting's photo as uploaded, never served). */
 
 const INVITE_COUNT = 5;

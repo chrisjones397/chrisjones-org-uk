@@ -1,5 +1,5 @@
 /* The floating wall: the home page's gallery section. The paintings hang down a tall wall of quiet grey, at
-   different depths, each at a size that follows (softly) its real size, in the order of paintings.yaml.
+   different depths, each at a size that follows (softly) its real size, in the gallery's order.
 
    There is nothing to switch on and nothing takes over the page: ordinary scrolling (a mouse's wheel, a
    trackpad, a finger, the keys or the scrollbar) carries you down the wall, so every way of moving through the
@@ -12,13 +12,13 @@
    still leads to its own page). Otherwise the caption
    names the painting nearest the middle of the view.
 
-   The list of paintings and the settings from paintings.yaml are written into the page by tools/build_site.py
-   (the "gallery-data" block). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
+   The list of paintings and the settings come from the database: worker.js writes them into the page
+   (the "gallery-data" block; site.js galleryData). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
    the few paintings hung around the words that are already in the page. */
 import * as THREE from '../face/vendor/three.module.min.js';
 
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
-// The arrangement, from paintings.yaml's gallery: settings (all 1 as first built). Adding ?tune to the page's
+// The arrangement, from the database's gallery settings (entry settings-gallery; all 1 as first built). Adding ?tune to the page's
 // address shows sliders for trying them out live; see tuner() at the end.
 const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, nearness: 0.5, drift: 1, seed: 1 };
 const P = { ...DEFAULTS };
@@ -185,7 +185,7 @@ function start() {
     const w = p.widths.find((x) => x >= wanted) || p.widths[p.widths.length - 1];
     if (w <= (m.userData.loaded || 0)) return;
     m.userData.loaded = w;
-    const src = `${BASE}${p.base || 'img/'}${p.file || p.name}-${w}.${p.ext || 'webp'}`;   // base and ext: see site.js
+    const src = `${BASE}${p.base}${p.file || p.name}-${w}.${p.ext}`;   // base and ext: see site.js
     loader.load(src, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -420,8 +420,8 @@ function start() {
 }
 
 // The tuning panel (only with ?tune in the address): a slider for each setting, applied as you move it. The
-// values are remembered in this browser while tuning; "Copy" puts them on the clipboard in paintings.yaml's
-// form, ready to go into its gallery: block; "Reset" goes back to what paintings.yaml says.
+// values are remembered in this browser while tuning; "Copy" puts them on the clipboard, to be put into the
+// database's gallery settings; "Reset" goes back to what the database says.
 function tuner(relayout) {
   const box = document.createElement('div');
   box.className = 'gallery-tuner';

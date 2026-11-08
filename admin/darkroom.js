@@ -87,7 +87,7 @@ function applyPaper(c, paperAt, { brightness = 1, warmth = 0 } = {}) {
   ctx.putImageData(im, 0, 0);
 }
 
-/* "Paper all round": build_site.py's white_paper(). The paper's colour is read all round the outer edges (a band
+/* "Paper all round": the old build_site.py's white_paper() (removed from git, Nov 2026). The paper's colour is read all round the outer edges (a band
    2% of the shorter side deep, in 16 lengths along each side, on a copy 512 pixels across) and filled in
    smoothly inside (a Coons patch: each point blends the four sides by how near it is to them). */
 function paperAllRound(c) {

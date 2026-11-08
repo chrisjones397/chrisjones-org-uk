@@ -17,13 +17,13 @@ once at the top of index.html's styles. Section headings mirror the opening titl
   chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Both have the build command
   `sh tools/cloudflare_build.sh` (set in each Worker's build settings). Settings in wrangler.jsonc (no workers.dev or preview
   addresses; Worker logs kept);
-  `.assetsignore` lists what isn't published (this file, the README, tools/, masters/, paintings.yaml, db/,
+  `.assetsignore` lists what isn't published (this file, the README, tools/, db/,
   the server code...). Anchor root files there with / (a bare name matches in every folder).
 
 ## Who does what
 
-- Claude works in a cloud clone of the repository: edits, runs `python3 tools/build_site.py` (needs Pillow and
-  PyYAML: `pip install --break-system-packages pillow pyyaml`), commits and pushes to dev. Christopher reviews on
+- Claude works in a cloud clone of the repository: edits, runs `python3 tools/build_site.py` (needs Pillow:
+  `pip install --break-system-packages pillow`), commits and pushes to dev. Christopher reviews on
   dev.chrisjones.org.uk and says when to put it live.
 - Christopher works on his Mac in /Library/WebServer/Documents/prd/sync (a clone on dev, served by local Apache,
   Python in a venv there). He pushes some things himself (e.g. new master images), and prefers not to run
@@ -44,9 +44,9 @@ Christopher, on the Mac before working, and again before pushing anything (Claud
     git pull --rebase           # bring in what Claude pushed; his own unpushed commits go on top
 
 If `git pull --rebase` stops with a conflict, stop and ask rather than guess. Generated files (index.html's
-built blocks, paintings/, gallery/, img/, 404.html) can always be remade by running build_site.py.
+built blocks, gallery/, 404.html) can always be remade by running build_site.py.
 
-Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml or masters changed.
+Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's styles or header changed.
 
 ## Putting dev live (only when Christopher says so)
 
@@ -56,18 +56,15 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 
 ## How the site is made
 
-- **tools/build_site.py** reads paintings.yaml and masters/ and writes: every image size in img/ (WebP),
-  gallery/paintings.json (for worker.js), gallery/ (now only forwards to the home page's gallery section), gallery/list/, 404.html, and the
-  built blocks inside index.html (between `<!-- ... start/end -->` markers: contact picture, gallery
-  section). It copies index.html's `<style>` and header into every other page, so shared styles live in
-  index.html. It fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
-  Never edit generated files by hand; change index.html, the script or paintings.yaml and rebuild.
-- **paintings.yaml**: sections and paintings (title, details "Medium, H x W cm, year" (in D1 now medium, cm and year
-  separately, see the editor), wide, white_paper: drawings
-  white balanced by the build from the paper all round their edges, following the light's fall-off across
-  the sheet; masters untouched; phone photos are stood upright from their EXIF tag), plus
-  `contact_picture:`, `gallery_invitation:` (paintings shown before the 3D gallery loads) and `gallery:` settings.
-  Master file names come from titles: `python3 tools/build_site.py --name "Title"`.
+- **tools/build_site.py** knows nothing of paintings (step 1, Nov 2026, removed masters/, img/, paintings.yaml,
+  gallery/paintings.json and tools/import_content.py from git; they're in the commit before "Remove the old
+  painting files"). It writes: med/contact-<width>.webp from CONTACT_SOURCE (med/jpg/paint-palette.jpg),
+  gallery/ (only forwards to the home page's gallery section), gallery/list/ (its grid left empty for
+  worker.js), 404.html, and the built blocks inside index.html (between `<!-- ... start/end -->` markers:
+  contact picture; gallery section, with the invitation wall and gallery-data left empty for worker.js). It
+  copies index.html's `<style>` and header into every other page, so shared styles live in index.html. It
+  fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
+  Never edit generated files by hand; change index.html or the script and rebuild.
 - **Home page order**: opening forest video (.hero) / gallery section (#paintings, .invite) / contact
   (#contact) / profile with the head animation (.face-section, three windows tall) / footer (copyright only).
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
@@ -79,7 +76,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   different depths (middle depth moves exactly with the page). Placement across balances how big paintings look
   left and right. Click or tap brings a painting forward (others dim, and the heading fades: class `painting-forward` on the section) and puts /paintings/<name>/ in the address
   bar (history.pushState, no reload); clicking again, Escape, scrolling or Back sends it back. Snapping
-  treats the tall section as free, like the profile. Its arrangement comes from paintings.yaml's `gallery:` settings (size,
+  treats the tall section as free, like the profile. Its arrangement comes from the database's gallery settings (entry settings-gallery: size,
   spacing, spread, depth, nearness, drift, seed); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit
   Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
@@ -93,11 +90,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   and `revisions` (what each entry became in each release, and what it was). JSON is written with fixed key
   order (editor.js `normalise`), so equal text means no change. Databases: live site-content
   (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb), both
-  seeded from db/seed.sql (tools/import_content.py, a one-off from paintings.yaml). Query them through the
+  seeded from db/seed.sql (written once by tools/import_content.py from paintings.yaml, both since removed;
+  its images now pointed at R2, so it's for local tests only). Query them through the
   Cloudflare API connector. dev's database is a sandbox for code changes: content never goes from dev to live.
-  paintings.yaml, masters/ and the painting files in img/ are now only the record of what was imported (no
-  page uses them); removing them from git is a later step, when Christopher says. build_site.py still makes the
-  contact picture.
+  History records from before the move to R2 (releases 1 and 2) were pointed at media/images/ in step 1, so
+  "Bring back" never asks for img/.
 - **worker.js** runs first (wrangler.jsonc run_worker_first) for /, /paintings/*, /gallery/list/, /media/* and
   /admin*. It fills the pages from the database with HTMLRewriter (site.js): the gallery-data JSON, the
   invitation wall, the list page's grid, `data-text="key"` elements and `data-paragraphs="key"` blocks in
@@ -107,7 +104,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   has text for it. The opening title and its paragraphs drift together (.hero-words). A painting's address is the home page with that painting brought forward (its
   title, og:image from `preview`, canonical link, `<base href="/">`). Painting images are
   `<base><file>-<width>.<ext>` (file = name, or name-v2... if R2 already had that name; stored only when it
-  differs): base img/ + webp (from the build) or media/images/ + jpg (uploaded) or webp (moved from img/). R2
+  differs): base always media/images/ (editor.js refuses any other), ext jpg (uploaded) or webp (moved out of git). R2
   layout, two folders only: images/ (served by worker.js at /media/images/..., to visitors only if a published
   painting uses that file, checked in D1 then cached for a year; to the signed-in editor always) and
   originals/ (as uploaded, never served). Originals are named by content: originals/<hash>-<name>.<ext>, hash
@@ -153,7 +150,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   icon in the spots view) places 20 spots 3.5% in from the margins inside the corners (the photo's edges if not
   cropped), leaving out any much darker than their neighbours (marks). Tested on the three life drawings against
   "paper all round": on average 1.4 to 1.6 levels in 255 apart, at most 8. Older records with white 'paper'
-  ("paper all round", a port of build_site.py's white_paper() matching it to within 3 levels) still reproduce;
+  ("paper all round", a port of the old build_site.py's white_paper() matching it to within 3 levels) still reproduce;
   reopened, they say so, and spots replace it (the picture may change slightly). The spot fit uses the current
   corners, so a wrong corner guess puts spots on the drawing: set the corners first; a pixel brighter than the white is turned down as a whole, keeping its hue, not cut off one
   colour at a time, which turned a warm yellow lemon; sliders for the brightness of the white, 50 to 100%,
@@ -204,8 +201,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 
 ## Next steps (agreed with Christopher, Nov 2026; start each in a new chat)
 
-1. Tidy git: remove masters/, the painting files in img/ and paintings.yaml (nothing uses them now; one commit,
-   undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
+1. Tidy git: done (Nov 2026), see build_site.py above.
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
    a. Shared originals: done (Nov 2026), see the R2 layout above. The duplicates stored before it (the
@@ -236,8 +232,6 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
    Then detail images (rectangles of free shape, Christopher's choice, drawn on the squared-up painting, cut
    from the full-size original; part of darkroom(), so available when adding and reopening). How details show
    on the site comes later: probably a page of its own for each painting that has them.
-   The image files for paintings in git are obsolete and will be removed (step 1): build nothing that relies
-   on them.
 3. Users and roles.
 4. Editing in place on the editor's preview.
 5. Optional: a "change address" option, so a retitle can rename a painting's files and address (with the

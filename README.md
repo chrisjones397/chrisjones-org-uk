@@ -25,21 +25,24 @@ Paintings, sections and the marked page text live in a database (Cloudflare D1),
 dev has its own copy of the database and its own editor, **admin-dev.chrisjones.org.uk**, for trying out code
 changes without touching the live content. dev is for code only: content never travels from dev to live.
 
-New paintings' images are kept in R2, Cloudflare's file storage (buckets site-media and site-media-dev), in two
+Every painting's images are kept in R2, Cloudflare's file storage (buckets site-media and site-media-dev), in two
 folders: `originals/` (each photo as uploaded, never shown) and `images/` (the sizes the site shows, named after
 the painting: `red-on-blue-768.jpg`; a later painting reusing a name gets `red-on-blue-v2-...`). Visitors can
-only open the images of published paintings.
-For now the photo's sizes are made as JPEG in the browser; the white-paper correction comes in a later stage.
+only open the images of published paintings. The paintings that were on the site before the move were
+moved into R2 too.
 
-The paintings already on the site keep their images in `img/`, made by `tools/build_site.py` from
-`masters/`, and `paintings.yaml` is how they were listed before the move: it no longer changes the site.
-`tools/import_content.py` wrote `db/seed.sql` from it, once; `db/schema.sql` describes the tables.
+`db/schema.sql` describes the tables; `db/seed.sql` is the content as first imported, for local tests. The old
+`masters/`, `img/` and `paintings.yaml` were removed from git in November 2026 (they're in the history, in the
+commit before "Remove the old painting files").
+
+`tools/build_site.py` now only makes the contact picture's sizes (from `med/jpg/paint-palette.jpg`) and the
+pages that share the home page's header and styles (`404.html`, `gallery/list/`, `gallery/index.html`). Run
+it after changing index.html's styles or header: `python3 tools/build_site.py` (needs Pillow).
 
 A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
 forward in the gallery. On Cloudflare, `worker.js` answers the home page, those addresses and the list page,
 filling in the content from the database (`site.js`). Your local Apache copy has no Worker or database, so it
-shows a frozen snapshot from before the move (the old files in `img/`, `gallery/list/`, `gallery/paintings.json`),
-and will show broken pictures once those are tidied away. Check the site on dev.chrisjones.org.uk instead.
+shows the pages with no paintings in them. Check the site on dev.chrisjones.org.uk instead.
 To run your local code as Cloudflare would, against the dev database and dev image storage (needs Node, and
 signing in to Cloudflare once with `npx wrangler login`): `npx wrangler dev --env dev --remote`, then open
 http://localhost:8787. Without `--remote` it uses an empty local database.
@@ -71,4 +74,4 @@ Unknown addresses get `404.html` (made by the build script).
 
 ## What isn't published
 
-`.assetsignore` lists what Cloudflare leaves out: the masters, the tools, paintings.yaml, wrangler.jsonc and this README.
+`.assetsignore` lists what Cloudflare leaves out: the tools, the database files, the server code, wrangler.jsonc and this README.

@@ -1,98 +1,52 @@
 #!/usr/bin/env python3
 """
-build_site.py: builds the gallery from paintings.yaml and the master images.
+build_site.py: makes the contact picture's sizes and the pages that share the home page's header and styles.
 
-Run it from anywhere after changing paintings.yaml or any master image:
+Run it from anywhere after changing index.html's styles or header, or the contact picture:
     python3 tools/build_site.py              (the site folder is the one above tools/)
     python3 tools/build_site.py --dry-run    (report what would change, change nothing)
-    python3 tools/build_site.py --force      (remake every image, even if up to date)
+    python3 tools/build_site.py --force      (remake the contact picture's sizes, even if up to date)
     python3 tools/build_site.py --missing-only   (make only images that don't exist: for Cloudflare's build,
                                               where a fresh checkout gives every file the same date)
-    python3 tools/build_site.py --name "Collaboration with Teo #1"   (print a title's name)
 
-Needs Pillow and PyYAML:  pip install pillow pyyaml  (in the venv).
+Needs Pillow:  pip install pillow  (in the venv).
 
-What it makes, all from paintings.yaml and masters/:
-  * img/<name>-<width>.webp: each painting at 300, 480, 768, 1024, 1536 and 2560 pixels
-    wide (never wider than its master; a master narrower than 2560 also gets a copy at
-    its own width). The browser picks the size it needs; the largest is the full-size view.
-  * img/<name>-preview.jpg: 1200 wide, for link previews (some apps still want JPEG).
-  * The gallery on the home page: everything between the "gallery" markers in index.html.
-  * gallery/paintings.json: each painting's title, details and link-preview image, for worker.js.
-    A painting's address, /paintings/<name>/, is the home page with that painting brought forward in
-    the floating gallery: worker.js answers it (see there). There are no separate painting pages.
-  * gallery/list/index.html: the same paintings as a plain grid.
-  * med/contact-<width>.webp: the home page's contact picture, from the file named by contact_picture: in
-    paintings.yaml (a photo kept in med/jpg/, as it isn't a painting).
-  * Every local script a page loads gets a fingerprint of its contents in its address (?v=...), so
-    browsers always fetch the latest version.
-  * gallery/index.html: forwards old links to the floating gallery, now a section of the home page
-    (built into index.html; its movement is in gallery/gallery.js, written by hand).
+Paintings and page text are not here: they're in the database, edited at admin.chrisjones.org.uk, and
+worker.js fills them into the pages as they're served (see site.js). Painting images are in R2.
+
+What it makes:
+  * med/contact-<width>.webp: the home page's contact picture, from CONTACT_SOURCE below (a photo kept in
+    med/jpg/, as it isn't a painting), and its <img> between the "contact picture" markers in index.html.
+  * The home page's gallery section, between the "gallery invitation" markers in index.html: the floating
+    wall's stage, caption and script, with the invitation wall and the gallery's data left empty for
+    worker.js to fill.
+  * gallery/list/index.html: the page for the paintings as a plain grid (the grid filled by worker.js).
+  * gallery/index.html: forwards old links to the floating gallery, now a section of the home page.
   * 404.html: the "page not found" page, with the same header and footer (Cloudflare shows it
     for any address that doesn't exist; see wrangler.jsonc).
-
-Images are only remade when the master is newer than them (or with --force), so a run
-after a caption change is quick. Files it made earlier for paintings no longer in the
-list are removed: in img/ only files named like the ones above. Any painting pages left in paintings/
-from before are removed (only pages carrying its own marker comment). Nothing else is touched.
-
-Names: each painting's master, image files and page address come from its title:
-    lower case; accents removed (é -> e); "&" -> "and"; "#", commas, full stops and
-    apostrophes dropped; spaces and hyphens -> single hyphens.
-    "Composition in Blue with Border" -> composition-in-blue-with-border
+  * Every local script a page loads gets a fingerprint of its contents in its address (?v=...), so
+    browsers always fetch the latest version.
 """
 import argparse
-import html
 import io
 import os
 import re
-import shutil
 import sys
-import unicodedata
 
 try:
-    import yaml
-    from PIL import Image, ImageCms, ImageMath, ImageOps
+    from PIL import Image, ImageCms, ImageOps
 except ImportError as e:
-    sys.exit(f"ERROR: {e.name} is missing. In the venv: pip install pillow pyyaml")
+    sys.exit(f"ERROR: {e.name} is missing. In the venv: pip install pillow")
 
 SITE_URL = "https://chrisjones.org.uk"     # for link previews
-PAGES_DIR = "paintings"
-IMG_DIR = "img"
-MASTERS_DIR = "masters"
-WIDTHS = [300, 480, 768, 1024, 1536, 2560]
-PREVIEW_WIDTH = 1200
+CONTACT_SOURCE = "med/jpg/paint-palette.jpg"   # the contact picture (landscape, ideally 2560 to 3840 pixels wide)
 WEBP_QUALITY = 82
-JPEG_QUALITY = 85
 MISSING_ONLY = False   # --missing-only: an image counts as up to date if it exists at all
 
-MASTER_TYPES = (".png", ".webp", ".jpg", ".jpeg", ".tif", ".tiff")
-
-MARKER = "<!-- Generated by tools/build_site.py from paintings.yaml. Edit those, not this file. -->"
-REDIRECT_MARKER = "<!-- Forwarding page made by tools/build_site.py (see REDIRECTS in the script). -->"
-OLD_MARKERS = ("<!-- Generated by make_pages.py.", "<!-- Forwarding page made by make_pages.py")
-GALLERY_START = "<!-- gallery: start (built by tools/build_site.py from paintings.yaml; edit that, not this) -->"
-GALLERY_END = "<!-- gallery: end -->"
-
-# How wide each kind of painting is shown in the gallery, for the browser's choice of size
-SIZES_WIDE = "(max-width: 1200px) 100vw, 1200px"
-SIZES_GRID = "(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw"
-
-# ---------------------------------------------------------------------------
-# Old page names that should keep working after a painting is renamed:
-# old name -> new name. Each gets a small page forwarding to the new address.
-# ---------------------------------------------------------------------------
-REDIRECTS = {}
-
-# Footer on the painting pages
-EMAIL_USER = "hello"
-EMAIL_DOMAIN = "chrisjones.org.uk"
-INSTAGRAM = "only1jones2"
+MARKER = "<!-- Generated by tools/build_site.py. Edit index.html or the script, not this file. -->"
+REDIRECT_MARKER = "<!-- Forwarding page made by tools/build_site.py. -->"
 COPYRIGHT = "&copy;2026 Christopher Jones"
 
-INSTAGRAM_ICON = """<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>"""
-
-# Extras added to index.html and every painting page, between markers
 EXTRAS_START = "<!-- make_pages.py extras: start (rebuilt on every run; edit the script, not this block) -->"
 EXTRAS_END = "<!-- make_pages.py extras: end -->"
 EXTRAS_HEAD = """<style>
@@ -143,72 +97,6 @@ def fail(msg):
     sys.exit(f"ERROR: {msg}")
 
 
-def slug(title):
-    """A title's file and page name, by the fixed rule in the notes at the top."""
-    t = unicodedata.normalize("NFKD", title)
-    t = "".join(c for c in t if not unicodedata.combining(c)).lower()
-    t = t.replace("&", " and ")
-    t = re.sub(r"[#,.'’]", "", t)
-    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")
-
-
-def shown(text):
-    """Text for the page: escaped, with hyphens inside words kept from breaking onto two lines."""
-    return re.sub(r"(?<=\w)-(?=\w)", "&#8209;", html.escape(text, quote=False))
-
-
-# ---------------------------------------------------------------------------
-# The list
-# ---------------------------------------------------------------------------
-SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[x\u00d7]\s*(\d+(?:\.\d+)?)\s*cm")   # height x width
-GALLERY_SETTINGS = ("size", "spacing", "spread", "depth", "nearness", "drift", "seed")                             # see paintings.yaml
-
-
-def read_list(site):
-    path = os.path.join(site, "paintings.yaml")
-    if not os.path.isfile(path):
-        fail(f"no paintings.yaml in {site}")
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    paintings, sections = [], []
-    for s in data.get("sections") or []:
-        if not s.get("title"):
-            fail("a section in paintings.yaml has no title")
-        sec = dict(title=str(s["title"]), id=slug(str(s["title"])), paintings=[])
-        for p in s.get("paintings") or []:
-            if not isinstance(p, dict) or not p.get("title"):
-                fail(f"a painting in the section {sec['title']!r} has no title")
-            title = str(p["title"])
-            name = slug(title)
-            master = next((os.path.join(site, MASTERS_DIR, name + ext) for ext in MASTER_TYPES
-                           if os.path.isfile(os.path.join(site, MASTERS_DIR, name + ext))), None)
-            if not master:
-                fail(f"no master for {title!r}: expected {MASTERS_DIR}/{name}.png (or .webp, .jpg, .tif)")
-            item = dict(title=title, name=name, master=master, section=sec["id"],
-                        details=str(p["details"]) if p.get("details") else "",
-                        wide=bool(p.get("wide")), white_paper=bool(p.get("white_paper")))
-            sec["paintings"].append(item)
-            paintings.append(item)
-        sections.append(sec)
-    if not paintings:
-        fail("paintings.yaml lists no paintings")
-    names = [p["name"] for p in paintings]
-    dupes = sorted({n for n in names if names.count(n) > 1})
-    if dupes:
-        fail(f"two paintings would get the same name: {', '.join(dupes)}")
-    for p in paintings:
-        m = SIZE_RE.search(p["details"])
-        p["cm"] = [float(m.group(1)), float(m.group(2))] if m else None
-    settings = data.get("gallery") or {}
-    unknown = sorted(set(settings) - set(GALLERY_SETTINGS))
-    if unknown:
-        fail(f"paintings.yaml: unknown gallery settings {', '.join(unknown)} (known: {', '.join(GALLERY_SETTINGS)})")
-    return sections, paintings, settings
-
-
-# ---------------------------------------------------------------------------
-# Images
-# ---------------------------------------------------------------------------
 def load_srgb(path):
     """The master as plain sRGB (converting from its colour profile, if it has one)."""
     im = Image.open(path)
@@ -216,7 +104,7 @@ def load_srgb(path):
     im = ImageOps.exif_transpose(im)                    # phone photos: stand it the way up the camera says
     if im.mode not in ("RGB", "RGBA"):
         im = im.convert("RGBA" if "A" in im.getbands() else "RGB")
-    if im.mode == "RGBA":                               # paintings are opaque: flatten onto white
+    if im.mode == "RGBA":                               # the picture is opaque: flatten onto white
         bg = Image.new("RGB", im.size, (255, 255, 255)); bg.paste(im, mask=im.getchannel("A")); im = bg
     if icc:
         try:
@@ -227,50 +115,6 @@ def load_srgb(path):
     return im
 
 
-def white_paper(im):
-    """A drawing on white paper, white balanced so the paper comes out pure white everywhere. The paper's colour
-    is read all round the outer edges (a band 2% of the shorter side deep, in 16 lengths along each side; the
-    median of each, so smudges don't count). Phone photos are lit unevenly, so the paper's colour inside is
-    filled in smoothly from the edges (a Coons patch: each point blends the four sides by how near it is to
-    them), and every pixel is divided by the paper's colour where it is. That takes out the light's colour
-    cast, its greyness and its fall-off across the sheet together."""
-    w, h = im.size
-    small = im.resize((max(1, w * 512 // max(w, h)), max(1, h * 512 // max(w, h))), Image.BOX)
-    sw, sh = small.size
-    b, n = max(3, round(min(sw, sh) * 0.02)), 16
-
-    def median(box):
-        hist, out = small.crop(box).histogram(), []
-        for c in range(3):
-            counts, total = hist[c * 256:(c + 1) * 256], 0
-            half = sum(counts) / 2
-            out.append(max(1, next(v for v in range(256) if (total := total + counts[v]) >= half)))
-        return out
-    xs = [(sw * i // n, sw * (i + 1) // n) for i in range(n)]
-    ys = [(sh * j // n, sh * (j + 1) // n) for j in range(n)]
-    top = [median((a, 0, z, b)) for a, z in xs]
-    bottom = [median((a, sh - b, z, sh)) for a, z in xs]
-    left = [median((0, a, b, z)) for a, z in ys]
-    right = [median((sw - b, a, sw, z)) for a, z in ys]
-    corner = lambda p, q: [(x + y) / 2 for x, y in zip(p, q)]
-    c00, c10, c01, c11 = corner(top[0], left[0]), corner(top[-1], right[0]), corner(bottom[0], left[-1]), corner(bottom[-1], right[-1])
-    print(f"    paper read from RGB {tuple(round(x) for x in c00)} (top left) to {tuple(round(x) for x in c11)} (bottom right), made white")
-    gains = [Image.new("F", (n, n)) for _ in range(3)]
-    for j in range(n):
-        v = (j + 0.5) / n
-        for i in range(n):
-            u = (i + 0.5) / n
-            for c in range(3):
-                paper = ((1 - v) * top[i][c] + v * bottom[i][c] + (1 - u) * left[j][c] + u * right[j][c]
-                         - ((1 - u) * (1 - v) * c00[c] + u * (1 - v) * c10[c] + (1 - u) * v * c01[c] + u * v * c11[c]))
-                gains[c].putpixel((i, j), 255 / max(paper, 1))
-    out = []
-    for ch, g in zip(im.split(), gains):
-        g = g.resize((w, h), Image.BILINEAR)
-        out.append(ImageMath.lambda_eval(lambda e: e["convert"](e["min"](e["a"] * e["g"], 255), "L"), a=ch, g=g))
-    return Image.merge("RGB", out)
-
-
 def upright_size(path):
     """The master's width and height the way up it's shown (phone photos are often stored on their side, with
     an EXIF tag saying which way to turn them)."""
@@ -279,67 +123,20 @@ def upright_size(path):
         return (h, w) if im.getexif().get(0x0112) in (5, 6, 7, 8) else (w, h)
 
 
-def widths_for(w):
-    ws = [x for x in WIDTHS if x < w]
-    ws.append(min(w, WIDTHS[-1]))
-    return ws
-
-
-def make_images(site, p, force, dry):
-    """Make (or check) one painting's image files. Returns the files it should have."""
-    mw, mh = upright_size(p["master"])
-    p["w"], p["h"] = mw, mh
-    p["widths"] = widths_for(mw)
-    outs = {f"{IMG_DIR}/{p['name']}-{w}.webp": w for w in p["widths"]}
-    preview = f"{IMG_DIR}/{p['name']}-preview.jpg"
-    outs[preview] = min(PREVIEW_WIDTH, mw)
-    p["preview"] = preview
-    p["preview_size"] = (outs[preview], round(mh * outs[preview] / mw))
-    mtime = os.path.getmtime(p["master"])
-    stale = [f for f in outs if force or not os.path.isfile(os.path.join(site, f))
-             or (not MISSING_ONLY and os.path.getmtime(os.path.join(site, f)) < mtime)]
-    if stale and not dry:
-        im = load_srgb(p["master"])
-        if p["white_paper"]:
-            im = white_paper(im)
-        for f in stale:
-            w = outs[f]
-            out = im if w == mw else im.resize((w, round(mh * w / mw)), Image.LANCZOS)
-            path = os.path.join(site, f)
-            if f.endswith(".webp"):
-                out.save(path, "WEBP", quality=WEBP_QUALITY, method=6)
-            else:
-                out.save(path, "JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
-            os.chmod(path, 0o644)                       # readable by the web server
-    if stale:
-        print(f"  {'would make' if dry else 'made':10s} {len(stale)} image files for {p['name']}")
-    return set(outs)
-
-
-OURS_RE = re.compile(r"^(?P<name>[a-z0-9-]+)-(\d+\.webp|preview\.jpg)$")
-
-
-def remove_old_images(site, keep, dry):
-    d = os.path.join(site, IMG_DIR)
-    for f in sorted(os.listdir(d)):
-        rel = f"{IMG_DIR}/{f}"
-        if rel not in keep and OURS_RE.match(f):
-            print(f"  {'would remove' if dry else 'removed':10s} {rel}")
-            if not dry:
-                os.remove(os.path.join(d, f))
-
-
-CONTACT_START = "<!-- contact picture: start (built by tools/build_site.py from contact_picture: in paintings.yaml) -->"
+# ---------------------------------------------------------------------------
+# The contact picture
+# ---------------------------------------------------------------------------
+CONTACT_START = "<!-- contact picture: start (built by tools/build_site.py from CONTACT_SOURCE) -->"
 CONTACT_END = "<!-- contact picture: end -->"
 CONTACT_WIDTHS = [1024, 1536, 2560, 3840]
 
 
 def contact_picture(site, source, force, dry):
     """The contact section's full-window picture: med/contact-<width>.webp, made from the picture named by
-    contact_picture: in paintings.yaml. Returns None (leaving the page as it is) if that file isn't there."""
+    CONTACT_SOURCE. Returns None (leaving the page as it is) if that file isn't there."""
     master = os.path.join(site, source)
     if not os.path.isfile(master):
-        print(f"  WARNING: the contact picture {source} (contact_picture: in paintings.yaml) isn't there; "
+        print(f"  WARNING: the contact picture {source} (CONTACT_SOURCE in tools/build_site.py) isn't there; "
               f"the contact section keeps its current picture")
         return None, set()
     mw, mh = upright_size(master)
@@ -369,36 +166,17 @@ def contact_picture(site, source, force, dry):
     return tag, set(files)
 
 
-INVITE_START = "<!-- gallery invitation: start (built by tools/build_site.py from gallery_invitation: in paintings.yaml) -->"
+INVITE_START = "<!-- gallery invitation: start (built by tools/build_site.py; filled from the database by worker.js) -->"
 INVITE_END = "<!-- gallery invitation: end -->"
-INVITE_COUNT = 5
 
 
-def invite_html(site, paintings, settings):
+def invite_html():
     """The home page's gallery section: the floating wall, which the page scrolls down through
     (gallery/gallery.js), and, until it has loaded or where it can't run, a few paintings hung around the
-    words, each linking to its page. Those are the titles listed under gallery_invitation: in
-    paintings.yaml, or the first five paintings."""
-    import json
-    with open(os.path.join(site, "paintings.yaml"), encoding="utf-8") as f:
-        wanted = (yaml.safe_load(f) or {}).get("gallery_invitation")
-    by_title = {p["title"]: p for p in paintings}
-    if wanted:
-        missing = [t for t in wanted if str(t) not in by_title]
-        if missing:
-            fail(f"gallery_invitation: in paintings.yaml lists paintings that aren't in the list: {missing}")
-        chosen = [by_title[str(t)] for t in wanted][:INVITE_COUNT]
-    else:
-        chosen = paintings[:INVITE_COUNT]
-    ind = "          "
-    pics = "".join(f'\n        <a class="invite-pic" href="{PAGES_DIR}/{p["name"]}/" tabindex="-1">'
-                   f'\n{ind}{img_tag(p, "", "(max-width: 700px) 40vw, 24vw", True, ind)}\n        </a>'
-                   for p in chosen)
-    items = [dict(name=p["name"], title=p["title"], details=p["details"], wide=p["wide"],
-                  w=p["w"], h=p["h"], widths=p["widths"], cm=p["cm"]) for p in paintings]
-    data = json.dumps(dict(settings=settings, paintings=items), ensure_ascii=False).replace("</", "<\\/")
+    words, each linking to its page. worker.js fills in those paintings and the gallery's data from the
+    database (site.js homeRewriter); here both are left empty."""
     return f"""
-      <div class="invite-wall" aria-hidden="true">{pics}
+      <div class="invite-wall" aria-hidden="true">
       </div>
       <div id="float-stage" class="float-stage float-section" data-base="">
         <div class="float-text">
@@ -407,7 +185,7 @@ def invite_html(site, paintings, settings):
         </div>
       </div>
       <style>{FLOAT_UI_CSS}  </style>
-      <script type="application/json" id="gallery-data">{data}</script>
+      <script type="application/json" id="gallery-data">{{"settings": {{}}, "paintings": []}}</script>
       <script type="module" src="gallery/gallery.js?v=3"></script>
       """
 
@@ -415,34 +193,6 @@ def invite_html(site, paintings, settings):
 # ---------------------------------------------------------------------------
 # HTML
 # ---------------------------------------------------------------------------
-def img_tag(p, prefix, sizes, lazy, indent):
-    srcset = (",\n" + indent + "        ").join(f"{prefix}{IMG_DIR}/{p['name']}-{w}.webp {w}w" for w in p["widths"])
-    src_w = next((w for w in p["widths"] if w >= 480), p["widths"][-1])
-    return (f'<img src="{prefix}{IMG_DIR}/{p["name"]}-{src_w}.webp"\n'
-            f'{indent}     srcset="{srcset}"\n'
-            f'{indent}     sizes="{sizes}"\n'
-            f'{indent}     width="{p["w"]}" height="{p["h"]}" alt="{html.escape(p["title"])}"'
-            + (' loading="lazy"' if lazy else "") + ">")
-
-
-def gallery_html(sections, prefix=""):
-    out = []
-    for s in sections:
-        out.append(f'\n          <div class="entire"><h3 id="{s["id"]}">{shown(s["title"])}</h3></div>\n')
-        for p in s["paintings"]:
-            kind = "entire" if p["wide"] else ("portrait" if p["h"] > p["w"] else "landscape")
-            ind = "              "
-            details = f'\n            <p>{shown(p["details"])}</p>' if p["details"] else ""
-            out.append(f"""          <div class="{kind}">
-            <a href="{prefix}{PAGES_DIR}/{p["name"]}/">
-              {img_tag(p, prefix, SIZES_WIDE if p["wide"] else SIZES_GRID, True, ind)}
-            </a>
-            <p>{shown(p["title"])}</p>{details}
-          </div>
-""")
-    return "".join(out)
-
-
 def footer_html():
     """Every page's footer: only the copyright line, as on the home page (the email address and Instagram
     are in the home page's contact section, and the header's icons)."""
@@ -565,8 +315,9 @@ def build_gallery_redirect():
 """
 
 
-def build_list_page(sections, head_bits, style, header):
-    """gallery/list/index.html: every painting as a plain grid, for anyone who'd rather not float."""
+def build_list_page(head_bits, style, header):
+    """gallery/list/index.html: every painting as a plain grid, for anyone who'd rather not float. The grid itself
+    is filled in from the database by worker.js (site.js listRewriter): here it's left empty."""
     return f"""<!DOCTYPE html>
 {MARKER}
 <html lang="en">
@@ -593,7 +344,6 @@ def build_list_page(sections, head_bits, style, header):
       <h1>Gallery</h1>
       <p class="float-link"><a href="../../#paintings">View the floating gallery</a></p>
       <div class="wrapper">
-{gallery_html(sections, "../../")}
       </div>
     </div>
   </main>
@@ -635,15 +385,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("site", nargs="?", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     help="the website folder (default: the folder above tools/)")
-    ap.add_argument("--name", metavar="TITLE", help="just print the file and page name for a title")
     ap.add_argument("--dry-run", action="store_true", help="report what would change, change nothing")
-    ap.add_argument("--force", action="store_true", help="remake every image, even if up to date")
+    ap.add_argument("--force", action="store_true", help="remake the contact picture's sizes, even if up to date")
     ap.add_argument("--missing-only", action="store_true",
                     help="make only images that don't exist yet (ignore dates: for Cloudflare's build)")
     a = ap.parse_args()
-    if a.name is not None:
-        print(slug(a.name))
-        return
     site, dry = a.site, a.dry_run
     global MISSING_ONLY
     MISSING_ONLY = a.missing_only
@@ -653,47 +399,18 @@ def main():
     with open(index_path, encoding="utf-8") as f:
         index_html = f.read()
 
-    sections, paintings, settings = read_list(site)
-    print(f"{len(paintings)} paintings in {len(sections)} sections")
-
-    # Images
-    os.makedirs(os.path.join(site, IMG_DIR), exist_ok=True)
-    keep = set()
-    for p in paintings:
-        keep |= make_images(site, p, a.force, dry)
-    remove_old_images(site, keep, dry)
-
-    # The home page: the gallery grid (if it has one), the contact section's picture, and the extras block
+    # The home page: the contact section's picture, the gallery section and the extras block
     s = index_html
-    if GALLERY_START in s and GALLERY_END in s:
-        i, j = s.index(GALLERY_START) + len(GALLERY_START), s.index(GALLERY_END)
-        s = s[:i] + gallery_html(sections) + "          " + s[j:]
     if CONTACT_START in s and CONTACT_END in s:
-        with open(os.path.join(site, "paintings.yaml"), encoding="utf-8") as f:
-            source = (yaml.safe_load(f) or {}).get("contact_picture") or "med/jpg/paint-palette.jpg"
-        tag, _ = contact_picture(site, source, a.force, dry)
+        tag, _ = contact_picture(site, CONTACT_SOURCE, a.force, dry)
         if tag is not None:
             i, j = s.index(CONTACT_START) + len(CONTACT_START), s.index(CONTACT_END)
             s = s[:i] + "\n      " + tag + "\n      " + s[j:]
     if INVITE_START in s and INVITE_END in s:
         i, j = s.index(INVITE_START) + len(INVITE_START), s.index(INVITE_END)
-        s = s[:i] + invite_html(site, paintings, settings) + s[j:]
+        s = s[:i] + invite_html() + s[j:]
     s = EXTRAS_RE.sub("", s).replace("</head>", f"  {EXTRAS_START}\n  {EXTRAS_HEAD}\n  {EXTRAS_END}\n</head>", 1)
     write(index_path, s, "index.html", dry)
-
-    # A painting's address (/paintings/<name>/) is the home page with that painting brought forward: worker.js
-    # answers it, using this list for each painting's title and link-preview image (and any renamed paintings)
-    import json
-    wanted = {p["name"] for p in paintings}
-    for old, new in sorted(REDIRECTS.items()):
-        if old in wanted or new not in wanted:
-            fail(f"REDIRECTS: {old!r} -> {new!r} must lead from an unused name to a painting in the list")
-    listing = dict(paintings={p["name"]: dict(title=p["title"], details=p["details"], image=p["preview"],
-                                               width=p["preview_size"][0], height=p["preview_size"][1])
-                              for p in paintings},
-                   renamed=dict(sorted(REDIRECTS.items())))
-    write(os.path.join(site, "gallery", "paintings.json"), json.dumps(listing, ensure_ascii=False, indent=1) + "\n",
-          "gallery/paintings.json (for worker.js)", dry)
 
     # The other pages, which share the home page's styles and header
     style = re.search(r"<style>(.*?)</style>", s, re.S)
@@ -704,25 +421,8 @@ def main():
           build_404(head_bits_from(s, "/"), style.group(1), page_header(header.group(1), "/")), "404.html", dry)
     write(os.path.join(site, "gallery", "index.html"), build_gallery_redirect(), "gallery/index.html (forwards to the home page's gallery)", dry)
     write(os.path.join(site, "gallery", "list", "index.html"),
-          build_list_page(sections, head_bits_from(s, "../../"), style.group(1), page_header(header.group(1), "../../")),
+          build_list_page(head_bits_from(s, "../../"), style.group(1), page_header(header.group(1), "../../")),
           "gallery/list/index.html", dry)
-
-    # The separate painting pages this script used to make are no longer needed: remove them (only ones it made)
-    root = os.path.join(site, PAGES_DIR)
-    if os.path.isdir(root):
-        for d in sorted(os.listdir(root)):
-            page = os.path.join(root, d, "index.html")
-            if not os.path.isfile(page):
-                continue
-            text = open(page, encoding="utf-8").read()
-            if MARKER in text or REDIRECT_MARKER in text or any(m in text for m in OLD_MARKERS):
-                print(f"  {'would remove' if dry else 'removed':10s} {PAGES_DIR}/{d}/")
-                if not dry:
-                    shutil.rmtree(os.path.join(root, d))
-            else:
-                print(f"  left alone {PAGES_DIR}/{d}/ (not made by this script)")
-        if not dry and not os.listdir(root):
-            os.rmdir(root)
     print("Dry run: nothing was changed." if dry else "Done.")
 
 

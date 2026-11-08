@@ -1,8 +1,6 @@
 # Files in the repository that are not part of the website: Cloudflare does not publish these.
 # (Same pattern format as .gitignore.)
-masters/
 tools/
-paintings.yaml
 README.md
 CLAUDE.md
 wrangler.jsonc
