@@ -571,16 +571,14 @@ function addForm(secs) {
     try {
       const name = nameFor(title);
       const { file: stem } = await call('GET', `free?name=${encodeURIComponent(name)}`);
-      const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase();
-      f.progress.textContent = 'Keeping the original…';
-      await put(`originals/${stem}.${ext}`, file, file.type || 'image/jpeg');
+      const { key: original, shared } = await keepOriginal(file, name, (t) => { f.progress.textContent = t; });
       const pic = await storeImages(stem, dr.result(), (t) => { f.progress.textContent = t; });
       const data = { name, title, ...det, section: f.section.value, order: paintingsIn(f.section.value).length, wide: f.wide.checked,
-        white_paper: dr.white === 'paper', ...pic, process: dr.record(`originals/${stem}.${ext}`) };
+        white_paper: dr.white === 'paper', ...pic, process: dr.record(original) };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
       try { localStorage.setItem('editor-medium', det.medium); localStorage.setItem('editor-height', String(det.cm[0])); } catch { /* private browsing */ }
       adding = null;
-      toast(`"${title}" added as a draft`);
+      toast(`"${title}" added as a draft${shared ? ', sharing a photo already stored' : ''}`);
       render();
     } catch (e) {
       toast(e.message, true); f.progress.textContent = '';
@@ -592,6 +590,23 @@ function addForm(secs) {
 async function put(key, blob, type) {
   const r = await fetchFor(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, 120000);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
+  return r.json();
+}
+
+/* Store a photo as an original, named by its content (originals/<hash>-<name>.<ext>, see stored() in editor.js):
+   if the same photo is already stored, for this painting or another, it isn't uploaded again and that one is
+   used. Returns the original's key (for the painting's process record) and whether it was already stored. */
+async function keepOriginal(file, name, say) {
+  say('Checking whether this photo is already stored…');
+  const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))]
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  const hash = hex.slice(0, 12);
+  const { key: have } = await call('GET', `stored?hash=${hash}`);
+  if (have) return { key: have, shared: true };
+  const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase().replace(/^jpeg$/, 'jpg');
+  say('Keeping the original…');
+  const r = await put(`originals/${hash}-${name.slice(0, 96)}.${ext}`, file, file.type || 'image/jpeg');
+  return { key: r.key, shared: !!r.existed };
 }
 
 // ---- review and publish ------------------------------------------------------------------------------------

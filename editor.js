@@ -62,6 +62,7 @@ export async function api(request, env, url, who) {
       if (path === 'history') return json(await history(env));
       if (path === 'free') return json(await free(env, url.searchParams.get('name') || ''));
       if (path === 'original') return await original(env, url.searchParams.get('key') || '');
+      if (path === 'stored') return json({ key: await stored(env, url.searchParams.get('hash') || '') });
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -306,7 +307,8 @@ async function restore(env, who, revision) {
 }
 
 /* The file name to use for a new painting's images: its name, or name-v2, -v3... if R2 already has files by
-   that name (a painting deleted earlier keeps its files, so History can bring it back). */
+   that name (a painting deleted earlier keeps its files, so History can bring it back). Originals are named by
+   their content now (see stored), but those moved from git are still originals/<name>.<ext>, so both count. */
 async function free(env, name) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
   if (!/^[a-z0-9-]{1,100}$/.test(name)) throw new Bad('Bad name');
@@ -339,19 +341,36 @@ async function original(env, key) {
     'x-original': key, 'cache-control': 'private, no-store' } });
 }
 
+/* Originals are named by their content: originals/<hash>-<name>.<ext>, hash the first 12 hex digits of the
+   file's SHA-256 (worked out in the browser; the free plan's 10 ms of CPU won't stretch to hashing a large photo
+   here), name the painting it was first uploaded for (readable only: the hash alone identifies it). So a photo
+   already stored is found and shared, never uploaded twice: one photo can serve several paintings, each with
+   its own corners. Originals from before (originals/<file>.<ext>, and those moved from git) keep their names.
+   GET /admin/api/stored?hash=<12 hex>: the original with that content, or null. */
+async function stored(env, hash) {
+  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
+  if (!/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
+  const found = (await env.MEDIA.list({ prefix: `originals/${hash}-`, limit: 1 })).objects[0];
+  return found ? found.key : null;
+}
+
 /* PUT /admin/api/upload?key=images/<file>-<width>.jpg or images/<file>-preview.jpg (made in the browser), or
-   originals/<file>.<ext> (the photo as sent, kept for the image processing to come). Never overwrites. */
+   originals/<hash>-<name>.<ext> (the photo as sent). Never overwrites. An original whose content is already
+   stored (under any name) isn't stored again: the existing key is sent back instead. */
 async function upload(request, env, url) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on yet', 503);
   const key = url.searchParams.get('key') || '';
-  const m = /^(?:images\/[a-z0-9-]{1,110}-(?:\d{2,4}|preview)\.jpg|originals\/[a-z0-9-]{1,110}\.(jpg|jpeg|png|webp|heic|heif|tif|tiff))$/.exec(key);
+  const m = /^(?:images\/[a-z0-9-]{1,110}-(?:\d{2,4}|preview)\.jpg|originals\/([0-9a-f]{12})-[a-z0-9-]{1,96}\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff))$/.exec(key);
   if (!m) throw new Bad('Bad file name');
   const original = key.startsWith('originals/');
   const type = request.headers.get('content-type') || '';
   if (!/^image\/[a-z0-9.+-]+$/.test(type)) throw new Bad('Only images can be uploaded');
   const size = Number(request.headers.get('content-length') || 0);
   if (!size || size > 80 * 1024 * 1024) throw new Bad('Images must be under 80 megabytes');
-  if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
+  if (original) {
+    const have = await stored(env, m[1]);
+    if (have) return { key: have, existed: true };
+  } else if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
   const body = await request.arrayBuffer();
   const b = new Uint8Array(body.slice(0, 4));
   if (!original && !(b[0] === 0xff && b[1] === 0xd8)) throw new Bad('That file is not a JPEG');

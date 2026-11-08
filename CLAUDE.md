@@ -110,8 +110,14 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   differs): base img/ + webp (from the build) or media/images/ + jpg (uploaded) or webp (moved from img/). R2
   layout, two folders only: images/ (served by worker.js at /media/images/..., to visitors only if a published
   painting uses that file, checked in D1 then cached for a year; to the signed-in editor always) and
-  originals/<file>.<ext> (as uploaded, never served). Uploads never overwrite (409); GET /admin/api/free
-  picks the file name. Everything but chrisjones.org.uk and www gets noindex.
+  originals/ (as uploaded, never served). Originals are named by content: originals/<hash>-<name>.<ext>, hash
+  the first 12 hex digits of the file's SHA-256, worked out in the browser (keepOriginal in admin/editor.js;
+  hashing in the Worker would overrun the free plan's CPU), name the painting it was first uploaded for. GET
+  /admin/api/stored?hash= finds one already stored, so choosing the same photo again skips the upload and the
+  new painting points at it (one photo, several paintings, each with its own corners); the upload itself also
+  answers with the existing key rather than storing a second copy. Older originals (originals/<file>.<ext>,
+  before Nov 2026, and those moved from git) keep their names and still work. Image uploads never overwrite
+  (409); GET /admin/api/free picks the images' file name. Everything but chrisjones.org.uk and www gets noindex.
 - **The editor**: any host starting "admin" is the editor: admin.chrisjones.org.uk (live Worker, Access app
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
@@ -183,10 +189,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
    undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
-   a. Shared originals: name originals by content (a fingerprint of the file plus a readable name, e.g.
-      originals/<hash12>-<name>.<ext>), so choosing a photo already stored skips the upload and points at it.
-      One photo can serve several paintings (the pentaptych's five parts are five identical 11 megabyte copies
-      on dev; Small Composition in Yellow has four from test uploads). Existing paintings keep working.
+   a. Shared originals: done (Nov 2026), see the R2 layout above. The duplicates stored before it (the
+      pentaptych's five identical 11 megabyte copies on dev; Small Composition in Yellow's four test uploads)
+      are still there: merging them is optional, only if Christopher asks.
    b. The editor's darkroom as sections that open with a tap (White balance, Corners), each with a summary line
       while closed, open by default when adding; no "Change white or corners…" style buttons. Reopening shows
       the photo small and the previous and new results side by side, large; press and hold the new result to
