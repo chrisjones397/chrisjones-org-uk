@@ -214,6 +214,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
    d. Replacing a painting's photo (a better photo or a higher-resolution copy): if the proportions match the
       old original (same photo), keep corners and spots; otherwise keep only the sliders, guess the corners
       afresh and clear the spots, and say what was kept.
+   e. Moving one edge at a time (Christopher's idea, Nov 2026): at each corner, besides the knob that moves the
+      corner, a smaller circle on each of its two edges, extended a little past the corner. Dragging one moves
+      only that edge, pivoting on its far corner (the line runs through the far corner and the finger), so the
+      other edge, already right, stays put and the corner slides along it. Also: the magnifier bigger and
+      further from the corner, so it doesn't hide what's being looked at.
    Then detail images (rectangles of free shape, Christopher's choice, drawn on the squared-up painting, cut
    from the full-size original; part of darkroom(), so available when adding and reopening). How details show
    on the site comes later: probably a page of its own for each painting that has them.
