@@ -135,7 +135,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   corner; the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
   bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions or counts on screen (Christopher's choice:
   symbol buttons with tooltips, the icons drawn as SVG in darkroom.js ICONS: fit, sparkles to clear the white
-  spots, a cross to cancel, a tick for done; ⎌ goes back to the guess);
+  spots, a cross to cancel, a tick for done; the corners view has no fit button, its ⎌ goes back to the guess
+  and zooms out, so its buttons fit one row on a phone);
   a tap within about 28 screen pixels removes a white spot; zoomed in, two arrows at each corner glide the
   view along its edges to the next corner). Thumbnails in the editor's lists show each painting's true shape. Before and after are shown side by side; the sizes
   are made from the result. The choices are saved with the painting as `process` (original, white, spots,

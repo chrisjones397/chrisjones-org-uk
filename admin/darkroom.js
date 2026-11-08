@@ -376,13 +376,12 @@ export function fullView(img, mode, start, guess) {
       el('div', { className: 'dr-bar' },
         el('div', { className: 'dr-buttons' },
           btn('−', () => zoomBy(1 / 1.6), '', 'Zoom out'), btn('+', () => zoomBy(1.6), '', 'Zoom in'),
-          btn(icon('fit'), () => { fit(); draw(); }, '', 'Show the whole picture'),
           ...(mode === 'corners' ? [
             btn('↺', () => labelsRound(-1), '', 'Move the corner labels round anticlockwise'),
             btn('↻', () => labelsRound(1), '', 'Move the corner labels round clockwise'),
             btn('⇋', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }, '', 'Mirror: swap left and right'),
-            btn('⎌', () => { pts = (guess || FRAME).map((p) => [p[0] * W, p[1] * H]); draw(); }, '', 'Back to the best guess')]
-            : [btn(icon('clear'), () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
+            btn('⎌', () => { pts = (guess || FRAME).map((p) => [p[0] * W, p[1] * H]); fit(); draw(); }, '', 'Start again: the best guess, whole picture in view')]
+            : [btn(icon('fit'), () => { fit(); draw(); }, '', 'Show the whole picture'), btn(icon('clear'), () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
           count, btn(icon('cancel'), () => close(null), 'dr-cancel', 'Cancel'),
           done = btn(icon('done'), () => close(pts), 'main', 'Done'))),
       cv, loupe);
