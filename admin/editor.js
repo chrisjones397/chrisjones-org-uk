@@ -433,6 +433,8 @@ function darkroom() {
           const t = turnOf(p.corners);                                  // keep which way up, take in the whole photo
           p.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
         } }, 'Whole photo')),
+      g.shapeRow = h('label', { class: 'tick' }, g.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
+        g.shapeTick = h('span', {})),
       g.shapeText = h('p', { class: 'hint shape-note' }),
       g.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => g.compare.classList.toggle('big') })),
     g.status = h('p', { class: 'hint' }));
@@ -463,8 +465,9 @@ function darkroom() {
       g.white.value = process.white; p.spots = (process.spots || []).map((q) => q.slice());
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
+      g.shape.checked = !!process.shape || !process.corners;      // as it was made
     } else {
-      g.white.value = white; g.bright.value = 100; g.warm.value = 0;
+      g.white.value = white; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
       if (guess && p.guess && !wholePhoto(p.guess)) p.corners = p.guess;     // a new photo: start from the guess
     }
     slid(); clearTimeout(timer);
@@ -495,14 +498,17 @@ function darkroom() {
     return p.white;
   }
   const cropped = () => !!(p && p.corners && !wholePhoto(p.corners));
-  /* The shape the picture is squared up to: the measured size's, or none (then the photo's perspective decides). */
+  /* The shape the picture is squared up to: the measured size's (if measured and ticked: the tick shows only when
+     measured), or none, when the photo's perspective decides. The size is kept to a tenth of a centimetre, so a
+     10 x 5.5 painting is squared up as 10 x 5.5, never rounded to whole centimetres. */
   function shapeLine() {
     const det = F.height ? detailsOf(F) : { error: 1 }, size = det.error ? null : det.cm;
     const measured = !!(F.estimated && !F.estimated.checked && size);
-    g.shapeText.textContent = !p || !cropped() ? ''
-      : measured ? `Shape: from its measured size, ${size[0]} × ${size[1]} centimetres`
-      : 'Shape: from the photo\'s perspective';
-    return measured && cropped() ? size : null;
+    g.shapeRow.hidden = !(p && cropped() && measured);
+    if (measured) g.shapeTick.textContent = `Square up to its measured proportions, ${size[0]} × ${size[1]} centimetres`;
+    const use = measured && g.shape.checked && cropped();
+    g.shapeText.textContent = !p || !cropped() || use ? '' : 'Shape: from the photo\'s perspective';
+    return use ? size : null;
   }
   const busy = (text) => { g.status.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
 

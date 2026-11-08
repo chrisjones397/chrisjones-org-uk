@@ -171,10 +171,10 @@ function normalise(id, kind, d) {
     }
     // estimated: the size isn't measured (only a scale; the photo gave the shape). size_shown: whether visitors see
     // the size, kept only when it differs from the default (shown when measured, hidden when not); an estimated
-    // size that is shown says "about".
+    // size that is shown is followed by "(est.)".
     const estimated = parts && cm && !!d.estimated;
     const shown = !!cm && (d.size_shown == null ? !estimated : !!d.size_shown);
-    const size = cm && shown && `${estimated ? 'about ' : ''}${cm[0]} x ${cm[1]} cm`;
+    const size = cm && shown && `${cm[0]} x ${cm[1]} cm${estimated ? ' (est.)' : ''}`;
     const details = parts ? [medium, size, year].filter(Boolean).join(', ') : str(d.details || '', 200, 'Details');
     return {
       name: d.name, title, ...(parts ? { medium, cm, year, ...(estimated ? { estimated: true } : {}),

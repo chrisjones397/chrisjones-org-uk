@@ -135,11 +135,12 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   the photo's proportions (see below); height and width are required.
   What drives what (Christopher's decision, Nov 2026): a measured size is the dog. "Measured" or "Not measured"
   (estimated: true): measured, the height and width as typed fix the shape the picture is squared up to (process
-  shape); not measured, the photo's perspective gives the shape and the size only sets the scale (the side last
+  shape), unless "Square up to its measured proportions" (shown only when measured) is unticked; kept to a tenth of
+  a centimetre, never rounded to whole ones, so the shape isn't squashed; not measured, the photo's perspective gives the shape and the size only sets the scale (the side last
   typed is kept, the other follows the picture's proportions, greyed; detailsFields f.follow, f.ratio from the
-  darkroom). The darkroom says which ("Shape: from its measured size" / "from the photo's perspective"). Showing
+  darkroom). The darkroom says when the photo decides ("Shape: from the photo's perspective"). Showing
   the size to visitors is a separate tick (size_shown, stored only when it differs from the default: shown when
-  measured, hidden when not); a shown estimate says "about 60 x 75 cm". The editor's rows note a hidden size. A photo's proportions come from its perspective
+  measured, hidden when not); a shown estimate reads "60 x 75 cm (est.)". The editor's rows note a hidden size. A photo's proportions come from its perspective
   (darkroom.js trueRatio, Zhang and He's whiteboard method: the vanishing points of the edges give the focal
   length, so the true width/height; a typical phone lens, 26/36 of the longer side, when only one pair of edges
   converges; tested within 1% on simulated photos, where averaging the side lengths was up to 17% out).
