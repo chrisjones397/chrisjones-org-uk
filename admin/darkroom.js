@@ -442,7 +442,10 @@ function icon(name, box = name === 'clear' ? 24 : 20) {
 
 /* Opens the picture full screen, to zoom into (pinch, or pinch on a trackpad, or the + and - buttons) and move
    about (drag, or scroll; double-tap zooms in where tapped, or back out). mode 'spots': tap a spot to add it, tap it again to take it away. mode 'corners': drag
-   the four corners onto the painting's corners (a magnifier shows the spot under the finger). Each corner keeps
+   the four corners onto the painting's corners (a magnifier shows the corner, well clear of it and the finger).
+   Besides its knob, each corner has a small circle on each of its two edges, just past the corner: dragging one
+   moves only that edge, pivoting on its far corner, so the other edge stays put and the corner slides along it
+   (Christopher's idea, step 2e). Each corner keeps
    its label wherever it's dragged (Christopher's design): put the ones labelled bottom left and bottom right on
    the painting's bottom corners, and the painting comes out that way up. Tapping an edge relabels them so it's
    the bottom, the ↺ ↻ buttons move every label one corner round, and ⇋ mirrors. They start on the best guess at
@@ -458,7 +461,7 @@ export function fullView(img, mode, start, guess, ghost, find) {
     let pts = (start && start.length ? start : first).map((p) => [p[0] * W, p[1] * H]);
     const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
     let done;
-    const cv = el('canvas', { className: 'dr-canvas' }), loupe = el('canvas', { className: 'dr-loupe', width: 300, height: 300 });
+    const cv = el('canvas', { className: 'dr-canvas' }), loupe = el('canvas', { className: 'dr-loupe' });
     const count = el('span', { className: 'dr-count' });
     const btn = (text, fn, cls = '', tip = '') => el('button', { type: 'button', className: cls, onclick: fn, title: tip, ariaLabel: tip || text }, text);
     const box = el('div', { className: 'darkroom' },
@@ -506,10 +509,10 @@ export function fullView(img, mode, start, guess, ghost, find) {
     /* Each corner is a small crosshair with a knob on a stick, pointing out from the painting, so a finger on
        the knob doesn't hide the corner. Near the edge of the screen the stick points inwards instead. While a
        corner is dragged its stick keeps its direction, so the knob stays under the finger. */
-    const STICK = 52;
+    const STICK = 52, EDGE = 34;
+    const inside = (k) => k[0] > 20 && k[1] > 20 && k[0] < cw - 20 && k[1] < ch - 20;
     const knobs = () => {
       const q = pts.map(toScreen), cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
-      const inside = (k) => k[0] > 20 && k[1] > 20 && k[0] < cw - 20 && k[1] < ch - 20;
       return q.map((p, i) => {
         let d = drag && drag.i === i && drag.dir;
         if (!d) {
@@ -519,6 +522,28 @@ export function fullView(img, mode, start, guess, ghost, find) {
         }
         return { p, d, k: [p[0] + d[0] * STICK, p[1] + d[1] * STICK] };
       });
+    };
+    /* Each corner's two edge handles: on the edge's line carried on EDGE screen pixels past the corner (inside,
+       along the edge, if that would be off screen). The one being dragged stays under the finger. Handle
+       (i, j): corner i's edge towards corner j, which it pivots on. */
+    const handles = () => {
+      if (mode !== 'corners') return [];
+      const q = pts.map(toScreen), out = [];
+      q.forEach((p, i) => [(i + 1) % 4, (i + 3) % 4].forEach((j) => {
+        if (drag && drag.edge && drag.i === i && drag.j === j) { out.push({ i, j, p, h: drag.at }); return; }
+        const dx = p[0] - q[j][0], dy = p[1] - q[j][1], n = Math.hypot(dx, dy) || 1;
+        let h = [p[0] + dx / n * EDGE, p[1] + dy / n * EDGE];
+        if (!inside(h)) h = [p[0] - dx / n * EDGE, p[1] - dy / n * EDGE];
+        out.push({ i, j, p, h });
+      }));
+      return out;
+    };
+    /* Where the line from photo point a through b meets the line through c and d, or null if (nearly) parallel. */
+    const meet = (a, b, c, d) => {
+      const r = [b[0] - a[0], b[1] - a[1]], t = [d[0] - c[0], d[1] - c[1]], den = r[0] * t[1] - r[1] * t[0];
+      if (Math.abs(den) < 1e-9 * Math.hypot(...r) * Math.hypot(...t) || !den) return null;
+      const k = ((c[0] - a[0]) * t[1] - (c[1] - a[1]) * t[0]) / den;
+      return [a[0] + k * r[0], a[1] + k * r[1]];
     };
     /* Zoomed in, each corner has two arrows pointing along its edges; tapping one glides to the next corner. */
     const arrows = () => {
@@ -589,6 +614,13 @@ export function fullView(img, mode, start, guess, ghost, find) {
         }
         const K = knobs();
         const twice = (path, w) => { path(); ctx.strokeStyle = '#000'; ctx.lineWidth = w + 2; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = w; ctx.stroke(); };
+        for (const { p, h } of handles()) {                        // edge handles, each on its edge carried past the corner
+          ctx.save(); ctx.globalAlpha = 0.8;
+          twice(() => { ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(h[0], h[1]); }, 1);
+          ctx.restore();
+          ctx.beginPath(); ctx.arc(h[0], h[1], 8, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+          twice(() => { ctx.beginPath(); ctx.arc(h[0], h[1], 8, 0, 7); }, 1.2);
+        }
         for (const { p, k } of K) {
           twice(() => { ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(k[0], k[1]); }, 1.2);              // the stick
           twice(() => {                                            // a crosshair with a gap, leaving the corner itself in view
@@ -626,19 +658,41 @@ export function fullView(img, mode, start, guess, ghost, find) {
       }
     }
 
-    function showLoupe(p, fx, fy) {
-      const L = 150, m = Math.max(4, s * 4);                    // magnifier: L css pixels across, m screen pixels per photo pixel
-      loupe.style.display = 'block';
-      const above = fy > L + 40;
-      loupe.style.left = `${Math.min(cw - L - 8, Math.max(8, fx - L / 2))}px`;
-      loupe.style.top = `${cv.offsetTop + (above ? fy - L - 40 : fy + 40)}px`;
-      lctx.setTransform(300 / L, 0, 0, 300 / L, 0, 0);
+    /* The magnifier: a circle showing corner i close up, with its two edges (the one being moved, if an edge
+       handle is dragged, brighter). It sits well clear of both the corner and the finger f (screen point):
+       above them if there's room, else below, else beside, and keeps to its side for the whole drag. */
+    function showLoupe(i, f) {
+      const L = Math.round(Math.min(220, Math.min(cw, ch) * 0.5)), m = Math.max(4, s * 4), gap = 64, edge = 8;
+      const p = pts[i], c = toScreen(p);
+      const spots = {
+        above: Math.min(c[1], f[1]) - gap - L >= edge && [c[0] - L / 2, Math.min(c[1], f[1]) - gap - L],
+        below: Math.max(c[1], f[1]) + gap + L <= ch - edge && [c[0] - L / 2, Math.max(c[1], f[1]) + gap],
+        left: Math.min(c[0], f[0]) - gap - L >= edge && [Math.min(c[0], f[0]) - gap - L, c[1] - L / 2],
+        right: Math.max(c[0], f[0]) + gap + L <= cw - edge && [Math.max(c[0], f[0]) + gap, c[1] - L / 2],
+      };
+      let side = drag && drag.side;
+      if (!side || !spots[side]) side = ['above', 'below', 'left', 'right'].find((k) => spots[k]);
+      if (drag) drag.side = side;
+      const [x, y] = side ? spots[side] : [edge, edge];
+      loupe.style.display = 'block'; loupe.style.width = loupe.style.height = `${L}px`;
+      loupe.style.left = `${Math.min(cw - L - edge, Math.max(edge, x))}px`;
+      loupe.style.top = `${cv.offsetTop + Math.min(ch - L - edge, Math.max(edge, y))}px`;
+      const px = Math.round(L * dpr);
+      if (loupe.width !== px) { loupe.width = px; loupe.height = px; }
+      lctx.setTransform(px / L, 0, 0, px / L, 0, 0);
       lctx.fillStyle = '#000'; lctx.fillRect(0, 0, L, L);
       lctx.imageSmoothingEnabled = false;
       const half = L / 2 / m;
       lctx.drawImage(img, p[0] - half, p[1] - half, 2 * half, 2 * half, 0, 0, L, L);
-      lctx.strokeStyle = '#fff'; lctx.lineWidth = 1;
-      lctx.beginPath(); lctx.moveTo(L / 2, 0); lctx.lineTo(L / 2, L); lctx.moveTo(0, L / 2); lctx.lineTo(L, L / 2); lctx.stroke();
+      const at = (q) => [L / 2 + (q[0] - p[0]) * m, L / 2 + (q[1] - p[1]) * m];
+      for (const j of [(i + 1) % 4, (i + 3) % 4]) {                // the corner's two edges, as they'll crop
+        const q = at(pts[j]), moving = drag && drag.edge && drag.j === j;
+        lctx.beginPath(); lctx.moveTo(L / 2, L / 2); lctx.lineTo(...q);
+        lctx.strokeStyle = moving ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.45)'; lctx.lineWidth = moving ? 1.5 : 1; lctx.stroke();
+      }
+      lctx.beginPath();                                            // a small crosshair, gapped at the corner itself
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { lctx.moveTo(L / 2 + a * 5, L / 2 + b * 5); lctx.lineTo(L / 2 + a * 14, L / 2 + b * 14); }
+      lctx.strokeStyle = '#000'; lctx.lineWidth = 3; lctx.stroke(); lctx.strokeStyle = '#fff'; lctx.lineWidth = 1; lctx.stroke();
     }
 
     const down = new Map();
@@ -655,13 +709,20 @@ export function fullView(img, mode, start, guess, ghost, find) {
       if (down.size > 2) return;
       tap = { p, t: performance.now() };
       if (mode === 'corners') {
-        // Grab a knob first (the easy target for a finger), then an arrow, then the corner's own crosshair.
+        // Grab a knob or an edge handle first, whichever is nearer (the easy targets for a finger), then an
+        // arrow, then the corner's own crosshair.
         const K = knobs(), grab = (i, d) => {
           const q = K[i].p;
-          drag = { i, dir: K[i].d, off: [q[0] - p[0], q[1] - p[1]] }; tap = null; showLoupe(pts[i], q[0], q[1]);
+          drag = { i, dir: K[i].d, off: [q[0] - p[0], q[1] - p[1]] }; tap = null; showLoupe(i, p);
         };
         const nearest = (pick) => K.map((c, i) => [Math.hypot(pick(c)[0] - p[0], pick(c)[1] - p[1]), i]).sort((a, b) => a[0] - b[0])[0];
         const kn = nearest((c) => c.k);
+        const hn = handles().map((h) => [Math.hypot(h.h[0] - p[0], h.h[1] - p[1]), h]).sort((a, b) => a[0] - b[0])[0];
+        if (hn && hn[0] < 22 && !(kn[0] < hn[0])) {
+          const { i, j, h } = hn[1], k = (2 * i - j + 4) % 4;      // k: corner i's other neighbour, along the edge that stays
+          drag = { edge: true, i, j, at: h, off: [h[0] - p[0], h[1] - p[1]], fixed: [pts[i].slice(), pts[k].slice()] };
+          tap = null; showLoupe(i, p); draw(); return;
+        }
         if (kn[0] < 28) return grab(kn[1]);
         const arrow = arrows().find((a) => Math.hypot(a.x - p[0], a.y - p[1]) < 26);
         if (arrow) { tap.arrow = arrow; return; }
@@ -682,8 +743,16 @@ export function fullView(img, mode, start, guess, ghost, find) {
       if (!drag) return;
       if (drag.pan) { tx += p[0] - drag.pan[0]; ty += p[1] - drag.pan[1]; drag.pan = p; draw(); return; }
       const sx = p[0] + drag.off[0], sy = p[1] + drag.off[1];
+      if (drag.edge) {
+        // The moving edge runs from its far corner through the handle under the finger; the corner goes where it
+        // meets the edge that stays, and stops at the photo's border.
+        drag.at = [sx, sy];
+        const c = meet(pts[drag.j], toImage(sx, sy), ...drag.fixed);
+        if (c && c[0] >= 0 && c[1] >= 0 && c[0] <= W && c[1] <= H) pts[drag.i] = c;
+        draw(); showLoupe(drag.i, p); return;
+      }
       const q = toImage(sx, sy); pts[drag.i] = [Math.min(W, Math.max(0, q[0])), Math.min(H, Math.max(0, q[1]))];
-      draw(); showLoupe(pts[drag.i], sx, sy);
+      draw(); showLoupe(drag.i, p);
     });
     const up = (e) => {
       if (!down.has(e.pointerId)) return;
@@ -700,8 +769,8 @@ export function fullView(img, mode, start, guess, ghost, find) {
             last = { time: now, p: t.p, timer: setTimeout(() => { last = null; single(t); }, 280) };
           }
         }
-        const was = drag && drag.dir; drag = null; tap = null; loupe.style.display = 'none';
-        if (was) draw();                                          // let the stick point outwards again
+        const was = drag && (drag.dir || drag.edge); drag = null; tap = null; loupe.style.display = 'none';
+        if (was) draw();                                          // let the stick point outwards again, the handle go back
       }
     };
     let last = null;                                              // the last single tap, while waiting to see if a second follows

@@ -168,7 +168,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of its
   height and width if measured. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
-  corner; the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
+  corner, as big as half the screen's shorter side (220 at most), kept 64 pixels clear of both corner and finger
+  (above, else below, else beside, staying on its side for the drag), showing the corner's two edges; besides
+  the knob, each corner has a small circle on each of its edges, carried 34 pixels past the corner (inside,
+  along the edge, if off screen): dragging one moves only that edge, pivoting on its far corner, so the other
+  edge stays put and the corner slides along it (step 2e); the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
   bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions or counts on screen (Christopher's choice:
   symbol buttons with tooltips, the icons drawn as SVG in darkroom.js ICONS: fit, sparkles to clear the white
   spots, a cross to cancel, a tick for done; the corners view has no fit button, its ⎌ goes back to the guess
@@ -221,7 +225,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
       spots dropped). A note under the darkroom says which. The new photo goes to originals/ on Save (keepOriginal,
       so an already-stored one is reused) and the process points at it; the old original stays for History.
       "Back to saved" goes back to the old photo and its choices.
-   e. Moving one edge at a time (Christopher's idea, Nov 2026): at each corner, besides the knob that moves the
+   e. Moving one edge at a time: done (Nov 2026), see the darkroom above. The idea (Christopher's): at each corner, besides the knob that moves the
       corner, a smaller circle on each of its two edges, extended a little past the corner. Dragging one moves
       only that edge, pivoting on its far corner (the line runs through the far corner and the finger), so the
       other edge, already right, stays put and the corner slides along it. Also: the magnifier bigger and
