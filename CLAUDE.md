@@ -182,9 +182,29 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 1. Tidy git: remove masters/, the painting files in img/ and paintings.yaml (nothing uses them now; one commit,
    undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
-   2026). Next: detail images (rectangles of free shape, Christopher's choice, drawn on the squared-up
-   painting, cut from the full-size original; part of darkroom(), so available when adding and reopening). How
-   details show on the site comes later: probably a page of its own for each painting that has them.
+   2026). Agreed with Christopher (Nov 2026), in this order:
+   a. Shared originals: name originals by content (a fingerprint of the file plus a readable name, e.g.
+      originals/<hash12>-<name>.<ext>), so choosing a photo already stored skips the upload and points at it.
+      One photo can serve several paintings (the pentaptych's five parts are five identical 11 megabyte copies
+      on dev; Small Composition in Yellow has four from test uploads). Existing paintings keep working.
+   b. The editor's darkroom as sections that open with a tap (White balance, Corners), each with a summary line
+      while closed, open by default when adding; no "Change white or corners…" style buttons. Reopening shows
+      the photo small and the previous and new results side by side, large; press and hold the new result to
+      see the previous one in its place (blink comparison). Ghost marks for the saved settings: a faint mark on
+      each slider, faint previous corners and spots in the full-screen views, one "back to saved" button.
+   c. White balance without the drop-down: no spots = no white balance. A "find the paper" button places spots
+      round the margins (cleared by the existing clear button). Spot fitting must follow a gentle curve with
+      about six or more spots (now a flat slope from three), tested against the current paper method so
+      drawings don't shift; old 'paper' records must still reproduce. Reprocessing old drawings may change
+      them slightly: say so.
+   d. Replacing a painting's photo (a better photo or a higher-resolution copy): if the proportions match the
+      old original (same photo), keep corners and spots; otherwise keep only the sliders, guess the corners
+      afresh and clear the spots, and say what was kept.
+   Then detail images (rectangles of free shape, Christopher's choice, drawn on the squared-up painting, cut
+   from the full-size original; part of darkroom(), so available when adding and reopening). How details show
+   on the site comes later: probably a page of its own for each painting that has them.
+   The image files for paintings in git are obsolete and will be removed (step 1): build nothing that relies
+   on them.
 3. Users and roles.
 4. Editing in place on the editor's preview.
 5. Optional: a "change address" option, so a retitle can rename a painting's files and address (with the
