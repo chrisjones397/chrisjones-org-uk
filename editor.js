@@ -61,6 +61,7 @@ export async function api(request, env, url, who) {
       if (path === 'state') return json(await state(env, who));
       if (path === 'history') return json(await history(env));
       if (path === 'free') return json(await free(env, url.searchParams.get('name') || ''));
+      if (path === 'original') return await original(env, url.searchParams.get('key') || '');
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -316,6 +317,26 @@ async function free(env, name) {
     if (!found.objects.length && !sized.objects.length) return { file };
   }
   throw new Bad('Too many versions of that name');
+}
+
+/* GET /admin/api/original?key=originals/<file>.<ext>, or originals/<file> to find it whatever its extension
+   (paintings moved from git have no record of it): a painting's original photo, for reopening its picture in
+   the editor. Only ever to the signed-in editor (this API); visitors never get originals. The key found is
+   sent back as x-original. */
+async function original(env, key) {
+  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
+  const m = /^originals\/([a-z0-9-]{1,110})(\.[a-z0-9]{1,5})?$/.exec(key);
+  if (!m) throw new Bad('Bad file name');
+  if (!m[2]) {
+    const found = (await env.MEDIA.list({ prefix: `originals/${m[1]}.`, limit: 5 })).objects
+      .find((o) => /^originals\/[a-z0-9-]+\.[a-z0-9]{1,5}$/.test(o.key) && o.key.slice(0, o.key.lastIndexOf('.')) === `originals/${m[1]}`);
+    if (!found) throw new Bad('The original photo isn\'t in storage', 404);
+    key = found.key;
+  }
+  const obj = await env.MEDIA.get(key);
+  if (!obj) throw new Bad('The original photo isn\'t in storage', 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType || 'application/octet-stream',
+    'x-original': key, 'cache-control': 'private, no-store' } });
 }
 
 /* PUT /admin/api/upload?key=images/<file>-<width>.jpg or images/<file>-preview.jpg (made in the browser), or

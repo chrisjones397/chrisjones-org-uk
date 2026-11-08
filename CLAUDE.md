@@ -161,7 +161,13 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   side, at most 38% of the window's height (tap to enlarge); the sizes are made from the result. The choices are saved with the painting as `process` (original, white, spots,
   brightness, warmth, corners, shape; fractions of the original's width and height as photographed; corners in the order the
   painting's top left, top right, bottom right, bottom left; checked by editor.js processOf()), so the
-  images can be made again from the original. Editor requests give up after 30 seconds (uploads 2 minutes) with
+  images can be made again from the original. These steps are one piece in admin/editor.js, darkroom(), used by
+  the add form and by a painting's Edit form: "Change white or corners…" reads the original back from R2 (GET
+  /admin/api/original?key=, editor only; originals/<file> with no extension finds it, for paintings moved from
+  git, which have no process record and reopen as the whole photo, with "paper all round" if white_paper) and
+  starts from the saved choices. Saving makes new sizes only if the choices changed, under a fresh file name
+  from GET free (name-v2...), so the old images stay for History; the process keeps pointing at the original.
+  Editor requests give up after 30 seconds (uploads 2 minutes) with
   a message, so a dropped signal can't leave a button disabled. In the browser, not a Worker: the free plan allows Workers 10 ms
   of CPU per request. Every painting on both sites is now in
   R2 (moved Nov 2026 by a one-off editor button, since removed: see the history). R2 binding MEDIA: bucket site-media (live),
@@ -175,9 +181,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
 
 1. Tidy git: remove masters/, the painting files in img/ and paintings.yaml (nothing uses them now; one commit,
    undone by git revert). Keep the contact picture's files and what build_site.py needs for it.
-2. Image processing at upload: white balance and four-corner crop are done (Nov 2026). Next: detail images
-   (rectangles drawn on the cropped painting, cut from the full-size original); then reopening a painting
-   already added to change its white or corners (needs the original read back from R2 for the editor). How
+2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
+   2026). Next: detail images (rectangles of free shape, Christopher's choice, drawn on the squared-up
+   painting, cut from the full-size original; part of darkroom(), so available when adding and reopening). How
    details show on the site comes later: probably a page of its own for each painting that has them.
 3. Users and roles.
 4. Editing in place on the editor's preview.

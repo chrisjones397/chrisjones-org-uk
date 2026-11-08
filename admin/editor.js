@@ -238,7 +238,7 @@ function paintingRow(e, items, i, secs) {
       : h('span', { class: 'move' },
         h('button', { title: 'Move up', disabled: i === 0, onclick: () => movePainting(items, i, -1) }, '↑'),
         h('button', { title: 'Move down', disabled: i === items.length - 1, onclick: () => movePainting(items, i, 1) }, '↓'),
-        h('button', { onclick: () => { open.has(e.id) ? open.delete(e.id) : open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
+        h('button', { onclick: () => { if (open.has(e.id)) { open.delete(e.id); reopened.delete(e.id); } else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
   if (gone || !open.has(e.id)) return [row];
 
   const f = {};
@@ -247,20 +247,63 @@ function paintingRow(e, items, i, secs) {
     ...detailsFields(f, d),
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
+    ...pictureFields(e, d, f),
     h('p', { class: 'hint' }, `Address: /paintings/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
-      h('button', { class: 'main', onclick: () => {
+      f.go = h('button', { class: 'main', onclick: async () => {
         const moved = f.section.value !== d.section, det = detailsOf(f);
         if (det.error) return toast(det.error, true);
         const { estimated, ...rest } = d;                // dropped unless still ticked
+        const re = reopened.get(e.id);
+        let pic = {};
+        if (re && re.dr.changed()) {                     // new image sizes under a new file name; the old ones stay for History
+          if (!re.dr.ready) return toast('The picture is still being made', true);
+          f.go.disabled = true;
+          try {
+            const { file: stem } = await call('GET', `free?name=${encodeURIComponent(d.name)}`);
+            pic = { ...(await storeImages(stem, re.dr.result(), (t) => re.dr.say(t))),
+              white_paper: re.dr.white === 'paper', process: re.dr.record(re.original) };
+          } catch (err) { f.go.disabled = false; re.dr.say(''); return toast(err.message, true); }
+        }
         const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
-          section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order };
-        open.delete(e.id);
-        save([{ id: e.id, kind: 'painting', data }]);
+          section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order, ...pic };
+        open.delete(e.id); reopened.delete(e.id);
+        save([{ id: e.id, kind: 'painting', data }], pic.file ? 'Saved, with the new picture' : undefined);
       } }, 'Save draft'),
       changed(e) ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
       h('button', { class: 'danger', onclick: () => { if (confirm(`Delete "${d.title}"? It stays on the site until you publish.`)) { open.delete(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Deleted in the draft'); } } }, 'Delete')));
   return [row, form];
+}
+
+/* Reopening a painting's picture: its original is read back from R2 and the darkroom starts from the choices
+   saved with it (or, for paintings moved from git, which have none: the whole photo, with the paper's white
+   balance if it's a drawing on white paper). */
+const reopened = new Map();         // painting id -> { dr, original }, while its Edit form is open
+function pictureFields(e, d, f) {
+  if (!media) return [];
+  const re = reopened.get(e.id);
+  if (re) {
+    re.dr.attach(f);
+    return [h('label', {}, 'Picture'), re.dr.el,
+      h('div', { class: 'row' }, h('button', { type: 'button', onclick: () => { reopened.delete(e.id); render(); } }, 'Keep the picture as it was'))];
+  }
+  const status = h('span', { class: 'grow muted' });
+  const btn = h('button', { type: 'button', onclick: async () => {
+    btn.disabled = true; status.textContent = 'Fetching the original…';
+    try {
+      const key = d.process ? d.process.original : `originals/${d.file || d.name}`;
+      const r = await fetchFor(`/admin/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
+      const original = r.headers.get('x-original') || key;
+      const dr = darkroom();
+      dr.attach(f);
+      reopened.set(e.id, { dr, original });
+      render();                                     // the form now shows the darkroom, which reads the photo
+      const ok = await dr.load(await r.blob(), d.process ? { process: d.process } : { white: d.white_paper ? 'paper' : 'none', guess: false });
+      if (!ok) { reopened.delete(e.id); toast('This browser can\'t read the original', true); render(); }
+    } catch (err) { btn.disabled = false; status.textContent = ''; toast(err.message, true); }
+  } }, 'Change white or corners…');
+  return [h('label', {}, 'Picture'), h('div', { class: 'row' }, status, btn)];
 }
 
 function moveSection(secs, i, dir) {
@@ -300,129 +343,126 @@ function nameFor(title) {
   return n;
 }
 
-let pending = null;   // the chosen photo, its working copy and the choices made for it
-function addForm(secs) {
-  if (!media) {
-    return h('p', { class: 'hint' }, 'Adding paintings needs image storage (R2), which isn\'t switched on yet for this site. Everything else here works.');
-  }
-  const f = {};
-  const form = h('div', { class: 'card' },
-    h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
-    f.steps = h('div', { class: 'steps', hidden: true },
+/* The steps that make a painting's picture from a photo: white balance, corners and shape, with the photo and
+   the result side by side. Used by the add form and by a painting's Edit form (to change the white or corners
+   of one already added, from its original in R2). Its element is kept across re-renders of the page; the form
+   it sits in gives it the details fields (height, width, size estimated) with attach(). */
+function darkroom() {
+  const g = {};
+  let F = {}, p = null, baseline = '';
+  let timer;
+  const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
+  const how = () => ({ brightness: +g.bright.value / 100, warmth: +g.warm.value / 100 });
+  const el = h('div', {},
+    g.steps = h('div', { class: 'steps', hidden: true },
       h('label', {}, 'White balance'),
       h('div', { class: 'row' },
-        f.white = h('select', { class: 'grow', onchange: () => { if (f.white.value === 'picks' && !pending.spots.length) pickSpots(); else update(); } },
+        g.white = h('select', { class: 'grow', onchange: () => { if (g.white.value === 'picks' && !p.spots.length) pickSpots(); else update(); } },
           h('option', { value: 'none' }, 'None: as photographed'),
           h('option', { value: 'paper' }, 'Paper all round: a drawing on white paper'),
           h('option', { value: 'picks' }, 'From white I pick on the photo')),
-        f.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
-      f.sliders = h('div', { class: 'sliders' },
-        h('label', {}, 'Brightness of the white ', f.brightOut = h('span', { class: 'muted' })),
-        f.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
-        h('label', {}, 'Keep the light\'s warmth ', f.warmOut = h('span', { class: 'muted' })),
-        f.warm = h('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, oninput: () => slid() })),
+        g.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
+      g.sliders = h('div', { class: 'sliders' },
+        h('label', {}, 'Brightness of the white ', g.brightOut = h('span', { class: 'muted' })),
+        g.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
+        h('label', {}, 'Keep the light\'s warmth ', g.warmOut = h('span', { class: 'muted' })),
+        g.warm = h('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, oninput: () => slid() })),
       h('label', {}, 'Corners'),
       h('div', { class: 'row' },
-        f.cornersNote = h('span', { class: 'grow muted' }),
+        g.cornersNote = h('span', { class: 'grow muted' }),
         h('button', { type: 'button', onclick: () => setCorners() }, 'Set corners…'),
-        f.wholeBtn = h('button', { type: 'button', onclick: () => {
-          const t = turnOf(pending.corners);                            // keep which way up, take in the whole photo
-          pending.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
+        g.wholeBtn = h('button', { type: 'button', onclick: () => {
+          const t = turnOf(p.corners);                                  // keep which way up, take in the whole photo
+          p.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
         } }, 'Whole photo')),
-      f.shapeRow = h('label', { class: 'tick' }, f.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
-        f.shapeText = h('span', {})),
-      f.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') })),
-    h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
-    ...detailsFields(f, {}, () => {
-      if (document.activeElement === f.width && f.width.classList.contains('suggested')) {   // typed: measured, not a suggestion
-        f.width.classList.remove('suggested'); f.estimated.checked = false;
-      }
-      if (pending) later(update); else shapeLine();
-    }),
-    h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
-    h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
-    h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
-    f.progress = h('div', { id: 'upload-progress' }));
-  let timer;
-  const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
-  const how = () => ({ brightness: +f.bright.value / 100, warmth: +f.warm.value / 100 });
+      g.shapeRow = h('label', { class: 'tick' }, g.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
+        g.shapeText = h('span', {})),
+      g.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => g.compare.classList.toggle('big') })),
+    g.status = h('p', { class: 'hint' }));
   function slid() {
-    f.brightOut.textContent = `${f.bright.value}%: ${+f.bright.value === 100 ? 'pure white' : 'a light grey'}`;
-    f.warmOut.textContent = `${f.warm.value}%${+f.warm.value === 0 ? ': cast fully removed' : ''}`;
+    g.brightOut.textContent = `${g.bright.value}%: ${+g.bright.value === 100 ? 'pure white' : 'a light grey'}`;
+    g.warmOut.textContent = `${g.warm.value}%${+g.warm.value === 0 ? ': cast fully removed' : ''}`;
     later(update, 250);
   }
   slid(); clearTimeout(timer);
 
-  async function pick() {
-    pending = null; f.steps.hidden = true;
-    const file = f.file.files[0];
-    if (!file) return;
-    f.progress.textContent = 'Reading the photo…';
+  /* Read a photo (a File, or the original's Blob from R2). With a process record, its choices are put back as
+     they were; without one, it starts from the best guess at the painting's corners. */
+  async function load(blob, { process, white = 'none', guess = true } = {}) {
+    p = null; g.steps.hidden = true; baseline = '';
+    g.status.textContent = 'Reading the photo…';
     const img = new Image();
-    img.src = URL.createObjectURL(file);
+    img.src = URL.createObjectURL(blob);
     try { await img.decode(); } catch {
-      f.progress.textContent = 'This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.';
-      return;
+      g.status.textContent = 'This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.';
+      return false;
     }
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
-    pending = { file, W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
-    // Start from the best guess at the painting's corners, so the result shows straight away as it will be.
-    pending.guess = guessCorners(pending.src);
-    if (pending.guess && !wholePhoto(pending.guess)) pending.corners = pending.guess;
-    f.white.value = 'none'; f.bright.value = 100; f.warm.value = 0; slid(); clearTimeout(timer);
-    if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
-    f.steps.hidden = false;
-    update();
+    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
+    URL.revokeObjectURL(img.src);
+    p.guess = guessCorners(p.src);
+    if (process) {
+      g.white.value = process.white; p.spots = (process.spots || []).map((q) => q.slice());
+      g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
+      p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
+      g.shape.checked = !!process.shape || !process.corners;
+    } else {
+      g.white.value = white; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
+      if (guess && p.guess && !wholePhoto(p.guess)) p.corners = p.guess;     // a new photo: start from the guess
+    }
+    slid(); clearTimeout(timer);
+    g.steps.hidden = false;
+    await update();
+    baseline = JSON.stringify(record(''));
+    return true;
   }
 
   async function pickSpots() {
-    const r = await fullView(pending.src, 'spots', pending.spots);
-    if (r) pending.spots = r;
-    if (!pending.spots.length && f.white.value === 'picks') f.white.value = 'none';
+    const r = await fullView(p.src, 'spots', p.spots);
+    if (r) p.spots = r;
+    if (!p.spots.length && g.white.value === 'picks') g.white.value = 'none';
     update();
   }
   async function setCorners() {
     await busy('Getting the full-size view ready…');
-    const r = await fullView(balanced().canvas, 'corners', pending.corners, pending.guess);
+    const r = await fullView(balanced().canvas, 'corners', p.corners, p.guess);
     if (r) {
       const t = turnOf(r);
-      pending.corners = wholePhoto(r) && !t.r && !t.m ? null : r;    // the whole photo, as it is: nothing to do
+      p.corners = wholePhoto(r) && !t.r && !t.m ? null : r;          // the whole photo, as it is: nothing to do
     }
     update();
   }
-
   function balanced() {
-    const p = pending, key = `${f.white.value}|${JSON.stringify(p.spots)}|${f.bright.value}|${f.warm.value}`;
-    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, f.white.value, p.spots, how()) };
+    const key = `${g.white.value}|${JSON.stringify(p.spots)}|${g.bright.value}|${g.warm.value}`;
+    if (!p.white || p.white.key !== key) p.white = { key, ...whiteBalanced(p.src, g.white.value, p.spots, how()) };
     return p.white;
   }
+  const cropped = () => !!(p && p.corners && !wholePhoto(p.corners));
   function shapeLine() {
-    const det = detailsOf(f), size = det.error ? null : det.cm;
-    f.shapeRow.hidden = !(pending && cropped() && size);
-    if (size) f.shapeText.textContent = `Squared up to the shape of its size: ${size[0]} × ${size[1]} centimetres`;
-    return f.shape.checked && cropped() ? size : null;
+    const det = F.height ? detailsOf(F) : { error: 1 }, size = det.error ? null : det.cm;
+    g.shapeRow.hidden = !(p && cropped() && size);
+    if (size) g.shapeText.textContent = `Squared up to the shape of its size: ${size[0]} × ${size[1]} centimetres`;
+    return g.shape.checked && cropped() ? size : null;
   }
-  const cropped = () => !!(pending && pending.corners && !wholePhoto(pending.corners));
-  const busy = (text) => { f.progress.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
+  const busy = (text) => { g.status.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
 
   /* Make the picture that will be uploaded from the choices, and show it beside the photo. */
   async function update() {
-    const p = pending;
     if (!p) return;
-    f.spotsBtn.hidden = f.white.value !== 'picks';
-    f.sliders.hidden = f.white.value === 'none' || (f.white.value === 'picks' && !p.spots.length);
-    f.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
-    f.wholeBtn.hidden = !cropped();
+    g.spotsBtn.hidden = g.white.value !== 'picks';
+    g.sliders.hidden = g.white.value === 'none' || (g.white.value === 'picks' && !p.spots.length);
+    g.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
+    g.wholeBtn.hidden = !cropped();
     const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
-    f.cornersNote.textContent = (cropped() ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '');
+    g.cornersNote.textContent = (cropped() ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '');
     // Suggest the width from the height and the picture's proportions (after cropping and turning), unless a
     // width has been typed. A photo taken a little from one side can be a few per cent out, so it's a suggestion.
-    const hgt = parseFloat(f.height.value);
-    if (hgt > 0 && (!f.width.value || f.width.classList.contains('suggested'))) {
+    const hgt = F.height ? parseFloat(F.height.value) : NaN;
+    if (hgt > 0 && (!F.width.value || F.width.classList.contains('suggested'))) {
       let ratio = p.W / p.H;
       if (p.corners) { const [a, b] = cropSize(p.corners.map(([u, v]) => [u * p.W, v * p.H]), null, [p.W / 2, p.H / 2]); ratio = a / b; }
-      f.width.value = String(Math.round(hgt * ratio)); f.width.classList.add('suggested'); f.estimated.checked = true;
+      F.width.value = String(Math.round(hgt * ratio)); F.width.classList.add('suggested'); F.estimated.checked = true;
     }
     const shape = shapeLine();
     await busy('Working…');
@@ -449,14 +489,79 @@ function addForm(secs) {
       }
       return s;
     };
-    f.compare.replaceChildren(h('figure', {}, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
-      h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be added')));
-    f.compare.classList.remove('one');
-    f.progress.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
+    g.compare.replaceChildren(h('figure', {}, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
+      h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be used')));
+    g.status.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
+  }
+
+  /* The choices, as saved with the painting (editor.js processOf on the server). */
+  function record(original) {
+    const shape = shapeLine();
+    return { original, white: g.white.value,
+      ...(g.white.value === 'picks' ? { spots: p.spots } : {}),
+      ...(g.white.value !== 'none' ? how() : {}),
+      ...(p.corners ? { corners: p.corners } : {}), ...(shape ? { shape } : {}) };
+  }
+  return {
+    el, load, record, shapeLine,
+    attach(f) { F = f; },
+    sizeChanged() { if (p) later(update); else shapeLine(); },
+    get ready() { return !!(p && p.out); },
+    get white() { return g.white.value; },
+    result() { return { out: p.out, W: p.outW, H: p.outH }; },
+    changed() { return !!p && JSON.stringify(record('')) !== baseline; },   // since it was loaded
+    say(text) { g.status.textContent = text; },
+  };
+}
+
+/* Make every size of a painting's picture from the result and store them in R2 as images/<stem>-<width>.jpg and
+   -preview.jpg; returns the painting's image fields. Never overwrites: stem is a free name (GET free). */
+async function storeImages(stem, { out, W, H }, say) {
+  const base = 'media/images/';
+  const widths = [...new Set(WIDTHS.filter((w) => w < W).concat(Math.min(W, WIDTHS[WIDTHS.length - 1])))];
+  const jobs = widths.map((w) => [`${stem}-${w}.jpg`, w]).concat([[`${stem}-preview.jpg`, Math.min(PREVIEW, W)]]);
+  let done = 0;
+  for (const [fname, w] of jobs) {
+    say(`Making and uploading image sizes: ${++done} of ${jobs.length}`);
+    await put(`images/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
+  }
+  return { w: W, h: H, widths, base, ext: 'jpg', file: stem,
+    preview: { src: `${base}${stem}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) } };
+}
+
+let adding = null;   // the add form's darkroom, kept while the page re-renders
+function addForm(secs) {
+  if (!media) {
+    return h('p', { class: 'hint' }, 'Adding paintings needs image storage (R2), which isn\'t switched on yet for this site. Everything else here works.');
+  }
+  const f = {};
+  const dr = adding || (adding = darkroom());
+  const form = h('div', { class: 'card' },
+    h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
+    dr.el,
+    h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
+    ...detailsFields(f, {}, () => {
+      if (document.activeElement === f.width && f.width.classList.contains('suggested')) {   // typed: measured, not a suggestion
+        f.width.classList.remove('suggested'); f.estimated.checked = false;
+      }
+      dr.sizeChanged();
+    }),
+    h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
+    h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
+    h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
+    f.progress = h('div', { id: 'upload-progress' }));
+  dr.attach(f);
+
+  async function pick() {
+    const file = dr.file = f.file.files[0] || null;
+    if (!file) return;
+    if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+    await dr.load(file);
   }
 
   async function add() {
-    if (!pending || !pending.out) return toast('Choose a photo first', true);
+    const file = dr.file;
+    if (!file || !dr.ready) return toast('Choose a photo first', true);
     const title = f.title.value.trim();
     if (!title) return toast('Give it a title', true);
     if (!f.section.value) return toast('Add a genre first', true);
@@ -464,33 +569,17 @@ function addForm(secs) {
     if (det.error) return toast(det.error, true);
     f.go.disabled = true;
     try {
-      const { file, out, outW: W, outH: H } = pending;
       const name = nameFor(title);
-      const { file: stemName } = await call('GET', `free?name=${encodeURIComponent(name)}`);
-      const base = 'media/images/';
-      const widths = [...new Set(WIDTHS.filter((w) => w < W).concat(Math.min(W, WIDTHS[WIDTHS.length - 1])))];
-      const jobs = widths.map((w) => [`${stemName}-${w}.jpg`, w]).concat([[`${stemName}-preview.jpg`, Math.min(PREVIEW, W)]]);
-      let done = 0;
+      const { file: stem } = await call('GET', `free?name=${encodeURIComponent(name)}`);
       const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase();
       f.progress.textContent = 'Keeping the original…';
-      await put(`originals/${stemName}.${ext}`, file, file.type || 'image/jpeg');
-      for (const [fname, w] of jobs) {
-        f.progress.textContent = `Making and uploading image sizes: ${++done} of ${jobs.length}`;
-        await put(`images/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
-      }
-      const order = paintingsIn(f.section.value).length;
-      const shape = shapeLine();
-      const process = { original: `originals/${stemName}.${ext}`, white: f.white.value,
-        ...(f.white.value === 'picks' ? { spots: pending.spots } : {}),
-        ...(f.white.value !== 'none' ? how() : {}),
-        ...(pending.corners ? { corners: pending.corners } : {}), ...(shape ? { shape } : {}) };
-      const data = { name, title, ...det, section: f.section.value, order, wide: f.wide.checked,
-        white_paper: f.white.value === 'paper', w: W, h: H, widths, base, ext: 'jpg',
-        preview: { src: `${base}${stemName}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) },
-        file: stemName, process };
+      await put(`originals/${stem}.${ext}`, file, file.type || 'image/jpeg');
+      const pic = await storeImages(stem, dr.result(), (t) => { f.progress.textContent = t; });
+      const data = { name, title, ...det, section: f.section.value, order: paintingsIn(f.section.value).length, wide: f.wide.checked,
+        white_paper: dr.white === 'paper', ...pic, process: dr.record(`originals/${stem}.${ext}`) };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
       try { localStorage.setItem('editor-medium', det.medium); localStorage.setItem('editor-height', String(det.cm[0])); } catch { /* private browsing */ }
-      pending = null;
+      adding = null;
       toast(`"${title}" added as a draft`);
       render();
     } catch (e) {
