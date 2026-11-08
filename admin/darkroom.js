@@ -338,15 +338,18 @@ export function squaredUp(src, q, w, h) {
 
 // ---- the full-size view: picking spots and placing corners ------------------------------------------------
 
-/* The "show the whole picture" icon: four arrows from the centre out to the corners, drawn rather than a
-   character, so it looks the same in every browser's fonts. */
-function fitIcon() {
+/* The buttons' icons, drawn rather than characters so they look the same in every browser's fonts. */
+const ICONS = {
+  fit: 'M8 8 2.5 2.5M2.5 7V2.5H7M12 8l5.5-5.5M13 2.5h4.5V7M8 12l-5.5 5.5M2.5 13v4.5H7M12 12l5.5 5.5M17.5 13v4.5H13',  // arrows out to the corners
+  clear: 'M9.5 2.5Q10.28 8.22 16.0 9Q10.28 9.78 9.5 15.5Q8.72 9.78 3.0 9Q8.72 8.22 9.5 2.5ZM17 12.9Q17.43 16.07 20.6 16.5Q17.43 16.93 17 20.1Q16.57 16.93 13.4 16.5Q16.57 16.07 17 12.9ZM5 15.0Q5.3 17.2 7.5 17.5Q5.3 17.8 5 20.0Q4.7 17.8 2.5 17.5Q4.7 17.2 5 15.0ZM17.5 2.8v3.4M15.8 4.5h3.4M11 19.4v2.2M9.9 20.5h2.2',  // sparkles: wipe clean
+  cancel: 'M5 5l10 10M15 5 5 15',
+  done: 'M3.5 10.5l4.5 4.5L16.5 5.5',
+};
+function icon(name, box = name === 'clear' ? 24 : 20) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+  svg.setAttribute('viewBox', `0 0 ${box} ${box}`); svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
   svg.setAttribute('aria-hidden', 'true'); svg.style.display = 'block';
-  svg.innerHTML = '<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
-    + '<path d="M8 8 2.5 2.5M2.5 7V2.5H7"/><path d="M12 8l5.5-5.5M13 2.5h4.5V7"/>'
-    + '<path d="M8 12l-5.5 5.5M2.5 13v4.5H7"/><path d="M12 12l5.5 5.5M17.5 13v4.5H13"/></g>';
+  svg.innerHTML = `<path d="${ICONS[name]}" fill="none" stroke="currentColor" stroke-width="${name === 'clear' ? 1.7 : 1.8}" stroke-linecap="round" stroke-linejoin="round"/>`;
   return svg;
 }
 
@@ -373,15 +376,15 @@ export function fullView(img, mode, start, guess) {
       el('div', { className: 'dr-bar' },
         el('div', { className: 'dr-buttons' },
           btn('−', () => zoomBy(1 / 1.6), '', 'Zoom out'), btn('+', () => zoomBy(1.6), '', 'Zoom in'),
-          btn(fitIcon(), () => { fit(); draw(); }, '', 'Show the whole picture'),
+          btn(icon('fit'), () => { fit(); draw(); }, '', 'Show the whole picture'),
           ...(mode === 'corners' ? [
             btn('↺', () => labelsRound(-1), '', 'Move the corner labels round anticlockwise'),
             btn('↻', () => labelsRound(1), '', 'Move the corner labels round clockwise'),
             btn('⇋', () => { pts = [pts[1], pts[0], pts[3], pts[2]]; draw(); }, '', 'Mirror: swap left and right'),
             btn('⎌', () => { pts = (guess || FRAME).map((p) => [p[0] * W, p[1] * H]); draw(); }, '', 'Back to the best guess')]
-            : [btn('Clear', () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
-          count, btn('Cancel', () => close(null)),
-          done = btn('Done', () => close(pts), 'main'))),
+            : [btn(icon('clear'), () => { pts = []; draw(); }, '', 'Remove all the white spots')]),
+          count, btn(icon('cancel'), () => close(null), 'dr-cancel', 'Cancel'),
+          done = btn(icon('done'), () => close(pts), 'main', 'Done'))),
       cv, loupe);
     document.body.append(box);
     // No text or picture selection, long-press menu or magnifier while working in here (Safari offers them on a long press).
@@ -515,7 +518,7 @@ export function fullView(img, mode, start, guess) {
           ctx.font = '600 13px -apple-system, sans-serif'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
           ctx.strokeText(String(i + 1), x + r + 4, y - r); ctx.fillText(String(i + 1), x + r + 4, y - r);
         });
-        count.textContent = pts.length ? `${pts.length} ${pts.length === 1 ? 'spot' : 'spots'}` : 'No spots yet';
+        count.textContent = '';
       }
     }
 

@@ -133,8 +133,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
   corner; the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
-  bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions on screen (Christopher's choice: symbol
-  buttons with tooltips; ⎌ goes back to the guess);
+  bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions or counts on screen (Christopher's choice:
+  symbol buttons with tooltips, the icons drawn as SVG in darkroom.js ICONS: fit, sparkles to clear the white
+  spots, a cross to cancel, a tick for done; ⎌ goes back to the guess);
   a tap within about 28 screen pixels removes a white spot; zoomed in, two arrows at each corner glide the
   view along its edges to the next corner). Thumbnails in the editor's lists show each painting's true shape. Before and after are shown side by side; the sizes
   are made from the result. The choices are saved with the painting as `process` (original, white, spots,
