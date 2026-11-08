@@ -193,29 +193,62 @@ function contentView() {
 }
 
 /* The painting's medium, size in centimetres and year, as separate fields (the server makes the details line
-   from them). d: the painting's data, or {} for a new one, which starts with the last medium and height used. */
+   from them). d: the painting's data, or {} for a new one, which starts with the last medium and height used.
+   What drives what (Christopher's decision, Nov 2026): a measured size is the dog. Measured: the height and width
+   are as typed and fix the picture's shape when it's squared up. Not measured (estimated: true in the data):
+   the shape comes from the photo, and the size only sets the scale: the side last typed is kept and the other
+   follows the picture's proportions (f.ratio, width over height, set by the darkroom), greyed. Whether visitors
+   see the size is a separate tick (size_shown), on by default when measured, off when not. */
 function detailsFields(f, d, onSize) {
   const media = [...new Set(entries.filter((e) => e.kind === 'painting' && current(e)).map((e) => current(e).medium).filter(Boolean))].sort();
   const listId = `media-${Math.random().toString(36).slice(2, 8)}`;
   const old = !d.cm && d.details ? /^(.*?),\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm(?:,\s*(.*))?$/i.exec(d.details) : null;
   const remembered = (k, dflt) => { try { return localStorage.getItem(k) || dflt; } catch { return dflt; } };
   const isNew = !d.title;
-  const num = (value, label) => h('label', { class: 'num' }, label,
-    h('input', { type: 'number', inputmode: 'decimal', min: '0.1', step: '0.1', value, oninput: onSize }));
+  const typed = (side) => () => {
+    if (f.estimated.checked) { f.scaleBy = side; f[side].classList.remove('suggested'); f.follow(); }
+    if (onSize) onSize();
+  };
+  const num = (value, label, side) => h('label', { class: 'num' }, label,
+    h('input', { type: 'number', inputmode: 'decimal', min: '0.1', step: '0.1', value, oninput: typed(side) }));
+  const group = `how-${Math.random().toString(36).slice(2, 8)}`;
+  const how = () => {                                // Measured / Not measured chosen
+    if (!f.shownTouched) f.shown.checked = !f.estimated.checked;
+    if (f.estimated.checked) f.follow(); else { f.height.classList.remove('suggested'); f.width.classList.remove('suggested'); }
+    if (onSize) onSize();
+  };
+  const unmeasured = isNew || !!d.estimated;
   const out = [
     h('label', {}, 'Medium'),
     f.medium = h('input', { type: 'text', autocomplete: 'off', list: listId,
       value: d.medium ?? (old ? old[1] : isNew ? remembered('editor-medium', '') : d.details || '') }),
     h('datalist', { id: listId }, ...media.map((m) => h('option', { value: m }))),
     h('div', { class: 'row size' },
-      f.hBox = num(d.cm ? d.cm[0] : old ? old[2] : isNew ? remembered('editor-height', '60') : '', 'Height (cm)'),
-      f.wBox = num(d.cm ? d.cm[1] : old ? old[3] : '', 'Width (cm)'),
+      f.hBox = num(d.cm ? d.cm[0] : old ? old[2] : isNew ? remembered('editor-height', '60') : '', 'Height (cm)', 'height'),
+      f.wBox = num(d.cm ? d.cm[1] : old ? old[3] : '', 'Width (cm)', 'width'),
       f.yBox = h('label', { class: 'num' }, 'Year', h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off',
         value: d.year ?? (old ? old[4] || '' : isNew ? String(new Date().getFullYear()) : '') }))),
-    h('label', { class: 'tick' }, f.estimated = h('input', { type: 'checkbox', checked: !!d.estimated, onchange: onSize }),
-      'Size estimated: used for the shape and the gallery, not shown to visitors until measured'),
+    h('div', { class: 'row how' },
+      h('label', { class: 'tick', title: 'The height and width are as measured, and the picture is squared up to exactly that shape' },
+        f.measured = h('input', { type: 'radio', name: group, checked: !unmeasured, onchange: how }), 'Measured'),
+      h('label', { class: 'tick', title: 'The shape comes from the photo; the size you type only sets the scale, and the other side follows' },
+        f.estimated = h('input', { type: 'radio', name: group, checked: unmeasured, onchange: how }), 'Not measured')),
+    h('label', { class: 'tick' }, f.shown = h('input', { type: 'checkbox', checked: d.size_shown ?? !unmeasured,
+      onchange: () => { f.shownTouched = true; } }), 'Show the size to visitors'),
   ];
   f.height = f.hBox.querySelector('input'); f.width = f.wBox.querySelector('input'); f.year = f.yBox.querySelector('input');
+  f.scaleBy = 'height'; f.shownTouched = d.size_shown != null;
+  f.ratio = d.cm ? d.cm[1] / d.cm[0] : null;
+  /* Not measured: work out the side not typed from the one that was. */
+  f.follow = () => {
+    if (!f.estimated.checked || !(f.ratio > 0)) return;
+    const [from, to] = f.scaleBy === 'width' ? [f.width, f.height] : [f.height, f.width];
+    const v = parseFloat(from.value);
+    if (!(v > 0)) return;
+    to.value = String(Math.round((f.scaleBy === 'width' ? v / f.ratio : v * f.ratio) * 10) / 10);
+    to.classList.add('suggested'); from.classList.remove('suggested');
+  };
+  if (unmeasured && !isNew) f.width.classList.add('suggested');
   return out;
 }
 /* The fields' values, or an error message. */
@@ -223,7 +256,7 @@ function detailsOf(f) {
   const hgt = parseFloat(f.height.value), wid = parseFloat(f.width.value);
   if (!(hgt > 0) || !(wid > 0)) return { error: 'Give the height and width in centimetres' };
   return { medium: f.medium.value.trim(), cm: [Math.round(hgt * 10) / 10, Math.round(wid * 10) / 10], year: f.year.value.trim(),
-    ...(f.estimated.checked ? { estimated: true } : {}) };
+    ...(f.estimated.checked ? { estimated: true } : {}), size_shown: f.shown.checked };
 }
 
 /* Forms are rebuilt whenever the page re-renders (after any save, e.g. adding a genre mid-way), so what has been
@@ -234,9 +267,18 @@ let newGenre = null;                // a genre just added, for the add form to p
 function carry(from, to) {
   if (!from) return;
   for (const k of ['title', 'medium', 'height', 'width', 'year']) if (from[k] && to[k]) to[k].value = from[k].value;
-  for (const k of ['estimated', 'wide']) if (from[k] && to[k]) to[k].checked = from[k].checked;
-  if (from.width && to.width) to.width.classList.toggle('suggested', from.width.classList.contains('suggested'));
+  for (const k of ['measured', 'estimated', 'shown', 'wide']) if (from[k] && to[k]) to[k].checked = from[k].checked;
+  for (const k of ['height', 'width']) if (from[k] && to[k]) to[k].classList.toggle('suggested', from[k].classList.contains('suggested'));
+  for (const k of ['scaleBy', 'shownTouched', 'ratio']) if (k in from) to[k] = from[k];
   if (from.section && to.section && [...to.section.options].some((o) => o.value === from.section.value)) to.section.value = from.section.value;
+}
+
+/* For the editor's rows: the size when the details line doesn't say all there is to know about it. */
+function sizeNote(d) {
+  if (!d.cm) return null;
+  const shown = d.size_shown ?? !d.estimated;
+  if (shown) return null;                          // the details line has it ("about" when not measured)
+  return h('span', { class: 'muted' }, ` (${d.estimated ? 'not measured' : 'measured'}: ${d.cm[0]} × ${d.cm[1]} cm${shown ? '' : ', hidden from visitors'})`);
 }
 
 function paintingRow(e, items, i, secs) {
@@ -245,7 +287,7 @@ function paintingRow(e, items, i, secs) {
   const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') },
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
     h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
-      h('span', { class: 'd' }, d.details || ' ', d.estimated ? h('span', { class: 'muted' }, ` (size estimated: ${d.cm[0]} × ${d.cm[1]} cm)`) : null)),
+      h('span', { class: 'd' }, d.details || ' ', sizeNote(d))),
     badge(e),
     gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
       : h('span', { class: 'move' },
@@ -266,7 +308,7 @@ function paintingRow(e, items, i, secs) {
       f.go = h('button', { class: 'main', onclick: async () => {
         const moved = f.section.value !== d.section, det = detailsOf(f);
         if (det.error) return toast(det.error, true);
-        const { estimated, ...rest } = d;                // dropped unless still ticked
+        const { estimated, size_shown, ...rest } = d;    // put back from the form (detailsOf)
         const re = reopened.get(e.id);
         let pic = {};
         if (re && re.dr.changed()) {                     // new image sizes under a new file name; the old ones stay for History
@@ -362,7 +404,7 @@ function nameFor(title) {
 /* The steps that make a painting's picture from a photo: white balance, corners and shape, with the photo and
    the result side by side. Used by the add form and by a painting's Edit form (to change the white or corners
    of one already added, from its original in R2). Its element is kept across re-renders of the page; the form
-   it sits in gives it the details fields (height, width, size estimated) with attach(). */
+   it sits in gives it the details fields (height, width, measured or not) with attach(). */
 function darkroom() {
   const g = {};
   let F = {}, p = null, baseline = '';
@@ -391,8 +433,7 @@ function darkroom() {
           const t = turnOf(p.corners);                                  // keep which way up, take in the whole photo
           p.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
         } }, 'Whole photo')),
-      g.shapeRow = h('label', { class: 'tick' }, g.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
-        g.shapeText = h('span', {})),
+      g.shapeText = h('p', { class: 'hint shape-note' }),
       g.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => g.compare.classList.toggle('big') })),
     g.status = h('p', { class: 'hint' }));
   function slid() {
@@ -422,9 +463,8 @@ function darkroom() {
       g.white.value = process.white; p.spots = (process.spots || []).map((q) => q.slice());
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
-      g.shape.checked = !!process.shape || !process.corners;
     } else {
-      g.white.value = white; g.bright.value = 100; g.warm.value = 0; g.shape.checked = true;
+      g.white.value = white; g.bright.value = 100; g.warm.value = 0;
       if (guess && p.guess && !wholePhoto(p.guess)) p.corners = p.guess;     // a new photo: start from the guess
     }
     slid(); clearTimeout(timer);
@@ -455,11 +495,14 @@ function darkroom() {
     return p.white;
   }
   const cropped = () => !!(p && p.corners && !wholePhoto(p.corners));
+  /* The shape the picture is squared up to: the measured size's, or none (then the photo's perspective decides). */
   function shapeLine() {
     const det = F.height ? detailsOf(F) : { error: 1 }, size = det.error ? null : det.cm;
-    g.shapeRow.hidden = !(p && cropped() && size);
-    if (size) g.shapeText.textContent = `Squared up to the shape of its size: ${size[0]} × ${size[1]} centimetres`;
-    return g.shape.checked && cropped() ? size : null;
+    const measured = !!(F.estimated && !F.estimated.checked && size);
+    g.shapeText.textContent = !p || !cropped() ? ''
+      : measured ? `Shape: from its measured size, ${size[0]} × ${size[1]} centimetres`
+      : 'Shape: from the photo\'s perspective';
+    return measured && cropped() ? size : null;
   }
   const busy = (text) => { g.status.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
 
@@ -472,13 +515,12 @@ function darkroom() {
     g.wholeBtn.hidden = !cropped();
     const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
     g.cornersNote.textContent = (cropped() ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '');
-    // Suggest the width from the height and the picture's proportions (after cropping and turning), unless a
-    // width has been typed. A photo taken a little from one side can be a few per cent out, so it's a suggestion.
-    const hgt = F.height ? parseFloat(F.height.value) : NaN;
-    if (hgt > 0 && (!F.width.value || F.width.classList.contains('suggested'))) {
+    // The picture's proportions as the photo has them (after cropping and turning): when the size isn't measured,
+    // the side not typed follows them (F.follow, in detailsFields).
+    if (F.follow) {
       let ratio = p.W / p.H;
       if (p.corners) { const [a, b] = cropSize(p.corners.map(([u, v]) => [u * p.W, v * p.H]), null, [p.W / 2, p.H / 2]); ratio = a / b; }
-      F.width.value = String(Math.round(hgt * ratio)); F.width.classList.add('suggested'); F.estimated.checked = true;
+      F.ratio = ratio; F.follow();
     }
     const shape = shapeLine();
     await busy('Working…');
@@ -557,12 +599,7 @@ function addForm(secs) {
     dr.note || (dr.note = h('p', { class: 'hint stored-note' })),
     dr.el,
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
-    ...detailsFields(f, {}, () => {
-      if (document.activeElement === f.width && f.width.classList.contains('suggested')) {   // typed: measured, not a suggestion
-        f.width.classList.remove('suggested'); f.estimated.checked = false;
-      }
-      dr.sizeChanged();
-    }),
+    ...detailsFields(f, {}, () => dr.sizeChanged()),
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
@@ -659,7 +696,7 @@ async function keepOriginal(file, name, known, say) {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Size estimated', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];

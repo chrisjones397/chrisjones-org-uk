@@ -169,11 +169,16 @@ function normalise(id, kind, d) {
       if (!Array.isArray(d.cm) || d.cm.length !== 2) throw new Bad('Bad size');
       cm = d.cm.map((v) => { num(v, 'Size'); if (!(v > 0 && v < 10000)) throw new Bad('A size must be more than 0 cm'); return Math.round(v * 10) / 10; });
     }
-    // An estimated size shapes the picture and scales it in the gallery, but isn't shown until measured.
+    // estimated: the size isn't measured (only a scale; the photo gave the shape). size_shown: whether visitors see
+    // the size, kept only when it differs from the default (shown when measured, hidden when not); an estimated
+    // size that is shown says "about".
     const estimated = parts && cm && !!d.estimated;
-    const details = parts ? [medium, cm && !estimated && `${cm[0]} x ${cm[1]} cm`, year].filter(Boolean).join(', ') : str(d.details || '', 200, 'Details');
+    const shown = !!cm && (d.size_shown == null ? !estimated : !!d.size_shown);
+    const size = cm && shown && `${estimated ? 'about ' : ''}${cm[0]} x ${cm[1]} cm`;
+    const details = parts ? [medium, size, year].filter(Boolean).join(', ') : str(d.details || '', 200, 'Details');
     return {
-      name: d.name, title, ...(parts ? { medium, cm, year, ...(estimated ? { estimated: true } : {}) } : {}), details, section: d.section,
+      name: d.name, title, ...(parts ? { medium, cm, year, ...(estimated ? { estimated: true } : {}),
+        ...(cm && shown !== !estimated ? { size_shown: shown } : {}) } : {}), details, section: d.section,
       order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       base: d.base, ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },

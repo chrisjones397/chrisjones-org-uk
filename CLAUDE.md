@@ -131,11 +131,15 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   A painting has medium, cm [height, width] (numbers, centimetres only, by Christopher's choice) and year as
   fields; the server makes `details` ("Oil on canvas, 60 x 90 cm, 2020") from them, and site.js gives the
   gallery `cm` (older entries with only a details line still work; all were converted Nov 2026). The add form
-  starts with the last medium and height used (60 at first) and this year; the width is suggested, in grey, from
-  the height and the cropped picture's proportions until a width is typed; height and width are required.
-  "Size estimated" (estimated: true; ticked automatically with a suggested width, unticked when a width is typed):
-  the size still shapes the crop and scales the gallery, but the details line leaves it out until measured; the
-  editor's painting rows say "(size estimated: H × W cm)". A photo's proportions come from its perspective
+  starts Not measured, with the last medium and height used (60 at first) and this year; the width is suggested, in grey, from
+  the photo's proportions (see below); height and width are required.
+  What drives what (Christopher's decision, Nov 2026): a measured size is the dog. "Measured" or "Not measured"
+  (estimated: true): measured, the height and width as typed fix the shape the picture is squared up to (process
+  shape); not measured, the photo's perspective gives the shape and the size only sets the scale (the side last
+  typed is kept, the other follows the picture's proportions, greyed; detailsFields f.follow, f.ratio from the
+  darkroom). The darkroom says which ("Shape: from its measured size" / "from the photo's perspective"). Showing
+  the size to visitors is a separate tick (size_shown, stored only when it differs from the default: shown when
+  measured, hidden when not); a shown estimate says "about 60 x 75 cm". The editor's rows note a hidden size. A photo's proportions come from its perspective
   (darkroom.js trueRatio, Zhang and He's whiteboard method: the vanishing points of the edges give the focal
   length, so the true width/height; a typical phone lens, 26/36 of the longer side, when only one pair of edges
   converges; tested within 1% on simulated photos, where averaging the side lengths was up to 17% out).
@@ -155,7 +159,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   left and right; crossed edges hold
   back Done, dimmed, with no message), so
   squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of its
-  height and width if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
+  height and width if measured. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
   corner; the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
   bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions or counts on screen (Christopher's choice:
