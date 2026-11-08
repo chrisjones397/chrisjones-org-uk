@@ -7,7 +7,7 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
-import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, sizeIn, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
+import { SOURCE_MAX, scaled, resized, whiteBalanced, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
 function h(tag, props = {}, ...kids) {
@@ -192,6 +192,37 @@ function contentView() {
   return out;
 }
 
+/* The painting's medium, size in centimetres and year, as separate fields (the server makes the details line
+   from them). d: the painting's data, or {} for a new one, which starts with the last medium and height used. */
+function detailsFields(f, d, onSize) {
+  const media = [...new Set(entries.filter((e) => e.kind === 'painting' && current(e)).map((e) => current(e).medium).filter(Boolean))].sort();
+  const listId = `media-${Math.random().toString(36).slice(2, 8)}`;
+  const old = !d.cm && d.details ? /^(.*?),\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm(?:,\s*(.*))?$/i.exec(d.details) : null;
+  const remembered = (k, dflt) => { try { return localStorage.getItem(k) || dflt; } catch { return dflt; } };
+  const isNew = !d.title;
+  const num = (value, label) => h('label', { class: 'num' }, label,
+    h('input', { type: 'number', inputmode: 'decimal', min: '0.1', step: '0.1', value, oninput: onSize }));
+  const out = [
+    h('label', {}, 'Medium'),
+    f.medium = h('input', { type: 'text', autocomplete: 'off', list: listId,
+      value: d.medium ?? (old ? old[1] : isNew ? remembered('editor-medium', '') : d.details || '') }),
+    h('datalist', { id: listId }, ...media.map((m) => h('option', { value: m }))),
+    h('div', { class: 'row size' },
+      f.hBox = num(d.cm ? d.cm[0] : old ? old[2] : isNew ? remembered('editor-height', '60') : '', 'Height (cm)'),
+      f.wBox = num(d.cm ? d.cm[1] : old ? old[3] : '', 'Width (cm)'),
+      f.yBox = h('label', { class: 'num' }, 'Year', h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off',
+        value: d.year ?? (old ? old[4] || '' : isNew ? String(new Date().getFullYear()) : '') }))),
+  ];
+  f.height = f.hBox.querySelector('input'); f.width = f.wBox.querySelector('input'); f.year = f.yBox.querySelector('input');
+  return out;
+}
+/* The fields' values, or an error message. */
+function detailsOf(f) {
+  const hgt = parseFloat(f.height.value), wid = parseFloat(f.width.value);
+  if (!(hgt > 0) || !(wid > 0)) return { error: 'Give the height and width in centimetres' };
+  return { medium: f.medium.value.trim(), cm: [Math.round(hgt * 10) / 10, Math.round(wid * 10) / 10], year: f.year.value.trim() };
+}
+
 function paintingRow(e, items, i, secs) {
   const d = current(e);
   const gone = e.draft == null;
@@ -209,14 +240,15 @@ function paintingRow(e, items, i, secs) {
   const f = {};
   const form = h('div', { class: 'edit' },
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
-    h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', value: d.details }),
+    ...detailsFields(f, d),
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
     h('p', { class: 'hint' }, `Address: /paintings/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
       h('button', { class: 'main', onclick: () => {
-        const moved = f.section.value !== d.section;
-        const data = { ...d, title: f.title.value, details: f.details.value, wide: f.wide.checked,
+        const moved = f.section.value !== d.section, det = detailsOf(f);
+        if (det.error) return toast(det.error, true);
+        const data = { ...d, title: f.title.value, ...det, wide: f.wide.checked,
           section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order };
         open.delete(e.id);
         save([{ id: e.id, kind: 'painting', data }]);
@@ -296,8 +328,10 @@ function addForm(secs) {
         f.shapeText = h('span', {})),
       f.compare = h('div', { class: 'compare', title: 'Tap to make bigger or smaller', onclick: () => f.compare.classList.toggle('big') })),
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
-    h('label', {}, 'Details (medium, height x width cm, year)'), f.details = h('input', { type: 'text', autocomplete: 'off',
-      value: localStorage.getItem('editor-medium') || '', oninput: () => { if (pending && pending.corners) later(update); else shapeLine(); } }),
+    ...detailsFields(f, {}, () => {
+      if (document.activeElement === f.width) f.width.classList.remove('suggested');     // typed: no longer a suggestion
+      if (pending) later(update); else shapeLine();
+    }),
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
     h('div', { class: 'actions' }, f.go = h('button', { class: 'main', onclick: add }, 'Add as a draft')),
@@ -355,9 +389,9 @@ function addForm(secs) {
     return p.white;
   }
   function shapeLine() {
-    const size = sizeIn(f.details.value);
+    const det = detailsOf(f), size = det.error ? null : det.cm;
     f.shapeRow.hidden = !(pending && cropped() && size);
-    if (size) f.shapeText.textContent = `Squared up to the shape of the size in the details: ${size[0]} × ${size[1]} centimetres`;
+    if (size) f.shapeText.textContent = `Squared up to the shape of its size: ${size[0]} × ${size[1]} centimetres`;
     return f.shape.checked && cropped() ? size : null;
   }
   const cropped = () => !!(pending && pending.corners && !wholePhoto(pending.corners));
@@ -373,6 +407,14 @@ function addForm(secs) {
     f.wholeBtn.hidden = !cropped();
     const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
     f.cornersNote.textContent = (cropped() ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '');
+    // Suggest the width from the height and the picture's proportions (after cropping and turning), unless a
+    // width has been typed. A photo taken a little from one side can be a few per cent out, so it's a suggestion.
+    const hgt = parseFloat(f.height.value);
+    if (hgt > 0 && (!f.width.value || f.width.classList.contains('suggested'))) {
+      let ratio = p.W / p.H;
+      if (p.corners) { const [a, b] = cropSize(p.corners.map(([u, v]) => [u * p.W, v * p.H]), null); ratio = a / b; }
+      f.width.value = String(Math.round(hgt * ratio)); f.width.classList.add('suggested');
+    }
     const shape = shapeLine();
     await busy('Working…');
     const { canvas: wb, note } = balanced();
@@ -401,6 +443,8 @@ function addForm(secs) {
     const title = f.title.value.trim();
     if (!title) return toast('Give it a title', true);
     if (!f.section.value) return toast('Add a genre first', true);
+    const det = detailsOf(f);
+    if (det.error) return toast(det.error, true);
     f.go.disabled = true;
     try {
       const { file, out, outW: W, outH: H } = pending;
@@ -423,12 +467,12 @@ function addForm(secs) {
         ...(f.white.value === 'picks' ? { spots: pending.spots } : {}),
         ...(f.white.value !== 'none' ? how() : {}),
         ...(pending.corners ? { corners: pending.corners } : {}), ...(shape ? { shape } : {}) };
-      const data = { name, title, details: f.details.value, section: f.section.value, order, wide: f.wide.checked,
+      const data = { name, title, ...det, section: f.section.value, order, wide: f.wide.checked,
         white_paper: f.white.value === 'paper', w: W, h: H, widths, base, ext: 'jpg',
         preview: { src: `${base}${stemName}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) },
         file: stemName, process };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
-      try { localStorage.setItem('editor-medium', f.details.value.replace(/,[^,]*\d.*$/, '')); } catch { /* private browsing */ }
+      try { localStorage.setItem('editor-medium', det.medium); localStorage.setItem('editor-height', String(det.cm[0])); } catch { /* private browsing */ }
       pending = null;
       toast(`"${title}" added as a draft`);
       render();
@@ -449,12 +493,14 @@ async function put(key, blob, type) {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { title: 'Title', details: 'Details', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
-  const show = (k, v) => (k === 'section' ? ((byId(v) && current(byId(v)).title) || v) : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
-  return Object.keys(b).filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map((k) =>
+  const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'section' ? ((byId(v) && current(byId(v)).title) || v)
+    : k === 'cm' ? `${v[0]} × ${v[1]} cm` : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
+  // the details line is made from medium, size and year, so it isn't listed as a change of its own
+  return Object.keys(b).filter((k) => !(k === 'details' && 'cm' in b) && JSON.stringify(a[k]) !== JSON.stringify(b[k])).map((k) =>
     h('div', {}, h('b', {}, `${FIELDS[k] || k}: `), h('del', {}, show(k, a[k])), ' → ', h('ins', {}, show(k, b[k]))));
 }
 

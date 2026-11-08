@@ -66,7 +66,8 @@ export function galleryData(c) {
   const items = c.paintings.map((p) => {
     const m = SIZE_RE.exec(p.details || '');
     return { name: p.name, title: p.title, details: p.details, wide: p.wide, w: p.w, h: p.h, widths: p.widths,
-      cm: m ? [parseFloat(m[1]), parseFloat(m[2])] : null, base: p.base, file: stem(p), ext: p.ext };
+      cm: p.cm || (m ? [parseFloat(m[1]), parseFloat(m[2])] : null),     // the size as entered, or read from older details lines
+      base: p.base, file: stem(p), ext: p.ext };
   });
   // inside <script>, so no "<" may appear as itself
   return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items }).replace(/</g, '\\u003c');

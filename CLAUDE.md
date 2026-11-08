@@ -62,7 +62,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   section). It copies index.html's `<style>` and header into every other page, so shared styles live in
   index.html. It fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
   Never edit generated files by hand; change index.html, the script or paintings.yaml and rebuild.
-- **paintings.yaml**: sections and paintings (title, details "Medium, H x W cm, year", wide, white_paper: drawings
+- **paintings.yaml**: sections and paintings (title, details "Medium, H x W cm, year" (in D1 now medium, cm and year
+  separately, see the editor), wide, white_paper: drawings
   white balanced by the build from the paper all round their edges, following the light's fall-off across
   the sheet; masters untouched; phone photos are stood upright from their EXIF tag), plus
   `contact_picture:`, `gallery_invitation:` (paintings shown before the 3D gallery loads) and `gallery:` settings.
@@ -120,6 +121,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   Gallery, Contact, Profile, Footer: its heading, then a box per paragraph, added, moved and deleted there;
   PAGE in admin/editor.js), Review with ticks, History with "Bring back"); its API is /admin/api/* in
   editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
+  A painting has medium, cm [height, width] (numbers, centimetres only, by Christopher's choice) and year as
+  fields; the server makes `details` ("Oil on canvas, 60 x 90 cm, 2020") from them, and site.js gives the
+  gallery `cm` (older entries with only a details line still work; all were converted Nov 2026). The add form
+  starts with the last medium and height used (60 at first) and this year; the width is suggested, in grey, from
+  the height and the cropped picture's proportions until a width is typed; height and width are required.
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
   and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
   from a working copy (at most 4096 pixels along its longer side): white balance (none; "paper all round", a
@@ -135,8 +141,8 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if paintings.yaml 
   bottom corners; tapping an edge relabels so it's the bottom; ↺ ↻ move every label one corner round; ⇋ swaps
   left and right; crossed edges hold
   back Done, dimmed, with no message), so
-  squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of the
-  "H x W cm" in the details if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
+  squaring up by a perspective map also turns or mirrors it (no separate rotate step, by Christopher's design), to the shape of its
+  height and width if ticked. Spots and corners are placed in a full-screen view (pinch or trackpad
   zoom, double-tap to zoom in or back out (single taps wait 280 ms for a second), drag to move, each corner a crosshair with a knob on a stick, so a finger doesn't hide it; magnifier while dragging a
   corner; the crop line drawn one screen dot wide and half see-through, crosshairs gapped at the centre; the
   bottom edge marked by an amber line just outside it; no selection or long-press menu in there; no instructions or counts on screen (Christopher's choice:

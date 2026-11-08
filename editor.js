@@ -158,8 +158,18 @@ function normalise(id, kind, d) {
     const pv = d.preview || {};
     if (typeof pv.src !== 'string' || !pv.src.startsWith(d.base) || !/^[a-z0-9/.-]+$/.test(pv.src)) throw new Bad('Bad preview image');
     if (!/^s-[a-z0-9-]{1,80}$/.test(d.section || '')) throw new Bad('Bad section');
+    // Medium, size in centimetres (height, width) and year, kept separately; the details line visitors see is
+    // made from them ("Oil on canvas, 60 x 90 cm, 2020"). Older entries with only a details line keep it.
+    const parts = d.medium != null || d.cm != null || d.year != null;
+    const medium = str(d.medium ?? '', 120, 'Medium'), year = str(d.year ?? '', 20, 'Year');
+    let cm = null;
+    if (d.cm != null) {
+      if (!Array.isArray(d.cm) || d.cm.length !== 2) throw new Bad('Bad size');
+      cm = d.cm.map((v) => { num(v, 'Size'); if (!(v > 0 && v < 10000)) throw new Bad('A size must be more than 0 cm'); return Math.round(v * 10) / 10; });
+    }
+    const details = parts ? [medium, cm && `${cm[0]} x ${cm[1]} cm`, year].filter(Boolean).join(', ') : str(d.details || '', 200, 'Details');
     return {
-      name: d.name, title, details: str(d.details || '', 200, 'Details'), section: d.section,
+      name: d.name, title, ...(parts ? { medium, cm, year } : {}), details, section: d.section,
       order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       base: d.base, ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
