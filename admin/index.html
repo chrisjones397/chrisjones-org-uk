@@ -74,6 +74,8 @@
            max-width: 90vw; z-index: 10; }
   #toast.show { opacity: 1; } #toast.error { background: #5a2626; }
   .muted { color: var(--dim); }
+  #signin { max-width: 46rem; margin: 0.8rem auto 0; padding: 0.7rem 1rem; border-radius: 8px; background: #5a2626; }
+  #signin a { font-weight: 600; }
   .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 0.6rem 0; cursor: zoom-in; }
   .compare.big { grid-template-columns: 1fr; cursor: zoom-out; }
   .compare.one { grid-template-columns: minmax(0, 24rem); }
@@ -146,6 +148,8 @@
     <a href="/" target="_blank" rel="noopener">Preview ↗</a>
   </div>
 </header>
+<div id="signin" role="alert" hidden>Your sign-in has run out. <a href="/admin/" target="_blank" rel="opener">Sign in again ↗</a>
+  <span class="muted">in a new tab, then come back and try once more: what you've typed here is kept.</span></div>
 <main id="main"><p class="muted">Loading…</p></main>
 <div id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="editor.js"></script>

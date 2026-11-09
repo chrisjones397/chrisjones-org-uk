@@ -132,7 +132,7 @@ Claude, before pushing: `git pull --rebase` too.
 - **The editor**: any host starting "admin" is the editor: admin.chrisjones.org.uk (live Worker, Access app
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
-  ACCESS_AUD per Worker). There the site shows drafts, with a bar; /admin/ is the editor (admin/index.html,
+  ACCESS_AUD per Worker; a rejected token is handled by signInAgain(), see 1c). There the site shows drafts, with a bar; /admin/ is the editor (admin/index.html,
   admin/editor.js: Gallery (add a painting at the top, then the genres and their paintings, with "Add a genre" under the Genres heading (a genre just added is picked in the add form; forms are rebuilt on every re-render, so carry() brings over what was typed in the add form and open Edit forms); the gallery's
   groupings are "genres" in the editor, kind 'section' in the data), Content (a box per page section, Hero,
   Gallery, Contact, Profile, Footer: its heading, then a box per paragraph, added, moved and deleted there;
@@ -240,12 +240,14 @@ Claude, before pushing: `git pull --rebase` too.
    the static or Apache setup) and add them here.
 1b. Retire build_site.py: done (Nov 2026), see "Nothing is built" above. The build command was removed from
    both Workers' build settings.
-1c. Next (Christopher's choice, Nov 2026: 1c before detail images). Start with a small sign-in fix: when
-   signedIn() rejects an Access token (e.g. one issued under an old team name, as happened after the team rename,
-   or an expired one), the editor shows a dead-end "Sign in required" page and Access doesn't ask again, because
-   its own cookie is still valid; Christopher had to clear cookies by hand. Instead, on an editor host, send the
-   browser to /cdn-cgi/access/logout (then back to the page), so a fresh sign-in starts by itself; API requests
-   (/admin/api/*) should get a 401 that editor.js turns into the same thing. Then:
+1c. Next (Christopher's choice, Nov 2026: 1c before detail images). Sign-in fix: done (Nov 2026). When
+   signedIn() rejects a token Access let through (old team name, another application), worker.js
+   signInAgain(): a page request clears Access's CF_Authorization cookie on that address and comes straight back
+   (302), so Access starts a fresh sign-in itself; a signin_retry cookie (one minute) makes a second failure show
+   a "Couldn't sign you in" page with a full sign-out link (/cdn-cgi/access/logout, which doesn't come back by
+   itself) instead of looping. API and image requests, and any with X-Requested-With, get a 401; admin/editor.js
+   fetchFor() sends X-Requested-With (so Access answers 401 for a run-out session rather than redirecting) and
+   on a 401 shows the #signin bar, whose link signs in in a new tab, keeping what's typed. Then:
    Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
    content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
    sizes made at upload like the paintings, published through Review like everything else. What stays in git

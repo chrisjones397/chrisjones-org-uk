@@ -37,7 +37,7 @@ export default {
 
     if (editor) {
       const who = await signedIn(request, env, url);
-      if (!who) return new Response('Sign in required.', { status: 403 });
+      if (!who) return signInAgain(request, url);
       if (path === '/admin') return Response.redirect(`${url.origin}/admin/`, 301);
       if (path.startsWith('/admin/api/')) return api(request, env, url, who);
       if (path.startsWith('/admin/')) {
@@ -73,6 +73,41 @@ async function notFound(env, url, mode = 'published') {
   const c = await load(env, mode);
   const page = new Response(notFoundPage, { headers: { 'content-type': 'text/html; charset=utf-8' } });
   return respond(rewriter(c).transform(page), mode === 'draft', 404);
+}
+
+/* On the editor's address, Access let a request through but its token didn't pass signedIn(): issued under an
+   old team name (as after the team rename, Nov 2026), or for another application. Access won't ask again while
+   its own cookie on this address lasts, so a page request clears that cookie and comes straight back: Access
+   then starts a fresh sign-in by itself (silently, if the sign-in address still has a good session). A marker
+   cookie, kept for a minute, means a second failure shows a page instead of going round again, so a mistake in
+   the settings (ACCESS_TEAM, ACCESS_AUD) can't loop. Requests from the editor's script (the API, images) get a
+   401, which admin/editor.js turns into a "Sign in again" link, so nothing typed is lost. */
+const RETRY = 'signin_retry';
+function signInAgain(request, url) {
+  const page = request.method === 'GET' && !url.pathname.startsWith('/admin/api/') && !url.pathname.startsWith('/media/')
+    && request.headers.get('x-requested-with') !== 'XMLHttpRequest';
+  if (!page) {
+    return new Response(JSON.stringify({ error: 'Your sign-in has run out: sign in again', signin: true }), {
+      status: 401, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+  }
+  const h = new Headers({ 'cache-control': 'no-store' });
+  if (new RegExp(`(?:^|;\\s*)${RETRY}=1`).test(request.headers.get('cookie') || '')) {
+    h.set('content-type', 'text/html; charset=utf-8');
+    h.append('set-cookie', `${RETRY}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`);
+    return new Response(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
+<title>Sign in - ${SITE}</title><style>body{margin:0;padding:3rem 1.5rem;background:#1a1a1a;color:#eee;
+font:16px/1.5 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif}main{max-width:32rem;margin:0 auto}
+a{color:#fff;text-decoration:none;border:1px solid #888;border-radius:6px;padding:0.45rem 0.8rem;display:inline-block}
+a:hover{text-shadow:0 0 8px #fff8e0}</style></head><body><main><h1 style="font-weight:300">Couldn't sign you in</h1>
+<p>Signing in again didn't help, so the editor's sign-in settings may need checking.</p>
+<p><a href="/cdn-cgi/access/logout">Sign out completely</a></p>
+<p style="color:#9a9a9a">Then come back to this address to sign in afresh.</p></main></body></html>`, { status: 403, headers: h });
+  }
+  h.set('location', url.pathname + url.search);
+  h.append('set-cookie', 'CF_Authorization=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax');
+  h.append('set-cookie', `${RETRY}=1; Path=/; Max-Age=60; Secure; HttpOnly; SameSite=Lax`);
+  return new Response(null, { status: 302, headers: h });
 }
 
 function respond(res, editor, status = 200) {
@@ -153,7 +188,7 @@ async function media(request, env, ctx, url, editor) {
         AND coalesce(json_extract(published, '$.file'), json_extract(published, '$.name')) = ? LIMIT 1`).bind(m[1]).first();
     if (!ok) return notFound(env, url);
   } else if (!(await signedIn(request, env, url))) {
-    return new Response('Sign in required.', { status: 403 });
+    return signInAgain(request, url);
   }
   const obj = await env.MEDIA.get(key);
   if (!obj) return notFound(env, url);

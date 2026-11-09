@@ -42,13 +42,23 @@ const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
 // ---- talking to the server ---------------------------------------------------------------------------------
 
 /* fetch, giving up after ms (a dropped phone signal can otherwise leave a request, and a disabled button,
-   waiting for ever). */
-async function fetchFor(url, opts, ms) {
-  try { return await fetch(url, { ...opts, signal: AbortSignal.timeout(ms) }); }
-  catch (e) {
+   waiting for ever).
+   X-Requested-With asks Cloudflare Access to answer 401 when its session has run out, rather than sending the
+   request off to its sign-in page (docs: Access, session management, AJAX); worker.js answers 401 too when it
+   rejects the token. Either way the sign-in bar appears, with a link that signs in afresh in a new tab, so
+   whatever is typed here stays put: sign in there, come back and try again. */
+async function fetchFor(url, opts = {}, ms) {
+  let r;
+  try {
+    r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), 'x-requested-with': 'XMLHttpRequest' },
+      signal: AbortSignal.timeout(ms) });
+  } catch (e) {
     if (e.name === 'TimeoutError' || e.name === 'AbortError') throw new Error('No answer from the server: check the signal and try again');
     throw new Error('Couldn\'t reach the server: check the signal and try again');
   }
+  $('#signin').hidden = r.status !== 401;
+  if (r.status === 401) throw new Error('Your sign-in has run out: sign in again, then try once more');
+  return r;
 }
 async function call(method, path, body) {
   const r = await fetchFor(`/admin/api/${path}`, {
