@@ -240,12 +240,18 @@ Claude, before pushing: `git pull --rebase` too.
    the static or Apache setup) and add them here.
 1b. Retire build_site.py: done (Nov 2026), see "Nothing is built" above. The build command was removed from
    both Workers' build settings.
-1c. Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
+1c. Next (Christopher's choice, Nov 2026: 1c before detail images). Start with a small sign-in fix: when
+   signedIn() rejects an Access token (e.g. one issued under an old team name, as happened after the team rename,
+   or an expired one), the editor shows a dead-end "Sign in required" page and Access doesn't ask again, because
+   its own cookie is still valid; Christopher had to clear cookies by hand. Instead, on an editor host, send the
+   browser to /cdn-cgi/access/logout (then back to the page), so a fresh sign-in starts by itself; API requests
+   (/admin/api/*) should get a 401 that editor.js turns into the same thing. Then:
+   Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
    content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
    sizes made at upload like the paintings, published through Review like everything else. What stays in git
    is only design (e.g. the head animation's model and textures). Video needs thought: sizes/encodings made
    where (the browser can't easily re-encode video; maybe upload each size, or one file), and R2 serving with
-   range requests for video. Order relative to detail images (2, below) is Christopher's choice, not yet made.
+   range requests for video. Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
    a. Shared originals: done (Nov 2026), see the R2 layout above. The duplicates stored before it (the
