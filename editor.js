@@ -80,6 +80,7 @@ export async function api(request, env, url, who) {
     if (path === 'discard') return json(await discard(env, body.ids));
     if (path === 'publish') return json(await publish(env, who, body.ids, body.note));
     if (path === 'restore') return json(await restore(env, who, body.revision));
+    if (path === 'hide') return json(await setHidden(env, who, String(body.id || ''), body.hidden === true));
     if (path === 'library/name') return json(await rename(env, String(body.id || ''), body.name));
     if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.part ? String(body.part) : null, body.history === true));
     if (path === 'library/new') return json(await newItem(env, who, body));
@@ -157,8 +158,9 @@ function processOf(p) {
 }
 
 /* Hide (step 1d): a painting, a genre or a section's background can be hidden: off the site (the editor's
-   preview too, as it shows the site as it will be) but kept in the editor, and published like any change. Stored
-   only when true, last, so showing it again gives back the very same text as before. */
+   preview too, as it shows the site as it will be) but kept in the editor. Hiding acts at once (setHidden, slice
+   4b): it's the opposite of Publish, not a change waiting for it. Stored only when true, last, so showing it again
+   gives back the very same text as before. */
 const hide = (d) => (d.hidden === true ? { hidden: true } : {});
 
 export function normalise(id, kind, d) {
@@ -379,6 +381,39 @@ async function publish(env, who, ids, note) {
   }
   await env.DB.batch(stmts);   // one transaction: all of it is published, or none
   return { published: [...chosen], added, entries: await rows(env) };
+}
+
+/* Hide or show again at once (slice 4b): the published version and the draft both change, straight away, as a
+   release of its own in History (so it can be brought back); any other change waiting in the draft stays waiting.
+   Only something already on the site can be hidden: a never-published thing isn't seen by visitors anyway. */
+const HIDEABLE = ['painting', 'section', 'background'];
+async function setHidden(env, who, id, hidden) {
+  const r = await env.DB.prepare('SELECT * FROM entries WHERE id = ?').bind(id).first();
+  if (!r) throw new Bad('No such entry', 404);
+  if (!HIDEABLE.includes(r.kind)) throw new Bad('Only paintings, genres and backgrounds can be hidden');
+  if (r.published === null) throw new Bad('That isn\'t on the site yet, so there is nothing to hide');
+  const flip = (text) => {
+    const d = JSON.parse(text);
+    delete d.hidden;
+    if (hidden) d.hidden = true;
+    return JSON.stringify(normalise(id, r.kind, d));
+  };
+  const published = flip(r.published);
+  if (published === r.published) return { entries: await rows(env) };
+  let draft = r.draft;
+  if (draft !== null) {
+    try { draft = r.draft === r.published ? published : flip(r.draft); }
+    catch { /* a draft that no longer passes the checks keeps waiting as it is */ }
+  }
+  const at = now(), d = JSON.parse(r.published);
+  const what = r.kind === 'section' ? `the genre ${d.title}` : r.kind === 'painting' ? d.title : `the ${id.slice(3)} background`;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO releases (at, by, note) VALUES (?, ?, ?)').bind(at, who, `${hidden ? 'Hidden' : 'Shown again'}: ${what}`),
+    env.DB.prepare('INSERT INTO revisions (release_id, entry_id, kind, data, previous) VALUES ((SELECT MAX(id) FROM releases), ?, ?, ?, ?)')
+      .bind(id, r.kind, published, r.published),
+    env.DB.prepare('UPDATE entries SET published = ?, published_at = ?, draft = ? WHERE id = ?').bind(published, at, draft, id),
+  ]);
+  return { entries: await rows(env) };
 }
 
 /* Bring back an earlier version (a revision) as the draft. */

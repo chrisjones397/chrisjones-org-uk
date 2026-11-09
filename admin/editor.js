@@ -98,7 +98,7 @@ function save(items, msg = 'Saved as a draft', key) {
     const list = typeof items === 'function' ? items() : items;
     if (!list || !list.length) return null;
     const out = await call('POST', 'save', { items: list });
-    if (key) marks.set(key, Date.now());
+    if (key) marks.set(key, [Date.now(), SAVED]);
     return out;
   }, key ? null : msg)).finally(() => { saving--; });
   queue = job;
@@ -109,10 +109,10 @@ window.addEventListener('beforeunload', (ev) => { if (saving) { ev.preventDefaul
 /* The saved tick: on the right of a text field, or just after anything else (a tick box, a choice, a button),
    for a few seconds after it saved, with a tooltip; plainly not a button. Marks survive re-renders (render()
    puts each back on the element with that data-k, part-way through its fade). */
-const marks = new Map(), MARK_MS = 3500;
+const marks = new Map(), MARK_MS = 3500, SAVED = 'Saved as a draft: visitors see it once it\'s published (Review)';
 function placeMarks() {
   const now = Date.now();
-  for (const [key, at] of marks) {
+  for (const [key, [at, tip]] of marks) {
     const age = now - at;
     if (age > MARK_MS) { marks.delete(key); continue; }
     const el = document.querySelector(`[data-k="${CSS.escape(key)}"]`);
@@ -120,10 +120,10 @@ function placeMarks() {
     const delay = `-${age}ms`;
     if (el.matches('input[type=text], input[type=number], input[type=email], input:not([type]), textarea')) {
       el.classList.add('saved'); el.style.animationDelay = delay;
-      el.title = 'Saved as a draft: visitors see it once it\'s published (Review)';
+      el.title = tip;
       setTimeout(() => { el.classList.remove('saved'); el.removeAttribute('title'); }, MARK_MS - age);
     } else {
-      const t = h('span', { class: 'mark', title: 'Saved as a draft: visitors see it once it\'s published (Review)', style: `animation-delay: ${delay}` }, glyph(GLYPHS.tick, 16));
+      const t = h('span', { class: 'mark', title: tip, style: `animation-delay: ${delay}` }, glyph(GLYPHS.tick, 16));
       if (el.tagName === 'LABEL') el.append(t); else (el.closest('label') || el).after(t);
       setTimeout(() => t.remove(), MARK_MS - age);
     }
@@ -148,15 +148,29 @@ const unhidden = (v) => { const o = JSON.parse(v); delete o.hidden; return JSON.
 const status = (e) => (!changed(e) ? null : e.published == null ? 'new' : e.draft == null ? 'gone'
   : unhidden(e.draft) === unhidden(e.published) ? (draftOf(e).hidden ? 'hiding' : 'showing') : 'changed');
 const STATUS = { new: 'New', changed: 'Changed', gone: 'Removed', hiding: 'Hidden', showing: 'Shown again' };
-const isHidden = (e) => !!(e && e.draft && draftOf(e).hidden);
-/* Hide or show again (an eye: open while on the site, closed while hidden). data: the entry's draft as it would be
-   saved, given hidden. */
-function hideButton(e, kind, data, what) {
+/* Hidden: what visitors see (hiding acts at once, slice 4b); a draft that hides (left from before 4b) counts too. */
+const isHidden = (e) => !!(e && ((e.published && liveOf(e).hidden) || (e.draft && draftOf(e).hidden)));
+/* Hide or show again, at once (an eye: open while on the site, closed while hidden): the opposite of Publish, so it
+   takes effect straight away, as a release in History, and other waiting changes stay waiting. Nothing to hide on a
+   thing never published, so no eye there. */
+function hideButton(e, what) {
+  if (!e || e.published == null) return null;
   const hid = isHidden(e), key = `${e.id}:hide`;
   return h('button', { class: 'eye' + (hid ? ' off' : ''), 'data-k': key, 'aria-pressed': String(hid),
-    title: hid ? `Hidden from visitors: tap to show ${what} again` : `On the site: tap to hide ${what} (it stays here)`,
+    title: hid ? `Hidden from visitors: tap to show ${what} again, straight away` : `On the site: tap to hide ${what} straight away (it stays here)`,
     'aria-label': hid ? `Show ${what} again` : `Hide ${what}`,
-    onclick: () => save([{ id: e.id, kind, data: data(!hid) }], null, key) }, glyph(hid ? GLYPHS.hidden : GLYPHS.eye));
+    onclick: () => hideNow(e.id, !hid, key) }, glyph(hid ? GLYPHS.hidden : GLYPHS.eye));
+}
+function hideNow(id, hidden, key) {
+  saving++;
+  const job = queue.then(() => act(async () => {
+    const out = await call('POST', 'hide', { id, hidden });
+    marks.set(key, [Date.now(), hidden ? 'Hidden: off the site now (History can bring it back)' : 'Shown again: on the site now']);
+    historyData = null;
+    return out;
+  })).finally(() => { saving--; });
+  queue = job;
+  return job;
 }
 const badge = (e) => { const s = status(e); return s ? h('span', { class: `badge ${s}` }, STATUS[s]) : null; };
 const current = (e) => draftOf(e) || liveOf(e);
@@ -207,7 +221,7 @@ function render() {
   placeMarks();
 }
 
-const HINT = 'Every change saves itself as a draft straight away (a tick shows it). Visitors see it only once you publish it under Review.';
+const HINT = 'Every change saves itself as a draft straight away (a tick shows it). Visitors see it only once you publish it under Review. The eye is the opposite of publishing: it hides something from visitors, or shows it again, at once.';
 
 function galleryView() {
   const out = [h('h1', {}, 'Gallery'), h('p', { class: 'hint' }, HINT)];
@@ -219,13 +233,13 @@ function galleryView() {
   secs.forEach((s, si) => {
     const se = byId(s.id);
     const items = paintingsIn(s.id);
-    const card = h('div', { class: 'card' + (s.hidden ? ' hidden' : '') });
+    const card = h('div', { class: 'card' + (isHidden(se) ? ' hidden' : '') });
     card.append(h('div', { class: 'row' },
       h('input', { type: 'text', class: 'grow', value: s.title, 'aria-label': 'Genre name', 'data-k': `${s.id}:title`, onchange: (ev) => {
         save([{ id: s.id, kind: 'section', data: { title: ev.target.value, order: s.order, hidden: s.hidden } }], null, `${s.id}:title`);
       } }),
       badge(se),
-      hideButton(se, 'section', (hidden) => ({ title: s.title, order: s.order, hidden }), 'this genre and its paintings'),
+      hideButton(se, 'this genre and its paintings'),
       h('span', { class: 'move' },
         h('button', { title: 'Move genre up', disabled: si === 0, onclick: () => moveSection(secs, si, -1) }, '↑'),
         h('button', { title: 'Move genre down', disabled: si === secs.length - 1, onclick: () => moveSection(secs, si, 1) }, '↓')),
@@ -360,7 +374,7 @@ function backgroundBox(key) {
   const id = `bg-${key}`, e = byId(id), d = e && current(e);
   const box = h('div', { class: 'box bg-box' + (isHidden(e) ? ' hidden' : '') }, h('div', { class: 'row' },
     h('label', { class: 'grow' }, 'Background ', e ? badge(e) : null),
-    d ? hideButton(e, 'background', (hidden) => ({ ...draftOf(e), hidden }), 'this background') : null));
+    d ? hideButton(e, 'this background') : null));
   if (!media) return box.append(h('p', { class: 'hint' }, 'Needs file storage (R2), which isn\'t switched on for this site.')), box;
   const busy = !!bgBusy[key];
   const status = h('p', { class: 'hint' }, bgBusy[key] || '');
@@ -762,7 +776,7 @@ function paintingRow(e, items, i, secs) {
     badge(e),
     gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
       : h('span', { class: 'move' },
-        hideButton(e, 'painting', (hidden) => ({ ...draftOf(e), hidden }), 'this painting'),
+        hideButton(e, 'this painting'),
         h('button', { title: 'Move up', disabled: i === 0, onclick: () => movePainting(items, i, -1) }, '↑'),
         h('button', { title: 'Move down', disabled: i === items.length - 1, onclick: () => movePainting(items, i, 1) }, '↓'),
         h('button', { onclick: () => { if (open.has(e.id)) closeEdit(e.id); else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
@@ -1502,11 +1516,11 @@ function historyView() {
         const d = parse(v.data), p = parse(v.previous);
         const what = d || p || {};
         const name = v.kind === 'painting' ? what.title : v.kind === 'section' ? `Genre: ${what.title}` : label({ id: v.entry_id, kind: v.kind, draft: v.data, published: v.previous });
-        const kind = !p ? 'new' : !d ? 'gone' : 'changed';
+        const kind = !p ? 'new' : !d ? 'gone' : unhidden(v.data) === unhidden(v.previous) ? (d.hidden ? 'hiding' : 'showing') : 'changed';
         const mine = byId(v.entry_id);
         const same = mine && mine.draft === v.data;
         return h('div', { class: 'row', style: 'margin-top:0.4rem' },
-          h('span', { class: 'grow' }, name, ' ', h('span', { class: `badge ${kind}` }, kind === 'new' ? 'Added' : kind === 'gone' ? 'Removed' : 'Changed')),
+          h('span', { class: 'grow' }, name, ' ', h('span', { class: `badge ${kind}` }, { new: 'Added', gone: 'Removed', hiding: 'Hidden', showing: 'Shown again' }[kind] || 'Changed')),
           same ? h('span', { class: 'muted' }, 'as now') : h('button', { onclick: () => act(() => call('POST', 'restore', { revision: v.id }), 'Brought back as a draft') }, 'Bring back'));
       })));
   }
@@ -1522,6 +1536,7 @@ function historyView() {
    when no draft or published page uses it. Photos and videos for the site can be added here; paintings come in
    through the Gallery (their pictures are prepared in the darkroom). */
 let libraryData = null, libBusy = '';
+const libPicked = new Set();   // items ticked to compare (two or three)
 const glyph = (d, size = 18) => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('width', size); svg.setAttribute('height', size);
@@ -1542,6 +1557,8 @@ const GLYPHS = {
   sizes: 'M2.5 9.5h7v7h-7zM11.5 5.5h6v6h-6zM11.5 14h3v2.5h-3z',                        // a few sizes of one picture
   frames: 'M3 4.5h14v11H3zM7 4.5v11M13 4.5v11',                                     // a strip of frames
   add: 'M10 4v12M4 10h12',
+  compare: 'M2.5 4.5h6.5v11H2.5zM11 4.5h6.5v11H11',                                 // two side by side
+  close: 'M5 5l10 10M15 5L5 15',
   live: 'M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',                                // published
   draft: 'M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3',                                        // a pencil: in a draft
   past: 'M3.5 10a6.5 6.5 0 1 0 2-4.7M3.5 3.5v3h3M10 6.5V10l2.5 1.5',                    // a clock turning back: History
@@ -1566,6 +1583,14 @@ function libraryView() {
         onclick: () => pick.click() }, glyph(GLYPHS.add)) : null));
     if (grp === 'site') out.push(pick, libBusy ? h('p', { class: 'hint' }, libBusy) : null);
     if (items.length) out.push(h('div', { class: 'card' }, ...items.map(libraryRow)));
+  }
+  for (const id of libPicked) if (!libraryData.items.some((it) => it.id === id)) libPicked.delete(id);
+  if (libPicked.size) {
+    const chosen = libraryData.items.filter((it) => libPicked.has(it.id));
+    out.push(h('div', { class: 'lib-comparebar' },
+      h('button', { class: 'lib-compare', disabled: chosen.length < 2, title: chosen.length < 2 ? 'Tick one or two more to compare' : 'Compare side by side',
+        'aria-label': 'Compare side by side', onclick: () => showItems(chosen) }, glyph(GLYPHS.compare, 20), h('span', {}, String(chosen.length))),
+      h('button', { title: 'Untick them all', 'aria-label': 'Untick them all', onclick: () => { libPicked.clear(); render(); } }, glyph(GLYPHS.close, 16))));
   }
   return out.filter(Boolean);
 }
@@ -1593,6 +1618,10 @@ function libraryRow(it) {
   const pic = it.thumb
     ? h('img', { src: `/media/${it.thumb}`, alt: '', loading: 'lazy' })
     : h('span', { class: 'lib-none', title: 'No picture to show' }, glyph(GLYPHS.photo, 28));
+  const picked = libPicked.has(it.id), full = !picked && libPicked.size >= 3;
+  const tick = h('label', { class: 'lib-tick' + (picked ? ' on' : ''), title: full ? 'Three are ticked already: untick one to compare this' : picked ? 'Ticked to compare' : 'Tick two or three to compare them side by side' },
+    h('input', { type: 'checkbox', checked: picked, disabled: full, 'aria-label': `Compare ${it.name}`,
+      onchange: (ev) => { if (ev.target.checked) libPicked.add(it.id); else libPicked.delete(it.id); render(); } }));
   const saved = h('span', { class: 'lib-saved', title: 'Name saved', hidden: true }, glyph(GLYPHS.tick));
   const name = h('input', { type: 'text', class: 'lib-name', value: it.name, maxLength: 120, 'aria-label': 'Name',
     onkeydown: (ev) => { if (ev.key === 'Enter') ev.target.blur(); },
@@ -1610,7 +1639,9 @@ function libraryRow(it) {
     'aria-label': 'Delete for good', onclick: () => deleteForGood(it, pastOnly) }, glyph(GLYPHS.bin));
   return h('div', { class: 'lib-item' },
     h('div', { class: 'painting lib-head' },
-      h('span', { class: 'lib-pic' }, pic, it.kind === 'video' ? h('span', { class: 'lib-video', title: 'Video' }, glyph(GLYPHS.play, 14)) : null),
+      tick,
+      h(it.large ? 'button' : 'span', { class: 'lib-pic', ...(it.large ? { title: 'See it large', 'aria-label': `See ${it.name} large`, onclick: () => showItems([it]) } : {}) },
+        pic, it.kind === 'video' ? h('span', { class: 'lib-video', title: 'Video' }, glyph(GLYPHS.play, 14)) : null),
       h('div', { class: 'what' },
         h('div', { class: 'row lib-top' }, name, saved),
         h('span', { class: 'd' }, codeChip, copied, uses.length ? useMarks(uses, it.name)
@@ -1653,6 +1684,38 @@ function shapeOf(p, parts) {
   const long = 6 + 12 * Math.max(p.w, p.h) / top, ratio = Math.min(p.w, p.h) / Math.max(p.w, p.h);
   const [w, hh] = p.h > p.w ? [long * ratio, long] : [long, long * ratio];
   return h('span', { class: 'lib-ver', title: p.h > p.w ? 'For phones held upright' : 'For wide screens', style: `width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px` });
+}
+
+/* One item large, or two or three side by side, over the page: each picture as big as fits, with what tells them
+   apart underneath: the original's pixels, its weight, when it was added, its name and code. The best (most pixels)
+   is marked when comparing. Tap the backdrop, the cross or Escape to close. */
+function showItems(list) {
+  const px = (it) => { const o = it.data && it.data.original; return o && o.w ? o.w * o.h : 0; };
+  const most = list.length > 1 ? Math.max(...list.map(px)) : 0;
+  const when = (t) => (t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'not known');
+  const facts = (it) => {
+    const o = it.data && it.data.original, orig = it.parts.find((p) => p.part === 'original');
+    const lines = [h('div', { class: 'lib-cmp-name' }, it.name), h('div', { class: 'lib-cmp-code' }, it.id)];
+    if (it.kind === 'video') {
+      for (const v of it.parts.filter((p) => /^\d+x\d+/.test(p.part))) lines.push(h('div', {}, glyph(GLYPHS.play, 13), ` ${v.w} × ${v.h}${v.seconds ? `, ${v.seconds} s` : ''}, ${MB(v.bytes)}`));
+    } else {
+      lines.push(h('div', { class: most && px(it) === most ? 'lib-best' : '', title: most && px(it) === most ? 'The most pixels of these' : '' },
+        glyph(GLYPHS.photo, 13), o && o.w ? ` ${o.w} × ${o.h} (${(o.w * o.h / 1e6).toFixed(1)} megapixels)` : ' size not known'));
+      if (orig) lines.push(h('div', {}, `Original ${MB(orig.bytes)}${orig.ext ? ` ${orig.ext.toUpperCase()}` : ''}`));
+    }
+    lines.push(h('div', {}, glyph(GLYPHS.past, 13), ` ${when(it.added)}`));
+    return h('div', { class: 'lib-cmp-facts' }, ...lines);
+  };
+  const close = () => { box.remove(); removeEventListener('keydown', onKey); };
+  const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+  const box = h('div', { class: 'lib-overlay', role: 'dialog', 'aria-label': list.length > 1 ? 'Compare' : list[0].name,
+    onclick: (ev) => { if (ev.target === box || ev.target.classList.contains('lib-cmp')) close(); } },
+    h('button', { class: 'lib-close', title: 'Close', 'aria-label': 'Close', onclick: close }, glyph(GLYPHS.close, 20)),
+    h('div', { class: `lib-cmp n${list.length}` }, ...list.map((it) => h('figure', {},
+      it.large ? h('img', { src: `/media/${it.large}`, alt: it.name }) : h('span', { class: 'lib-none' }, glyph(GLYPHS.photo, 40)),
+      facts(it)))));
+  document.body.append(box);
+  addEventListener('keydown', onKey);
 }
 
 function deletePart(it, p) {

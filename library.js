@@ -15,6 +15,7 @@
 */
 
 import { CODE } from './paths.js';
+import { dimensions, HEAD_BYTES } from './dimensions.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 class Bad extends Error { constructor(m, s = 400) { super(m); this.status = s; } }
@@ -94,6 +95,7 @@ async function survey(env) {
     use(usesOf(e.kind, e.id, e.published), { entry: e.id, state: e.published && JSON.parse(e.published).hidden ? 'hidden' : 'published' });
   }
   for (const v of revisions.results) use(usesOf(v.kind, v.entry_id, v.data), { entry: v.entry_id, state: 'history', revision: v.id });
+  await originalSizes(env, items);
 
   return [...items.values()].map((it) => {
     const r = it.row || {};
@@ -105,7 +107,7 @@ async function survey(env) {
       else if (/^\d+x\d+/.test(p.part)) { const [w, h] = p.part.split(/x|-/).map(Number); Object.assign(out, { w, h }); }
       const ren = (data.renditions || {})[p.part];
       if (ren) Object.assign(out, { w: ren.w, h: ren.h, sizes: ren.widths.length });
-      if (data.original && p.part === 'original') Object.assign(out, { w: data.original.w, h: data.original.h });
+      if (data.original && data.original.w && p.part === 'original') Object.assign(out, { w: data.original.w, h: data.original.h });
       if (p.ext) out.ext = p.ext;
       return out;
     });
@@ -113,20 +115,41 @@ async function survey(env) {
     parts.sort((a, b) => order(a) - order(b) || ((b.w || 0) - (a.w || 0)) || a.part.localeCompare(b.part, 'en', { numeric: true }));
     const kind = r.kind || (parts.some((p) => /^\d+x\d+/.test(p.part)) ? 'video' : 'photo');
     return { id: it.id, kind, grp: r.grp || (it.site ? 'site' : 'painting'), name: r.name || `Item ${it.id}`,
-      catalogued: !!it.row, added: r.added || '', bytes: it.bytes, files: it.files, parts, uses: it.uses, thumb: thumbOf(it.id, parts, data), data };
+      catalogued: !!it.row, added: r.added || '', bytes: it.bytes, files: it.files, parts, uses: it.uses, ...picturesOf(it.id, parts, data), data };
   });
 }
 
-/* A small picture for the list: the newest set of sizes' smallest, or a video's last frame. */
-function thumbOf(code, parts, data) {
+/* Pictures for the list: the newest set of sizes, or a video's last frame; thumb its smallest, large the largest
+   up to 1536 across (for seeing it large and comparing). */
+function picturesOf(code, parts, data) {
+  const upTo = (widths) => widths.filter((w) => w <= 1536).pop() || widths[0];
   const ren = parts.filter((p) => /^r\d+$/.test(p.part)).sort((a, b) => Number(b.part.slice(1)) - Number(a.part.slice(1)))[0];
   if (ren && data.renditions && data.renditions[ren.part]) {
-    const r = data.renditions[ren.part];
-    return `${code}/${ren.part}/${r.widths[0]}.${r.ext || 'jpg'}`;
+    const r = data.renditions[ren.part], ext = r.ext || 'jpg';
+    return { thumb: `${code}/${ren.part}/${r.widths[0]}.${ext}`, large: `${code}/${ren.part}/${upTo(r.widths)}.${ext}` };
   }
   const f = data.frames && (data.frames.wide || data.frames.tall);
-  if (f) return `${code}/${f.dir}/last-${f.widths[0]}.jpg`;
-  return null;
+  if (f) return { thumb: `${code}/${f.dir}/last-${f.widths[0]}.jpg`, large: `${code}/${f.dir}/last-${upTo(f.widths)}.jpg` };
+  return { thumb: null, large: null };
+}
+
+/* An original's size in pixels, read once from its file's header (dimensions.js) and kept in the item's record
+   (data.original { w, h }; 0 x 0 if it couldn't be read, so it isn't tried again). Covers items from before it was
+   recorded (the move from the old layout) as well as new ones. At most 20 a visit, to stay well inside a Worker's
+   limits; the rest follow on the next. */
+async function originalSizes(env, items) {
+  const todo = [...items.values()].filter((it) => it.row && it.parts.has('original') && !JSON.parse(it.row.data || '{}').original).slice(0, 20);
+  await Promise.all(todo.map(async (it) => {
+    const key = `media/${it.id}/original.${it.parts.get('original').ext}`;
+    let size = null;
+    try {
+      const obj = await env.MEDIA.get(key, { range: { offset: 0, length: HEAD_BYTES } });
+      if (obj) size = dimensions(await obj.arrayBuffer());
+    } catch { /* unreadable: recorded as unknown */ }
+    const data = { ...JSON.parse(it.row.data || '{}'), original: size || { w: 0, h: 0 } };
+    it.row.data = JSON.stringify(data);
+    await env.DB.prepare('UPDATE library SET data = ? WHERE id = ?').bind(it.row.data, it.id).run();
+  }));
 }
 
 // ---- the API ----------------------------------------------------------------------------------------------

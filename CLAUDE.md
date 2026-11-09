@@ -462,27 +462,53 @@ Claude, before pushing: `git pull --rebase` too.
      Library mark, Review lines); each Edit field saving with its tick; typing in the next field while a save lands;
      the picture saving itself after Find the paper and a slider, the superseded set deleted, Back to as it was
      making nothing, closing straight after a change; Undo resetting an open form. Not tested on a phone or Safari.
-   - Slice 4b, next (agreed with Christopher 9 Nov 2026, before slice 5), from his first use of slice 4 on dev:
-     a. Hide acts at once: Publish puts a thing on the site, Hide takes it off, both straight away (his original
-        model: Hide is the opposite of Publish). The eye changes the published version (and the draft) at once,
-        recorded in History as a release so it can be brought back; showing again is immediate too; other
-        unpublished edits stay waiting in Review; a never-published painting has no eye. Replaces slice 4's
-        "hiding goes through Review".
-     b. Comparing in the Library: tap a thumbnail to see it large; tick two or three items to compare side by
-        side (original's pixels, megabytes, date added, name). Fill in the original's size for items moved from
-        the old layout (their data has no `original`, so rows show none). (He had three uploads of Small
-        Composition in Yellow on dev and couldn't tell which was best; he kept af4e9259, the full-resolution one.)
-     c. Library routes: "Make a painting" on a Library photo (the add form with that photo in the darkroom, no
-        upload); "Back into the gallery" on an item only History uses (a published removal otherwise leaves only
-        History's Bring back); the uses marks link to where it's used (painting's Edit form, section background);
-        "Replace photo…" also "From the Library…".
-   - Next slices, in order: backgrounds as lists of Library items (with the upright-screen settings below);
-     paintings usable as backgrounds by reference.
+   - Slice 4b: done on dev (9 Nov 2026), from his first use of slice 4.
+     a. Hide acts at once (his model: Hide is the opposite of Publish). POST /admin/api/hide { id, hidden }
+        (editor.js setHidden): paintings, genres and backgrounds already published; the published version and the
+        draft both change at once (a draft that no longer passes the checks is left as it was), as a release of its
+        own ("Hidden: <title>" / "Shown again: ..."), revision data/previous, so History can bring it back; other
+        waiting edits stay waiting. A never-published thing has no eye (the server refuses it too).
+        admin/editor.js hideButton(e, what) -> hideNow() (runs in the save queue); isHidden reads the published
+        version (or a draft hidden before 4b); the tick's tooltip says it's on or off the site now (marks hold
+        [time, tooltip]); History badges a hide or show "Hidden" / "Shown again". Replaces slice 4's "hiding goes
+        through Review" (old hidden drafts still show as Hidden in Review until published).
+     b. Comparing in the Library: tap a thumbnail to see it large; a tick box on each row (three at most); with two
+        or three ticked a pill at the bottom compares them (showItems: an overlay, side by side, one above another on
+        an upright phone; under each, name, code, the original's pixels and megapixels (most marked green), its
+        megabytes and type, date added; a video lists its versions). library.js gives each item thumb and large
+        (largest size up to 1536). The original's pixels: dimensions.js (server only, in .assetsignore) reads them
+        from the first 512 kilobytes of the original (an R2 range read; JPEG with EXIF quarter-turns, PNG, WebP,
+        HEIC/AVIF with irot; tested on each), once, into the item's data.original { w, h } (0 x 0 if unreadable),
+        up to 20 per GET library. That fills it for items moved from the old layout and for new ones (nothing
+        recorded it before).
+     c. Library routes ("Make a painting" from a Library photo, "Back into the gallery", uses marks linking to where
+        they're used, "Replace photo… From the Library…"): moved into the restructure below (Christopher, 9 Nov).
+     Tested locally (wrangler dev, Playwright): hide and show a painting and a genre (published and draft, release
+        and note, painting address and file 404 then 200), a waiting title edit kept while hiding, refused for a
+        never-published painting and for text; eyes only on published things; tick, compare and large view at
+        desktop and phone widths; original sizes filled. Not tested on a phone or Safari.
+   - Uploads generally: confirmed by Christopher (9 Nov 2026), next, before backgrounds as lists (his order:
+     restructure, then lists on top of it, so backgrounds are built once). Three layers, each its own entity:
+     (1) Library item: the file as uploaded, untouched, plus what's true of the picture itself (alt text,
+     credit/photographer); (2) the darkroom recipe on an item (name not settled: he's weighing Framing, Treatment,
+     Handling, Rendering; Claude suggested Rendition, matching the r1, r2 folders it makes; Framing is taken, see
+     below): white balance, then either four-corner squaring up for flat things (paintings, drawings, documents)
+     or straighten and crop for scenes (rooms, people, buildings), where squaring up would distort; it produces
+     its sets of sizes; several per item allowed; (3) uses, each pointing at a recipe: artwork (title, medium,
+     size, year, genre, detail crops, shown in the gallery; its measured size drives the squaring-up shape),
+     background framing (named "Framing" by Christopher: focus and crops per screen shape, how a video plays and
+     what reduced-motion visitors get; was "treatment" in the slice 5 design below), later portrait/team member
+     etc. The Library's Site pictures / Paintings split becomes a filter by use. The painting's `process` record
+     moves out of the painting into the recipe. Videos: the browser can't re-encode, so no colour work after
+     upload; their recipe is only crops/focus per shape and the still frames; colour is fixed before upload.
+     The Library routes (4b c) are built as part of it.
+   - Next slices, in order: the uploads restructure (above, with the Library routes); backgrounds as lists of
+     framings (with the upright-screen settings below); paintings usable as backgrounds by reference.
    - Slice 5 design (agreed with Christopher by voice, 9 Nov 2026). He thinks in decoupled entities (data
      warehousing background): each thing its own entity, linked by ids, not coupled. Three layers, plainly
      normalised in D1 (our own design, not copied from Drupal or Sanity):
      1. Library item: just the file(s) (exists: table `library`, media/<code>/).
-     2. Treatment (name to settle): how one item is used as a background, an entity in its own right, reusable:
+     2. Framing (Christopher's name, 9 Nov; was "treatment"; it points at a recipe, see uploads generally): how one item is used as a background, an entity in its own right, reusable:
         points at a Library item; focus point and crop for wide screens and for upright screens (art direction:
         per-shape settings, so the framing ideas below live here); for a video, how it plays (once or loop)
         and what reduced-motion visitors get.
@@ -493,7 +519,7 @@ Claude, before pushing: `git pull --rebase` too.
      never restart or swap a playing video (it keeps playing, re-cropped round the new shape's focus); when it's
      resting (on its last frame, or a reduced-motion visitor's still), swap to the other shape's still or
      version, unnoticed. Listen for the orientation/resize change in backgrounds.js.
-   - Uploads generally (Christopher, 9 Nov 2026, proposed by Claude, to confirm at the start of slice 4b/5):
+   - Uploads generally, as first proposed (superseded by the confirmed version above):
      every photo may need the darkroom, painting or not, so "site picture" vs "painting" stops being a property
      of the file. Layers: (1) Library item: the file as uploaded, untouched, plus what's true of the picture
      itself (alt text, credit/photographer); (2) development (name to settle): a darkroom recipe on an item (white

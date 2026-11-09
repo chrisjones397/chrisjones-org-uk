@@ -208,6 +208,34 @@
   .lib-size { margin-left: auto; white-space: nowrap; }
   .lib-ver { display: inline-block; border: 1.5px solid var(--dim); border-radius: 2px; }
   button.lib-bin { flex: none; display: inline-flex; padding: 0.45rem; }
+  .lib-tick { flex: none; display: flex; align-items: center; padding: 0 0.1rem; cursor: pointer; }
+  .lib-tick input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: #ddd; cursor: pointer; }
+  button.lib-pic { padding: 0; border: 0; cursor: zoom-in; }
+  .lib-comparebar { position: fixed; left: 50%; bottom: max(1rem, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 6;
+                    display: flex; gap: 0.4rem; padding: 0.35rem; border-radius: 999px; background: rgba(35,35,35,0.95);
+                    border: 1px solid var(--line); box-shadow: 0 4px 18px rgba(0,0,0,0.6); }
+  .lib-comparebar button { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; }
+  .lib-overlay { position: fixed; inset: 0; z-index: 30; background: #000; display: flex; flex-direction: column;
+                 padding: max(0.8rem, env(safe-area-inset-top)) 0.8rem max(0.8rem, env(safe-area-inset-bottom)); }
+  .lib-close { position: absolute; top: max(0.6rem, env(safe-area-inset-top)); right: 0.6rem; z-index: 1; display: inline-flex; padding: 0.45rem; border-radius: 50%; }
+  .lib-cmp { flex: 1; min-height: 0; display: grid; gap: 0.8rem; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; }
+  .lib-cmp figure { margin: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 0.6rem; }
+  .lib-cmp img { flex: 0 1 auto; min-height: 0; max-width: 100%; max-height: 100%; object-fit: contain; align-self: center; }
+  .lib-cmp .lib-none { align-self: center; color: var(--dim); }
+  .lib-cmp-facts { flex: none; font-size: 0.85rem; color: var(--dim); text-align: center; line-height: 1.6; }
+  .lib-cmp-facts svg { vertical-align: -2px; }
+  .lib-cmp-name { color: var(--ink); font-size: 0.95rem; }
+  .lib-cmp-code { font: 0.78rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .lib-best { color: var(--new); }
+  /* Side by side while each picture keeps a fair width; on a phone held upright, one above another. */
+  @media (max-width: 600px) and (orientation: portrait) {
+    .lib-cmp { grid-auto-flow: row; grid-auto-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); padding-top: 2.4rem; }
+    .lib-cmp figure { flex-direction: row; align-items: center; gap: 0.7rem; }
+    .lib-cmp img { flex: 0 0 auto; max-width: 52%; }
+    .lib-cmp-facts { flex: 1 1 0; min-width: 0; text-align: left; font-size: 0.8rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .lib-cmp.n1 { grid-auto-flow: column; } .lib-cmp.n1 figure { flex-direction: column; } .lib-cmp.n1 img { max-width: 100%; }
+    .lib-cmp.n1 .lib-cmp-facts { flex: none; text-align: center; }
+  }
   #upload-progress { color: var(--dim); font-size: 0.9rem; margin-top: 0.6rem; min-height: 1.4em; }
 </style>
 </head>
