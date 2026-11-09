@@ -1,6 +1,6 @@
 // How Cloudflare publishes this site. Two Workers build from this one repository:
-//   chrisjones397-github-io      builds main, deploy command: npx wrangler deploy
-//   chrisjones397-github-io-dev  builds dev,  deploy command: npx wrangler deploy --env dev
+//   chrisjones-org-uk      builds main, deploy command: npx wrangler deploy
+//   chrisjones-org-uk-dev  builds dev,  deploy command: npx wrangler deploy --env dev
 // The dev Worker MUST use --env dev: without it, it would deploy under the live Worker's name.
 // Nothing is built: the repository is the site. Most of it is served straight from the files. worker.js runs
 // first only for the pages filled in from the content database (the home page, painting addresses, the list),
@@ -12,7 +12,7 @@
 // The editor addresses are guarded by Cloudflare Access applications "Site editor" and "Site editor (dev)";
 // ACCESS_AUD is the application's audience tag, which editor.js checks. Not secret.
 {
-  "name": "chrisjones397-github-io",
+  "name": "chrisjones-org-uk",
   "main": "worker.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": false,                  // no copy of the site at *.workers.dev
@@ -36,7 +36,7 @@
   },
   "env": {
     "dev": {
-      "name": "chrisjones397-github-io-dev",
+      "name": "chrisjones-org-uk-dev",
       "workers_dev": false,
       "preview_urls": false,
       "observability": { "enabled": true },

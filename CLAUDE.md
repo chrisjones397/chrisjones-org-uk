@@ -19,8 +19,8 @@ once at the top of site.css. Section headings mirror the opening title's positio
 - **dev** is where all work happens; it is published at dev.chrisjones.org.uk (with noindex).
 - **main** is live, chrisjones.org.uk. It only ever moves by fast-forwarding to dev, after Christopher approves.
 - **painted-forest-tools** holds the scripts that made the opening video. Never merged, never published.
-- Cloudflare: two Workers build from this repository. chrisjones397-github-io builds main (`npx wrangler deploy`);
-  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). No build command (removed in step
+- Cloudflare: two Workers build from this repository. chrisjones-org-uk builds main (`npx wrangler deploy`);
+  chrisjones-org-uk-dev builds dev (`npx wrangler deploy --env dev`). No build command (removed in step
   1b): nothing is built. Settings in wrangler.jsonc (no workers.dev or preview addresses; Worker logs kept);
   `.assetsignore` lists what isn't published (this file, the README, db/, templates/,
   the server code...). Anchor root files there with / (a bare name matches in every folder).
@@ -219,9 +219,12 @@ Claude, before pushing: `git pull --rebase` too.
    not the only one. Candidates found so far, to go through with him (each: what it was for, the proper
    Cloudflare way, then replace or remove), as part of 1b or straight after:
    - CNAME (chrisjones.org.uk.): GitHub Pages' custom-domain file; Cloudflare's Workers custom domains do this.
-   - The names: repository chrisjones397.github.io and Workers chrisjones397-github-io(-dev) follow GitHub
-     Pages' naming. Renaming (repository, Workers, wrangler.jsonc, his Mac's remote, the notes) is possible;
-     weigh it with him.
+   - The names (chosen Nov 2026): repository chrisjones-org-uk (Christopher renames it on GitHub; the proxy
+     here can't), Workers chrisjones-org-uk and chrisjones-org-uk-dev (renamed by API, PATCH
+     /workers/workers/{id} {name}: same IDs, so custom domains and builds stay attached; dev renamed, live to be
+     renamed just before main next moves, as main's wrangler.jsonc must match), Zero Trust team domain
+     chrisjones.cloudflareaccess.com (with going live: ACCESS_TEAM changes on both Workers at once). bigsas may
+     be renamed bigsas-co-uk to match.
    - The Zero Trust team name: randomly generated, and shown on the editor's sign-in page. Christopher wants a
      suitable, friendly name (Zero Trust > Custom pages > Team name and domain; the sign-in page's title and
      logo are set there too). The display name is harmless to change; changing the team domain
