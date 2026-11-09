@@ -306,6 +306,12 @@ Claude, before pushing: `git pull --rebase` too.
      profile a section like any other; smooth scrubbing needs every frame stored whole (all keyframes), so larger
      files. His call.
    - Sections added by the client don't exist yet (Content has fixed sections); when they do, each gets this.
+   - Deleting for good (raised 9 Nov 2026): Christopher uploaded an upright test video to the opening on dev
+     (bg-hero-464x832 and -v2), published it briefly, removed it, and wanted it gone everywhere. Claude deleted its
+     six files from site-media-dev by API, took it out of History (revisions 101 and 102) and purged Cloudflare's
+     cache for their addresses. The editor has no way to do this: removed things stay in storage for History by
+     design. Propose a "Delete for good" in History or on a removed item (files from R2, the item from every
+     revision, cache purged), for clients too.
    Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
