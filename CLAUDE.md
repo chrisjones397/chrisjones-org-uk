@@ -287,7 +287,7 @@ Claude, before pushing: `git pull --rebase` too.
      reduced motion gets the still, footer full width. Not tested on a real phone or Safari.
    Where things stand (9 Nov 2026): all of the above is live. Both databases have bg-hero (the forest video,
    three versions) and bg-contact (the palette photo) published; bg-footer none.
-   Contact links: done (9 Nov 2026, on dev). links.js (published, imported by site.js, editor.js and
+   Contact links: done and live (9 Nov 2026). links.js (published, imported by site.js, editor.js and
    admin/editor.js: one copy) lists Email, Instagram, Bluesky, Facebook, Threads, X, LinkedIn, TikTok, YouTube,
    Mastodon (user@instance), each with its username pattern, address, shown form and icon (SVG lines, drawn by
    Claude; Instagram's and Bluesky's as before). Entry 'links', kind 'links': { <site>: { name, on } } in that
