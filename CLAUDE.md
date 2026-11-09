@@ -251,9 +251,25 @@ Claude, before pushing: `git pull --rebase` too.
    Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
    content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
    sizes made at upload like the paintings, published through Review like everything else. What stays in git
-   is only design (e.g. the head animation's model and textures). Video needs thought: sizes/encodings made
-   where (the browser can't easily re-encode video; maybe upload each size, or one file), and R2 serving with
-   range requests for video. Then detail images (2, below).
+   is only design (e.g. the head animation's model and textures). Contact photo first (like a painting, without
+   corners), then the video. Video, as Christopher set out (Nov 2026), design proposed, not yet agreed in detail:
+   - Versions: the client uploads one or several, each for a shape and size of screen; a portrait version for
+     phones held upright as well as landscape ones. The site lists them as <source>s with media queries
+     (orientation, then the width the screen can show, as index.html does now). The browser can't re-encode
+     video, so each version is uploaded as made; no paid service (Cloudflare Stream isn't free).
+   - Checks and guidance in the browser on choosing a file, before upload (warnings, not refusals, except
+     unplayable): plays everywhere (MP4, H.264; canPlayType plus actually loading it), length (now 20 seconds),
+     weight (megabytes, and megabits a second, against a guide per screen size; now 2.3 to 10.7 megabytes),
+     pixels against the screen it's for, shape matching its slot, a sound track (it plays muted anyway). Also
+     WCAG 2.2.2: moving content over 5 seconds that starts by itself needs a way to pause it.
+   - Stills: first and last frames grabbed in the browser at upload (canvas, JPEG sizes like paintings): the
+     first is the poster while it loads, the last is what stays when it ends (as now). Visitors asking for
+     reduced motion (prefers-reduced-motion, handled now with the end frame) or less data (Save-Data, reported
+     by Chromium browsers only) never get the video: the client chooses last frame, or a slow fade from first to
+     last.
+   - Serving: R2 with range requests (env.MEDIA.get(key, { range: request.headers }), 206), as video needs for
+     seeking and for Safari. Uploads up to 100 megabytes per request on the free plan.
+   Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
    a. Shared originals: done (Nov 2026), see the R2 layout above. The duplicates stored before it (the
