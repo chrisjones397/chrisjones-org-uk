@@ -1,7 +1,11 @@
 /* The editor page (admin/index.html). Its views:
      #gallery  add a painting (at the top), and change the genres and paintings
-     #content  change the page's words, section by section. Every change is saved as a draft
-               at once; the preview (the site at this address) shows drafts in place.
+     #content  change the page's words, section by section.
+   One saving rule (step 1d): every change saves itself as a draft at once, everywhere (paintings too: there is no
+   Save button), and a tick on the right of what was changed says so (mark(), below). Nothing reaches visitors
+   until it's published under Review; the preview (the site at this address) shows drafts in place.
+   Three distinct ways to take something away: Hide (off the site, kept here: an eye), Remove (out of the page;
+   its photo stays in the Library), and Delete for good (in the Library, only when nothing uses it).
      #library  every file in storage (Site pictures, Paintings): what uses each, its name, Delete for good
      #review   every unpublished change, each with a tick: publish the ticked ones, or all, or discard them.
      #history  each publication, and every earlier version of anything, which can be brought back as a draft.
@@ -83,7 +87,48 @@ async function act(fn, done) {
   try { const out = await fn(); if (done) toast(typeof done === 'function' ? done(out) : done); render(); return out; }
   catch (e) { toast(e.message, true); render(); }
 }
-const save = (items, msg = 'Saved as a draft') => act(() => call('POST', 'save', { items }), msg);
+/* Saving a draft. Saves run one after another (a queue), so two never cross and the later always wins. items: the
+   entries, or a function giving them when their turn comes (so they're built from the latest state; null to skip).
+   key: what was changed (the data-k of its field or button): it gets a tick instead of a message. Resolves with
+   the server's answer, or undefined if it failed (the message says why). */
+let queue = Promise.resolve(), saving = 0;
+function save(items, msg = 'Saved as a draft', key) {
+  saving++;
+  const job = queue.then(() => act(async () => {
+    const list = typeof items === 'function' ? items() : items;
+    if (!list || !list.length) return null;
+    const out = await call('POST', 'save', { items: list });
+    if (key) marks.set(key, Date.now());
+    return out;
+  }, key ? null : msg)).finally(() => { saving--; });
+  queue = job;
+  return job;
+}
+window.addEventListener('beforeunload', (ev) => { if (saving) { ev.preventDefault(); ev.returnValue = ''; } });
+
+/* The saved tick: on the right of a text field, or just after anything else (a tick box, a choice, a button),
+   for a few seconds after it saved, with a tooltip; plainly not a button. Marks survive re-renders (render()
+   puts each back on the element with that data-k, part-way through its fade). */
+const marks = new Map(), MARK_MS = 3500;
+function placeMarks() {
+  const now = Date.now();
+  for (const [key, at] of marks) {
+    const age = now - at;
+    if (age > MARK_MS) { marks.delete(key); continue; }
+    const el = document.querySelector(`[data-k="${CSS.escape(key)}"]`);
+    if (!el) continue;
+    const delay = `-${age}ms`;
+    if (el.matches('input[type=text], input[type=number], input[type=email], input:not([type]), textarea')) {
+      el.classList.add('saved'); el.style.animationDelay = delay;
+      el.title = 'Saved as a draft: visitors see it once it\'s published (Review)';
+      setTimeout(() => { el.classList.remove('saved'); el.removeAttribute('title'); }, MARK_MS - age);
+    } else {
+      const t = h('span', { class: 'mark', title: 'Saved as a draft: visitors see it once it\'s published (Review)', style: `animation-delay: ${delay}` }, glyph(GLYPHS.tick, 16));
+      if (el.tagName === 'LABEL') el.append(t); else (el.closest('label') || el).after(t);
+      setTimeout(() => t.remove(), MARK_MS - age);
+    }
+  }
+}
 
 let toastTimer;
 function toast(text, error) {
@@ -98,8 +143,21 @@ const parse = (v) => (v == null ? null : JSON.parse(v));
 const draftOf = (e) => parse(e.draft), liveOf = (e) => parse(e.published);
 const byId = (id) => entries.find((e) => e.id === id);
 const changed = (e) => e.draft !== e.published;
-const status = (e) => (!changed(e) ? null : e.published == null ? 'new' : e.draft == null ? 'gone' : 'changed');
-const STATUS = { new: 'New', changed: 'Changed', gone: 'Deleted' };
+/* A change that only hides or shows something again is called that, not just "Changed". */
+const unhidden = (v) => { const o = JSON.parse(v); delete o.hidden; return JSON.stringify(o); };
+const status = (e) => (!changed(e) ? null : e.published == null ? 'new' : e.draft == null ? 'gone'
+  : unhidden(e.draft) === unhidden(e.published) ? (draftOf(e).hidden ? 'hiding' : 'showing') : 'changed');
+const STATUS = { new: 'New', changed: 'Changed', gone: 'Removed', hiding: 'Hidden', showing: 'Shown again' };
+const isHidden = (e) => !!(e && e.draft && draftOf(e).hidden);
+/* Hide or show again (an eye: open while on the site, closed while hidden). data: the entry's draft as it would be
+   saved, given hidden. */
+function hideButton(e, kind, data, what) {
+  const hid = isHidden(e), key = `${e.id}:hide`;
+  return h('button', { class: 'eye' + (hid ? ' off' : ''), 'data-k': key, 'aria-pressed': String(hid),
+    title: hid ? `Hidden from visitors: tap to show ${what} again` : `On the site: tap to hide ${what} (it stays here)`,
+    'aria-label': hid ? `Show ${what} again` : `Hide ${what}`,
+    onclick: () => save([{ id: e.id, kind, data: data(!hid) }], null, key) }, glyph(hid ? GLYPHS.hidden : GLYPHS.eye));
+}
 const badge = (e) => { const s = status(e); return s ? h('span', { class: `badge ${s}` }, STATUS[s]) : null; };
 const current = (e) => draftOf(e) || liveOf(e);
 const sections = () => entries.filter((e) => e.kind === 'section' && e.draft != null)
@@ -132,11 +190,24 @@ function render() {
   document.querySelectorAll('.bar a[data-view]').forEach((a) => a.classList.toggle('on', a.dataset.view === view()));
   const main = $('#main');
   const y = scrollY;
+  // The field being typed in (marked data-k) keeps its focus, caret and text across the re-render.
+  const a = document.activeElement, k = a && a.dataset && a.dataset.k;
+  const typed = k && 'value' in a && a.type !== 'checkbox' && a.type !== 'radio' ? a.value : null;
+  let sel = null; try { sel = [a.selectionStart, a.selectionEnd]; } catch { /* not a text field */ }
   main.replaceChildren(...({ gallery: galleryView, content: contentView, library: libraryView, review: reviewView, history: historyView }[view()] || galleryView)());
   if (view() !== 'history') scrollTo(0, y);
+  if (k) {
+    const b = main.querySelector(`[data-k="${CSS.escape(k)}"]`);
+    if (b) {
+      if (typed != null && b.value !== typed) b.value = typed;
+      b.focus({ preventScroll: true });
+      if (sel && sel[0] != null) try { b.setSelectionRange(...sel); } catch { /* not a text field */ }
+    }
+  }
+  placeMarks();
 }
 
-const HINT = 'Changes are saved as drafts straight away. Visitors see them only once you publish them under Review.';
+const HINT = 'Every change saves itself as a draft straight away (a tick shows it). Visitors see it only once you publish it under Review.';
 
 function galleryView() {
   const out = [h('h1', {}, 'Gallery'), h('p', { class: 'hint' }, HINT)];
@@ -148,17 +219,19 @@ function galleryView() {
   secs.forEach((s, si) => {
     const se = byId(s.id);
     const items = paintingsIn(s.id);
-    const card = h('div', { class: 'card' });
+    const card = h('div', { class: 'card' + (s.hidden ? ' hidden' : '') });
     card.append(h('div', { class: 'row' },
-      h('input', { type: 'text', class: 'grow', value: s.title, 'aria-label': 'Genre name', onchange: (ev) => {
-        save([{ id: s.id, kind: 'section', data: { title: ev.target.value, order: s.order } }]);
+      h('input', { type: 'text', class: 'grow', value: s.title, 'aria-label': 'Genre name', 'data-k': `${s.id}:title`, onchange: (ev) => {
+        save([{ id: s.id, kind: 'section', data: { title: ev.target.value, order: s.order, hidden: s.hidden } }], null, `${s.id}:title`);
       } }),
       badge(se),
+      hideButton(se, 'section', (hidden) => ({ title: s.title, order: s.order, hidden }), 'this genre and its paintings'),
       h('span', { class: 'move' },
         h('button', { title: 'Move genre up', disabled: si === 0, onclick: () => moveSection(secs, si, -1) }, '↑'),
         h('button', { title: 'Move genre down', disabled: si === secs.length - 1, onclick: () => moveSection(secs, si, 1) }, '↓')),
-      h('button', { class: 'danger', title: 'Delete genre', disabled: items.some((e) => e.draft != null),
-        onclick: () => { if (confirm(`Delete the genre "${s.title}"?`)) save([{ id: s.id, kind: 'section', data: null }], 'Genre deleted in the draft'); } }, 'Delete'),
+      h('button', { class: 'danger', title: items.some((e) => e.draft != null) ? 'Move or remove its paintings first' : 'Remove this genre',
+        disabled: items.some((e) => e.draft != null),
+        onclick: () => { if (confirm(`Remove the genre "${s.title}"?`)) save([{ id: s.id, kind: 'section', data: null }], 'Genre removed in the draft'); } }, 'Remove'),
     ));
     if (!items.length) card.append(h('p', { class: 'hint' }, 'No paintings in this genre.'));
     items.forEach((e, i) => card.append(...paintingRow(e, items, i, secs)));
@@ -166,7 +239,7 @@ function galleryView() {
   });
   // genres deleted in the draft but still live
   for (const e of entries.filter((x) => x.kind === 'section' && x.draft == null)) {
-    out.push(h('div', { class: 'card row' }, h('span', { class: 'grow muted' }, `${liveOf(e).title} (deleted in the draft)`), badge(e),
+    out.push(h('div', { class: 'card row' }, h('span', { class: 'grow muted' }, `${liveOf(e).title} (removed in the draft)`), badge(e),
       h('button', { onclick: () => discard([e.id]) }, 'Keep it')));
   }
 
@@ -182,7 +255,7 @@ function contentView() {
     const field = (id, name) => {
       const e = byId(id), text = e ? (current(e) || {}).text || '' : '';
       return h('div', { class: 'box' }, h('label', {}, name, ' ', e ? badge(e) : null),
-        h('input', { type: 'text', value: text, onchange: (ev) => save([{ id, kind: 'text', data: { text: ev.target.value } }]) }),
+        h('input', { type: 'text', value: text, 'data-k': id, onchange: (ev) => save([{ id, kind: 'text', data: { text: ev.target.value } }], null, id) }),
         e && changed(e) ? h('div', { class: 'actions' }, h('button', { onclick: () => discard([id]) }, 'Undo change')) : null);
     };
     if (sec.heading) card.append(field(sec.heading, 'Heading'));
@@ -192,22 +265,23 @@ function contentView() {
     const e = byId(sec.paras);
     const paras = (e ? (current(e) || {}).text || '' : '').split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
     const all = paras.concat(Array(extraParas[sec.paras] || 0).fill(''));
-    const store = (list) => {
+    const store = (list, key) => {
       extraParas[sec.paras] = list.filter((x) => !x.trim()).length;
-      save([{ id: sec.paras, kind: 'text', data: { text: list.map((x) => x.trim().replace(/\n\s*\n/g, '\n')).filter(Boolean).join('\n\n') } }]);
+      save([{ id: sec.paras, kind: 'text', data: { text: list.map((x) => x.trim().replace(/\n\s*\n/g, '\n')).filter(Boolean).join('\n\n') } }],
+        'Saved as a draft', key);
     };
     all.forEach((text, i) => {
-      const ta = h('textarea', { rows: Math.min(8, Math.max(2, Math.ceil(text.length / 60))), value: text,
-        onchange: (ev) => { const list = all.slice(); list[i] = ev.target.value; store(list); } });
+      const ta = h('textarea', { rows: Math.min(8, Math.max(2, Math.ceil(text.length / 60))), value: text, 'data-k': `${sec.paras}:${i}`,
+        onchange: (ev) => { const list = all.slice(); list[i] = ev.target.value; store(list, `${sec.paras}:${i}`); } });
       card.append(h('div', { class: 'box' },
         h('div', { class: 'row' }, h('label', { class: 'grow' }, `Paragraph ${i + 1}`),
           h('span', { class: 'move' },
             h('button', { title: 'Move up', disabled: i === 0, onclick: () => { const l = all.slice(); [l[i - 1], l[i]] = [l[i], l[i - 1]]; store(l); } }, '↑'),
             h('button', { title: 'Move down', disabled: i === all.length - 1, onclick: () => { const l = all.slice(); [l[i + 1], l[i]] = [l[i], l[i + 1]]; store(l); } }, '↓')),
-          h('button', { class: 'danger', title: 'Delete paragraph', onclick: () => {
+          h('button', { class: 'danger', title: 'Remove this paragraph', onclick: () => {
             if (!text.trim()) { extraParas[sec.paras]--; render(); return; }
-            if (confirm('Delete this paragraph?')) store(all.filter((_, j) => j !== i));
-          } }, 'Delete')),
+            if (confirm('Remove this paragraph?')) store(all.filter((_, j) => j !== i));
+          } }, 'Remove')),
         ta));
     });
     card.append(h('div', { class: 'actions' },
@@ -227,13 +301,13 @@ function contentView() {
 const tickedEmpty = new Set();
 function linksBox() {
   const e = byId('links'), d = (e && current(e)) || {};
-  const store = (key, change) => {
+  const store = (key, change, mk) => {
     const next = {};
     for (const s of SITES) {
       const v = { ...(d[s.key] || { name: '', on: false }), ...(s.key === key ? change : {}) };
       if (v.name || v.on) next[s.key] = { name: v.name, on: !!v.on };
     }
-    save([{ id: 'links', kind: 'links', data: next }]);
+    save([{ id: 'links', kind: 'links', data: next }], null, mk);
   };
   const box = h('div', { class: 'box links' }, h('label', {}, 'Links ', e ? badge(e) : null),
     h('p', { class: 'hint' }, 'Tick the ones to show, here and as icons in the header, and type the username (or paste the profile\'s address).'));
@@ -241,18 +315,18 @@ function linksBox() {
     const v = d[s.key] || { name: '', on: false };
     const on = v.on || tickedEmpty.has(s.key);
     const input = h('input', { type: s.key === 'email' ? 'email' : 'text', value: v.name, placeholder: s.sample,
-      autocapitalize: 'off', autocomplete: 'off', spellcheck: false, 'aria-label': `${s.name} ${s.key === 'email' ? 'address' : 'username'}`,
+      autocapitalize: 'off', autocomplete: 'off', spellcheck: false, 'aria-label': `${s.name} ${s.key === 'email' ? 'address' : 'username'}`, 'data-k': `links:${s.key}`,
       onchange: (ev) => {
         const name = tidy(s.key, ev.target.value);
         if (name && !ok(s.key, name)) { toast(`That doesn't look like ${s.key === 'email' ? 'an email address' : `a username for ${s.name}`}`, true); return; }
         if (!name && on) tickedEmpty.add(s.key);
         if (name) tickedEmpty.delete(s.key);
-        store(s.key, { name, on: on && !!name });
+        store(s.key, { name, on: on && !!name }, `links:${s.key}`);
       } });
-    const tick = h('input', { type: 'checkbox', checked: on, onchange: (ev) => {
+    const tick = h('input', { type: 'checkbox', checked: on, 'data-k': `links:${s.key}:on`, onchange: (ev) => {
       if (ev.target.checked && !v.name) { tickedEmpty.add(s.key); render(); return; }
       tickedEmpty.delete(s.key);
-      store(s.key, { on: ev.target.checked });
+      store(s.key, { on: ev.target.checked }, `links:${s.key}:on`);
     } });
     const glyph = h('span', { class: 'link-icon' }); glyph.innerHTML = icon(s.key, 18);   // drawn by links.js, nothing typed in it
     const tryIt = v.name && ok(s.key, v.name) && s.key !== 'email'
@@ -284,12 +358,17 @@ const lastStill = (d) => {
 
 function backgroundBox(key) {
   const id = `bg-${key}`, e = byId(id), d = e && current(e);
-  const box = h('div', { class: 'box bg-box' }, h('label', {}, 'Background ', e ? badge(e) : null));
+  const box = h('div', { class: 'box bg-box' + (isHidden(e) ? ' hidden' : '') }, h('div', { class: 'row' },
+    h('label', { class: 'grow' }, 'Background ', e ? badge(e) : null),
+    d ? hideButton(e, 'background', (hidden) => ({ ...draftOf(e), hidden }), 'this background') : null));
   if (!media) return box.append(h('p', { class: 'hint' }, 'Needs file storage (R2), which isn\'t switched on for this site.')), box;
   const busy = !!bgBusy[key];
   const status = h('p', { class: 'hint' }, bgBusy[key] || '');
   const say = (t) => { bgBusy[key] = t; status.textContent = t; };
-  const store = (data, msg) => save([{ id, kind: 'background', data }], msg);
+  // a new picture or video in a hidden background stays hidden until shown again
+  // the new Library item's name (declared before the return below: a const after it is never set)
+  const label = `${(PAGE.find((p) => p.bg === key) || { name: key }).name} background`;
+  const store = (data, msg, mk) => save([{ id, kind: 'background', data: data && { ...data, hidden: !!(d && d.hidden) } }], msg, mk);
   const pickPhoto = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => pickPhoto.files[0] && run(() => addPhoto(pickPhoto.files[0])) });
   // several files at once are one video's versions (a set: e.g. sizes for wide screens and one framed for phones)
   const pickVideo = h('input', { type: 'file', accept: 'video/mp4,.mp4,.m4v', hidden: true, multiple: true,
@@ -301,20 +380,20 @@ function backgroundBox(key) {
     const frames = ['phone', 'wide'].map((k) => h('div', { class: `bg-frame ${k}`, title: k === 'phone' ? 'On a phone held upright' : 'On a wide screen',
       style: `background-image: url("${src}"); background-position: ${pos}; filter: brightness(${1 - d.shade})` }));
     box.append(
-      h('div', { class: 'bg-pick', title: 'Tap the part to keep in view', onclick: (ev) => {
+      h('div', { class: 'bg-pick', 'data-k': `${id}:focus`, title: 'Tap the part to keep in view', onclick: (ev) => {
         const r = ev.currentTarget.getBoundingClientRect();
         const focus = [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000);
-        store({ ...d, focus }, 'Focus saved as a draft');
+        store({ ...d, focus }, null, `${id}:focus`);
       } }, h('img', { src, alt: '' }), h('span', { class: 'bg-focus', style: `left: ${d.focus[0] * 100}%; top: ${d.focus[1] * 100}%` })),
       h('p', { class: 'hint' }, d.type === 'video' ? 'The video\'s last frame. ' : '', 'Tap the part to keep in view. How it would be cropped:'),
       h('div', { class: 'bg-frames' }, ...frames.map((f) => h('figure', {}, f, h('figcaption', {}, f.title)))),
       h('label', {}, `Shade: ${Math.round(d.shade * 100)}%`),
-      h('input', { type: 'range', min: 0, max: 60, step: 1, value: Math.round(d.shade * 100),
+      h('input', { type: 'range', min: 0, max: 60, step: 1, value: Math.round(d.shade * 100), 'data-k': `${id}:shade`,
         oninput: (ev) => { frames.forEach((f) => { f.style.filter = `brightness(${1 - ev.target.value / 100})`; });
           ev.target.previousSibling.textContent = `Shade: ${ev.target.value}%`; },
-        onchange: (ev) => store({ ...d, shade: ev.target.value / 100 }, 'Shade saved as a draft') }));
+        onchange: (ev) => store({ ...d, shade: ev.target.value / 100 }, null, `${id}:shade`) }));
     if (d.type === 'video') {
-      const choice = (label, field, options) => h('label', {}, label, h('select', { onchange: (ev) => store({ ...d, [field]: ev.target.value }, 'Saved as a draft') },
+      const choice = (label, field, options) => h('label', {}, label, h('select', { 'data-k': `${id}:${field}`, onchange: (ev) => store({ ...d, [field]: ev.target.value }, null, `${id}:${field}`) },
         ...options.map(([v, t]) => h('option', { value: v, selected: d[field] === v }, t))));
       box.append(
         choice('Plays', 'play', [['once', 'Once, stopping on its last frame'], ['loop', 'On a loop']]),
@@ -328,7 +407,7 @@ function backgroundBox(key) {
       box.append(h('p', { class: 'hint' }, `Photo, ${d.w} × ${d.h} pixels.`));
     }
   } else {
-    box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background.' : 'None: the section shows the page\'s grey.'));
+    box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background (the picture stays in the Library).' : 'None: the section shows the page\'s grey.'));
   }
   if (bgPicking.has(key)) box.append(libraryPicker(d, (data) => { bgPicking.delete(key); store(data, 'Saved as a draft'); }));
   box.append(pickPhoto, pickVideo, status, h('div', { class: 'actions' },
@@ -339,7 +418,8 @@ function backgroundBox(key) {
       onclick: () => { addingFresh = true; pickVideo.click(); } }, d ? 'Replace with a video…' : 'Choose a video…'),
     d && d.type === 'video' ? h('button', { disabled: busy || d.versions.length >= 6, title: 'Another size of this video, or one made for phones held upright',
       onclick: () => { addingFresh = false; pickVideo.click(); } }, 'Add a version…') : null,
-    d ? h('button', { class: 'danger', disabled: busy, onclick: () => confirm('Remove this section\'s background?') && store(null, 'Removed in the draft') }, 'Remove') : null,
+    d ? h('button', { class: 'danger', disabled: busy, title: 'Take it out of this section: the picture stays in the Library',
+      onclick: () => confirm('Remove this section\'s background? The picture stays in the Library.') && store(null, 'Removed in the draft') }, 'Remove') : null,
     e && changed(e) ? h('button', { disabled: busy, onclick: () => discard([id]) }, 'Undo change') : null));
   return box;
 
@@ -347,7 +427,6 @@ function backgroundBox(key) {
     try { await job(); } catch (err) { toast(err.message, true); }
     delete bgBusy[key]; render();
   }
-  const label = `${(PAGE.find((p) => p.bg === key) || { name: key }).name} background`;
   async function addPhoto(file) {
     const pic = await photoItem(file, label, 'site', say);
     delete bgBusy[key];
@@ -676,19 +755,22 @@ function sizeNote(d) {
 function paintingRow(e, items, i, secs) {
   const d = current(e);
   const gone = e.draft == null;
-  const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') },
+  const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') + (isHidden(e) ? ' hidden' : '') },
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
     h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
-      h('span', { class: 'd' }, d.details || ' ', sizeNote(d))),
+      h('span', { class: 'd' }, d.details || ' ', sizeNote(d))),
     badge(e),
     gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
       : h('span', { class: 'move' },
+        hideButton(e, 'painting', (hidden) => ({ ...draftOf(e), hidden }), 'this painting'),
         h('button', { title: 'Move up', disabled: i === 0, onclick: () => movePainting(items, i, -1) }, '↑'),
         h('button', { title: 'Move down', disabled: i === items.length - 1, onclick: () => movePainting(items, i, 1) }, '↓'),
-        h('button', { onclick: () => { if (open.has(e.id)) { open.delete(e.id); reopened.delete(e.id); } else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
+        h('button', { onclick: () => { if (open.has(e.id)) closeEdit(e.id); else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
   if (gone || !open.has(e.id)) { editFields.delete(e.id); return [row]; }
 
-  const f = {};
+  /* One saving rule: each field saves the painting as a draft as soon as it's changed (a tick beside it), and a
+     change to the picture is made and stored by itself (pictureChanged, below). No Save button. */
+  const f = {}, k = (name) => `${e.id}:${name}`;
   const form = h('div', { class: 'edit' },
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
     ...detailsFields(f, d, () => { const re = reopened.get(e.id); if (re) re.dr.sizeChanged(); }),
@@ -697,32 +779,97 @@ function paintingRow(e, items, i, secs) {
     ...pictureFields(e, d, f),
     h('p', { class: 'hint' }, `Address: /paintings/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
-      f.go = h('button', { class: 'main', onclick: async () => {
-        const moved = f.section.value !== d.section, det = detailsOf(f);
-        if (det.error) return toast(det.error, true);
-        const { estimated, size_shown, ...rest } = d;    // put back from the form (detailsOf)
-        const re = reopened.get(e.id);
-        let pic = {};
-        if (re && re.dr.changed()) {                     // new image sizes under a new file name; the old ones stay for History
-          if (!re.dr.ready) return toast('The picture is still being made', true);
-          f.go.disabled = true;
-          try {
-            let orig = re.dr.original;                   // a replaced photo becomes a Library item (if not already stored)
-            if (re.dr.replacement) orig = (await keepOriginal(re.dr.replacement, f.title.value || d.title, null, (t) => re.dr.say(t))).key;
-            pic = { ...(await storeImages(orig.slice(6), re.dr.result(), (t) => re.dr.say(t))),
-              white_paper: re.dr.white === 'paper', process: re.dr.record(orig) };
-          } catch (err) { f.go.disabled = false; re.dr.say(''); return toast(err.message, true); }
-        }
-        const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
-          section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order, ...pic };
-        open.delete(e.id); reopened.delete(e.id);
-        save([{ id: e.id, kind: 'painting', data }], pic.media ? (re && re.dr.replacement ? 'Saved, with the new photo' : 'Saved, with the new picture') : undefined);
-      } }, 'Save draft'),
-      changed(e) ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
-      h('button', { class: 'danger', onclick: () => { if (confirm(`Delete "${d.title}"? It stays on the site until you publish.`)) { open.delete(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Deleted in the draft'); } } }, 'Delete')));
+      // never published: undoing would take it away altogether, which is what Remove (with its question) is for
+      changed(e) && e.published != null ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
+      h('button', { class: 'danger', title: 'Take it out of the gallery: its photo stays in the Library',
+        onclick: () => { if (confirm(`Remove "${d.title}" from the gallery? Its photo stays in the Library, and it stays on the site until you publish.`)) { closeEdit(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Removed in the draft'); } } }, 'Remove')));
+  for (const [name, el] of [['title', f.title], ['medium', f.medium], ['height', f.height], ['width', f.width], ['year', f.year],
+    ['section', f.section], ['wide', f.wide], ['measured', f.measured], ['estimated', f.estimated], ['shown', f.shown]]) {
+    el.dataset.k = k(name);
+    el.addEventListener('change', () => savePainting(e.id, f, k(name)));
+  }
   carry(editFields.get(e.id), f);
   editFields.set(e.id, f);
   return [row, form];
+}
+
+/* Save a painting's Edit form: built when its turn in the queue comes, from the latest draft and the form's fields,
+   keeping the picture as the draft has it (the picture saves itself). */
+function savePainting(id, f, key) {
+  return save(() => {
+    const e = byId(id);
+    if (!e || e.draft == null) return null;
+    const d = draftOf(e), det = detailsOf(f), title = f.title.value.trim();
+    if (det.error) throw new Error(det.error);
+    if (!title) throw new Error('Give it a title');
+    const moved = f.section.value !== d.section;
+    const { estimated, size_shown, ...rest } = d;    // put back from the form (detailsOf)
+    return [{ id, kind: 'painting', data: { ...rest, title, ...det, wide: f.wide.checked, section: f.section.value,
+      order: moved ? paintingsIn(f.section.value).length : d.order } }];
+  }, null, key);
+}
+
+/* Closing a painting's Edit form: a picture change still waiting to be stored is stored now. */
+function closeEdit(id) {
+  const re = reopened.get(id);
+  if (re && re.timer) { clearTimeout(re.timer); re.timer = null; storePicture(id, re); }
+  open.delete(id); reopened.delete(id); editFields.delete(id);
+}
+
+/* A painting's picture saves itself too: once the darkroom's choices have rested for a moment (PICTURE_REST), its
+   sizes are made and stored as the photo's next set (r2, r3...) and the draft points at them. A set made for an
+   earlier change in this same sitting, which nothing else can be using, is deleted once replaced, so trying things
+   out doesn't fill the Library. Going back to the choices it opened with (Back to saved) puts back its own
+   pictures, making nothing. A replaced photo is kept as a Library item once, however many changes follow. */
+const PICTURE_REST = 1200;
+function pictureChanged(id, re) {
+  clearTimeout(re.timer);
+  re.timer = setTimeout(() => { re.timer = null; storePicture(id, re); }, PICTURE_REST);
+}
+async function storePicture(id, re) {
+  if (re.running) { re.again = true; return; }
+  const dr = re.dr;
+  if (!dr.ready) return;
+  const want = dr.changed() ? JSON.stringify(dr.record('')) + (dr.replacement ? `|${dr.replacement.name}|${dr.replacement.size}` : '') : 'opened';
+  if (want === re.saved) return;
+  re.running = true;
+  const say = (t) => dr.say(t);
+  try {
+    let pic = re.opened;
+    if (want !== 'opened') {
+      let orig = dr.original;
+      if (dr.replacement) {
+        if (!re.kept || re.kept.file !== dr.replacement) {
+          const e = byId(id);
+          re.kept = { file: dr.replacement, key: (await keepOriginal(dr.replacement, e ? current(e).title : 'Painting', null, say)).key };
+        }
+        orig = re.kept.key;
+      }
+      pic = { ...(await storeImages(orig.slice(6), dr.result(), say)), white_paper: dr.white === 'paper', process: dr.record(orig) };
+      re.made.add(`${pic.media}/${pic.rendition}`);
+    }
+    let before = null;
+    const out = await save(() => {
+      const e = byId(id);
+      if (!e || e.draft == null) return null;
+      before = draftOf(e);
+      const { process, ...rest } = before;             // an older painting opened with no process record
+      return [{ id, kind: 'painting', data: { ...rest, ...pic } }];
+    }, null, `${id}:picture`);
+    if (!out) return;
+    re.saved = want;
+    say('');
+    const old = before && `${before.media}/${before.rendition}`;
+    if (old && re.made.has(old) && old !== `${pic.media}/${pic.rendition}`) {
+      re.made.delete(old);
+      call('POST', 'library/delete', { id: before.media, part: before.rendition }).catch(() => { /* still used: it stays */ });
+    }
+  } catch (err) {
+    say(''); toast(err.message, true);
+  } finally {
+    re.running = false;
+    if (re.again) { re.again = false; storePicture(id, re); }
+  }
 }
 
 /* Reopening a painting's picture: its darkroom starts with the saved choices summarised, and opening a section
@@ -738,7 +885,11 @@ function pictureFields(e, d, f) {
   let re = reopened.get(e.id);
   if (!re) {
     const white = d.white_paper ? 'paper' : 'none';
-    re = { dr: darkroom({
+    re = { saved: 'opened', made: new Set(), timer: null,
+      opened: { w: d.w, h: d.h, widths: d.widths, media: d.media, rendition: d.rendition, ext: d.ext, preview: d.preview,
+        white_paper: !!d.white_paper, ...(d.process ? { process: d.process } : {}) } };
+    re.dr = darkroom({
+      onChange: () => pictureChanged(e.id, re),
       previous: pictureOf(d),
       saved: d.process || { white },
       start: d.process ? { process: d.process } : { white, guess: false },
@@ -748,17 +899,17 @@ function pictureFields(e, d, f) {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
         return { original: r.headers.get('x-original') || key, blob: await r.blob() };
       },
-    }) };
+    });
     reopened.set(e.id, re);
   }
   re.dr.attach(f);
-  return [h('label', {}, 'Picture'), re.dr.el];
+  return [h('label', { 'data-k': `${e.id}:picture` }, 'Picture'), re.dr.el];
 }
 
 function moveSection(secs, i, dir) {
   const list = secs.slice(); [list[i], list[i + dir]] = [list[i + dir], list[i]];
   save(list.map((s, n) => ({ ...s, order: n })).filter((s, n) => secs.find((x) => x.id === s.id).order !== n)
-    .map(({ id, title, order }) => ({ id, kind: 'section', data: { title, order } })), 'Moved');
+    .map(({ id, title, order, hidden }) => ({ id, kind: 'section', data: { title, order, hidden } })), 'Moved');
 }
 function movePainting(items, i, dir) {
   const list = items.filter((e) => e.draft != null);
@@ -777,7 +928,14 @@ function addSection() {
   newGenre = id;
   save([{ id, kind: 'section', data: { title, order: sections().length } }], `"${title}" added at the bottom`);
 }
-const discard = (ids) => act(() => call('POST', 'discard', { ids }), 'Back to the published version');
+const discard = (ids) => {
+  for (const id of ids) {                         // an open Edit form starts again from the published version
+    const re = reopened.get(id);
+    if (re) clearTimeout(re.timer);
+    reopened.delete(id); editFields.delete(id);
+  }
+  return act(() => call('POST', 'discard', { ids }), 'Back to the published version');
+};
 
 // ---- adding a painting: images are made in the browser and stored in R2 -------------------------------------
 
@@ -807,8 +965,9 @@ function nameFor(title) {
    Reopening also offers "Replace photo…", for a better photo or a higher-resolution copy: if its proportions match
    the old original's (the same photo), the corners and white spots carry over (they're fractions of the photo);
    otherwise only the sliders are kept, the corners are guessed afresh and the spots cleared. It says which. The
-   new photo is stored as an original when the painting is saved (replacement); "Back to saved" returns to the
-   old photo and its choices. */
+   new photo is stored as an original with the picture (replacement; storePicture); "Back to saved" returns to the
+   old photo and its choices, and their pictures.
+   opts.onChange, for reopening: called whenever the result has been made afresh (the form stores it once it rests). */
 const fieldsetOf = (...kids) => h('fieldset', { class: 'step-body', disabled: true }, ...kids);
 function whiteText(r) {
   const n = (r.spots || []).length;
@@ -848,10 +1007,10 @@ function darkroom(opts = {}) {
         g.sliders = h('div', { class: 'sliders' },
           h('label', {}, 'Brightness of the white ', g.brightOut = h('span', { class: 'muted' })),
           slider(g.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
-            g.brightGhost = h('span', { class: 'ghost', hidden: true, title: 'As saved' })),
+            g.brightGhost = h('span', { class: 'ghost', hidden: true, title: 'As it was when opened' })),
           h('label', {}, 'Keep the light\'s warmth ', g.warmOut = h('span', { class: 'muted' })),
           slider(g.warm = h('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, oninput: () => slid() }),
-            g.warmGhost = h('span', { class: 'ghost', hidden: true, title: 'As saved' }))))),
+            g.warmGhost = h('span', { class: 'ghost', hidden: true, title: 'As it was when opened' }))))),
       g.cornerBox = step('Corners', g.cornerSum = h('span', { class: 'step-sum muted' }), g.cornerBody = fieldsetOf(
         h('div', { class: 'row' },
           g.cornersNote = h('span', { class: 'grow muted' }),
@@ -868,7 +1027,7 @@ function darkroom(opts = {}) {
       g.status = h('p', { class: 'hint grow' }),
       g.pickFile = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => replace(g.pickFile.files[0]) }),
       g.replaceBtn = h('button', { type: 'button', hidden: !reopen, title: 'Use a better photo, or a higher-resolution copy, of this painting', onclick: () => g.pickFile.click() }, 'Replace photo…'),
-      g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was saved (and the saved photo, if replaced)', onclick: () => backToSaved() }, 'Back to saved')),
+      g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was when you opened it (and the photo, if replaced)', onclick: () => backToSaved() }, 'Back to as it was')),
     g.replaceNote = h('p', { class: 'hint stored-note' }));
   function slid() {
     g.brightOut.textContent = `${g.bright.value}%: ${+g.bright.value === 100 ? 'pure white' : 'a light grey'}`;
@@ -928,8 +1087,8 @@ function darkroom(opts = {}) {
       g.replaceNote.textContent = !before
         ? 'The old photo couldn\'t be read, so nothing was compared: the corners are a fresh guess.'
         : same
-          ? `Same proportions as the old photo${kept.length ? `: kept ${and(kept)}` : ''}. It's stored when you save.`
-          : `Different proportions from the old photo: ${sliders.brightness != null ? 'kept the sliders, ' : ''}guessed the corners afresh${had ? ' and cleared the white spots' : ''}. It's stored when you save.`;
+          ? `Same proportions as the old photo${kept.length ? `: kept ${and(kept)}` : ''}. It's stored, as a draft, straight away.`
+          : `Different proportions from the old photo: ${sliders.brightness != null ? 'kept the sliders, ' : ''}guessed the corners afresh${had ? ' and cleared the white spots' : ''}. It's stored, as a draft, straight away.`;
       await update();
     } finally { g.replaceBtn.disabled = false; }
   }
@@ -1113,6 +1272,7 @@ function darkroom(opts = {}) {
         h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be used')));
     }
     g.status.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
+    if (opts.onChange) opts.onChange();             // reopened: the painting's form stores the picture once it rests
   }
 
   /* The choices, as saved with the painting (editor.js processOf on the server). */
@@ -1264,7 +1424,7 @@ async function keepOriginal(file, name, known, say, grp = 'painting') {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For reduced motion', file: 'Files', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For reduced motion', file: 'Files', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text', hidden: 'Hidden from visitors', media: 'Picture', rendition: 'Picture' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
@@ -1276,9 +1436,20 @@ function diffs(e) {
   const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'section' ? ((byId(v) && current(byId(v)).title) || v)
     : k === 'cm' ? `${v[0]} × ${v[1]} cm` : k === 'focus' ? `${Math.round(v[0] * 100)}% across, ${Math.round(v[1] * 100)}% down`
     : k === 'shade' ? `${Math.round(v * 100)}%` : k === 'versions' ? v.map((x) => `${x.w} × ${x.h}`).join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
-  // the details line is made from medium, size and year, so it isn't listed as a change of its own
-  return Object.keys(b).filter((k) => !(k === 'details' && 'cm' in b) && JSON.stringify(a[k]) !== JSON.stringify(b[k])).map((k) =>
-    h('div', {}, h('b', {}, `${FIELDS[k] || k}: `), h('del', {}, show(k, a[k])), ' → ', h('ins', {}, show(k, b[k]))));
+  if (status(e) === 'hiding' || status(e) === 'showing') return [];      // the badge says it all
+  // the details line is made from medium, size and year, so it isn't listed as a change of its own; a new picture
+  // is one line (its sizes, preview and process change with it)
+  const pic = ['media', 'rendition', 'w', 'h', 'widths', 'ext', 'preview', 'process', 'white_paper'];
+  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !(k === 'details' && 'cm' in b)
+    && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  const out = [];
+  if (e.kind === 'painting' && keys.some((k) => pic.includes(k))) out.push(h('div', {}, h('b', {}, 'Picture: '), 'made afresh'));
+  for (const k of keys) {
+    if (e.kind === 'painting' && pic.includes(k)) continue;
+    if (k === 'hidden') { out.push(h('div', {}, h('b', {}, b.hidden ? 'Hidden from visitors' : 'Shown again'))); continue; }
+    out.push(h('div', {}, h('b', {}, `${FIELDS[k] || k}: `), h('del', {}, show(k, a[k])), ' → ', h('ins', {}, show(k, b[k]))));
+  }
+  return out;
 }
 
 function reviewView() {
@@ -1335,7 +1506,7 @@ function historyView() {
         const mine = byId(v.entry_id);
         const same = mine && mine.draft === v.data;
         return h('div', { class: 'row', style: 'margin-top:0.4rem' },
-          h('span', { class: 'grow' }, name, ' ', h('span', { class: `badge ${kind}` }, kind === 'new' ? 'Added' : kind === 'gone' ? 'Deleted' : 'Changed')),
+          h('span', { class: 'grow' }, name, ' ', h('span', { class: `badge ${kind}` }, kind === 'new' ? 'Added' : kind === 'gone' ? 'Removed' : 'Changed')),
           same ? h('span', { class: 'muted' }, 'as now') : h('button', { onclick: () => act(() => call('POST', 'restore', { revision: v.id }), 'Brought back as a draft') }, 'Bring back'));
       })));
   }
@@ -1364,6 +1535,8 @@ const glyph = (d, size = 18) => {
 const GLYPHS = {
   bin: 'M3.5 5.5h13M8 5.5V3.5h4v2M5 5.5l1 11h8l1-11M8.5 8.5v5.5M11.5 8.5v5.5',
   tick: 'M4 10.5l4 4L16 6',
+  eye: 'M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10zM10 7.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z',   // on the site
+  hidden: 'M2.5 8.5c2 2.7 4.6 4.1 7.5 4.1s5.5-1.4 7.5-4.1M5.2 11.4l-1.5 1.9M10 12.6v2.4M14.8 11.4l1.5 1.9',       // a closed eye: hidden
   play: 'M7 5v10l8-5z',
   photo: 'M3 4.5h14v11H3zM3 13l4-4 3.5 3.5L13 10l4 4M13 7.5h.01',
   sizes: 'M2.5 9.5h7v7h-7zM11.5 5.5h6v6h-6zM11.5 14h3v2.5h-3z',                        // a few sizes of one picture
@@ -1373,8 +1546,8 @@ const GLYPHS = {
   draft: 'M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3',                                        // a pencil: in a draft
   past: 'M3.5 10a6.5 6.5 0 1 0 2-4.7M3.5 3.5v3h3M10 6.5V10l2.5 1.5',                    // a clock turning back: History
 };
-const STATES = { published: ['live', 'On the site'], draft: ['draft', 'In a draft'], history: ['past', 'Only in History'] };
-const RANK = { published: 0, draft: 1, history: 2 };
+const STATES = { published: ['live', 'On the site'], hidden: ['hidden', 'Published, but hidden from visitors'], draft: ['draft', 'In a draft'], history: ['past', 'Only in History'] };
+const RANK = { published: 0, hidden: 1, draft: 2, history: 3 };
 
 function loadLibrary() {
   return call('GET', 'library').then((d) => { libraryData = d; render(); }).catch((e) => toast(e.message, true));

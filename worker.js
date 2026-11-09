@@ -183,8 +183,9 @@ function bar(c) {
 </div>`;
 }
 
-/* A file in a Library item's folder. Visitors get it only if something published uses the item (its code is the
-   entry's media), and never its original. The signed-in editor gets everything. */
+/* A file in a Library item's folder. Visitors get it only if something published and not hidden uses the item
+   (its code is the entry's media), and never its original. (A file already cached stays cached until it's
+   deleted for good, which purges it; hiding is meant to be undone, and the page no longer links to it.) The signed-in editor gets everything. */
 async function libraryFile(request, env, ctx, url, editor, [, code, path, base, ext]) {
   if (!env.MEDIA) return notFound(env, url);
   const key = `media/${code}/${path}`;
@@ -193,7 +194,8 @@ async function libraryFile(request, env, ctx, url, editor, [, code, path, base, 
     if (base === 'original' && !path.includes('/')) return notFound(env, url);
     if (!isVideo) { const hit = await caches.default.match(request); if (hit) return hit; }
     const ok = await env.DB.prepare(`SELECT 1 FROM entries WHERE kind IN ('painting', 'background')
-        AND published IS NOT NULL AND json_extract(published, '$.media') = ? LIMIT 1`).bind(code).first();
+        AND published IS NOT NULL AND json_extract(published, '$.media') = ?
+        AND json_extract(published, '$.hidden') IS NULL LIMIT 1`).bind(code).first();
     if (!ok) return notFound(env, url);
   } else if (!(await signedIn(request, env, url))) {
     return signInAgain(request, url);

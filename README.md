@@ -18,7 +18,8 @@ Paintings, sections and the marked page text live in a database (Cloudflare D1),
 
 - the whole site, showing the drafts in place, with a bar at the bottom ("Draft · 2 changes to publish · Edit · Review");
 - **/admin/** is the editor: change text, sections and paintings, add a painting from a photo. Every change is
-  saved as a draft at once; visitors see nothing until it's published;
+  saved as a draft at once (a tick shows it; there are no Save buttons); visitors see nothing until it's published.
+  The eye hides a painting, genre or background from visitors without removing it (published like any change);
 - **Review**: every unpublished change with a tick. Publish the ticked ones, or all, or discard them;
 - **History**: each publication, and every earlier version of anything, which can be brought back as a draft.
 

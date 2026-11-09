@@ -156,12 +156,17 @@ function processOf(p) {
   return out;
 }
 
+/* Hide (step 1d): a painting, a genre or a section's background can be hidden: off the site (the editor's
+   preview too, as it shows the site as it will be) but kept in the editor, and published like any change. Stored
+   only when true, last, so showing it again gives back the very same text as before. */
+const hide = (d) => (d.hidden === true ? { hidden: true } : {});
+
 export function normalise(id, kind, d) {
   if (!d || typeof d !== 'object') throw new Bad('Missing content');
   if (kind === 'section') {
     const title = str(d.title, 120, 'A section title');
     if (!title) throw new Bad('A section needs a title');
-    return { title, order: int(d.order, 'Order') };
+    return { title, order: int(d.order, 'Order'), ...hide(d) };
   }
   if (kind === 'painting') {
     const title = str(d.title, 200, 'A title');
@@ -197,7 +202,7 @@ export function normalise(id, kind, d) {
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       media: d.media, rendition: d.rendition,
       ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
-      ...(d.process != null ? { process: processOf(d.process) } : {}),
+      ...(d.process != null ? { process: processOf(d.process) } : {}), ...hide(d),
     };
   }
   if (kind === 'background') return backgroundOf(id, d);
@@ -214,7 +219,7 @@ export function normalise(id, kind, d) {
 /* A section's background (entries bg-<section>): a Library item, see backgroundItem. */
 function backgroundOf(id, d) {
   if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background');
-  return backgroundItem(d);
+  return { ...backgroundItem(d), ...hide(d) };
 }
 
 /* A background from a Library item (paths.js): what it uses of the item, so visitors see a change only once it's

@@ -422,8 +422,48 @@ Claude, before pushing: `git pull --rebase` too.
      more, so the move and every old-name reader (frames.js, old branches in paths.js, worker.js, editor.js:
      free, stored, originals/ and videos/ uploads, old entry formats) were removed: in the history before
      "Library: old layout retired". Earlier notes above (1c backgrounds, slices 1 and 2) describe the old names.
-   - Next slices, in order: one saving rule and Hide; backgrounds as lists of Library items (with the
-     upright-screen settings below); paintings usable as backgrounds by reference.
+   - Slice 4, one saving rule and Hide: done on dev (9 Nov 2026).
+     Saving: every change saves itself as a draft at once, paintings included (the Edit form's Save draft button is
+     gone). admin/editor.js save(items, msg, key) runs saves one after another (a queue, so they never cross and the
+     later wins; items may be a function, built when its turn comes, from the latest entries); with a key (the
+     changed element's data-k) the answer is a tick, not a message: placeMarks() puts a tick on the right inside a
+     text field (class saved, a background SVG) or just after anything else (span.mark; inside a label), fading over
+     3.5 seconds, tooltip "Saved as a draft...", kept through re-renders. render() keeps the focused field (data-k):
+     focus, caret and what's typed, so a save landing mid-typing loses nothing. beforeunload warns while saves are
+     pending. A painting's Edit form: each field saves on change (savePainting: from the latest draft and the form;
+     picture fields left as the draft has them). Its picture saves itself: darkroom opts.onChange (after every
+     update()) -> pictureChanged(), which waits PICTURE_REST (1.2 s) of quiet, then storePicture(): makes the next rN
+     set (keepOriginal once for a replaced photo, re.kept) and saves; a set made earlier in the same sitting (re.made)
+     is deleted once superseded (library/delete part; nothing else can use it); back at the choices it opened with
+     ("Back to as it was", formerly "Back to saved"), it puts back the opening's own picture fields (re.opened),
+     making nothing. Closing the form stores a waiting change at once (closeEdit). discard() resets an open form
+     (editFields, reopened). "Undo changes" isn't offered on a never-published painting (it would delete it in one
+     tap; Remove asks first). The add form keeps its "Add as a draft" button: adding is an act, not a save.
+     Hide: `hidden: true` in the entry's JSON (editor.js hide(): paintings, genres (kind section) and backgrounds;
+     stored only when true, last, so showing again restores the same text). site.js load() skips hidden entries in
+     both modes (the preview shows the site as it will be): a hidden genre takes its paintings with it; a hidden
+     painting's address is "not found"; worker.js libraryFile() refuses visitors a file unless a published entry
+     that isn't hidden uses its item (files already in Cloudflare's cache stay there until deleted for good: hiding
+     is meant to be undone and nothing links to them). library.js: a published-but-hidden use has state 'hidden'
+     (closed-eye mark in the Library; still blocks Delete for good). Editor: an eye button (hideButton) on each
+     painting row, genre and background box: open eye on the site, closed eye hidden (row or box faded); badges
+     "Hidden" / "Shown again" when that's the whole change, and Review says so in one line (a new painting picture is
+     one line too, "Picture: made afresh"). A new photo or video put into a hidden background stays hidden.
+     Wording: Remove (out of the page, its file stays in the Library) for paintings, genres, paragraphs and
+     backgrounds; Delete for good only in the Library.
+     Not done: hiding whole page sections (Hero, Contact, Profile...): they're fixed in index.html and the scripts
+     (gallery.js, face.js, motion.js, the header's links) expect them, so this goes with sections added by the
+     client, when sections become entries.
+     Fixed on the way: backgroundBox()'s `label` (the new Library item's name) was declared after `return box`, so
+     "Choose a photo…" / "Choose a video…" in a background box failed ("Cannot access 'label' before
+     initialization") since slice 3, on live too; "From the Library…" worked.
+     Tested locally (wrangler dev, Playwright, against the seed converted to the current layout): hide and show
+     paintings, genres, backgrounds (preview, live site, list page, painting address 404, file 404 for visitors,
+     Library mark, Review lines); each Edit field saving with its tick; typing in the next field while a save lands;
+     the picture saving itself after Find the paper and a slider, the superseded set deleted, Back to as it was
+     making nothing, closing straight after a change; Undo resetting an open form. Not tested on a phone or Safari.
+   - Next slices, in order: backgrounds as lists of Library items (with the upright-screen settings below);
+     paintings usable as backgrounds by reference.
    - Framing on upright screens (Christopher thinking aloud, 9 Nov 2026, not decided): the forest works on wide
      screens because the bright fern sits against dark trees; an upright phone's full-height crop of the 4:3
      video shows only about 35% of its width, so the trees are lost (moving the focus helped landscape phones).

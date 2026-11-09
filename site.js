@@ -44,6 +44,7 @@ export async function load(env, mode) {
     const raw = pick(r);
     if (raw == null) continue;
     const d = JSON.parse(raw);
+    if (d.hidden) continue;                          // hidden: off the site, kept in the editor
     if (r.kind === 'section') sections.push({ id: r.id, ...d, paintings: [] });
     else if (r.kind === 'painting') paintings.push({ id: r.id, ...d });
     else if (r.kind === 'text') texts[r.id.slice(2)] = d.text;

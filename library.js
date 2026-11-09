@@ -91,7 +91,7 @@ async function survey(env) {
   };
   for (const e of entries.results) {
     use(usesOf(e.kind, e.id, e.draft), { entry: e.id, state: 'draft' });
-    use(usesOf(e.kind, e.id, e.published), { entry: e.id, state: 'published' });
+    use(usesOf(e.kind, e.id, e.published), { entry: e.id, state: e.published && JSON.parse(e.published).hidden ? 'hidden' : 'published' });
   }
   for (const v of revisions.results) use(usesOf(v.kind, v.entry_id, v.data), { entry: v.entry_id, state: 'history', revision: v.id });
 
