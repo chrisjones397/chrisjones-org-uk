@@ -1,6 +1,7 @@
 /* The site's server code. Most of the site is served straight from the files; Cloudflare runs this first
    (run_worker_first in wrangler.jsonc) only for the pages that show content from the database, the uploaded
-   images and the editor.
+   images and the editor, and otherwise only for addresses where there's no file (not_found_handling "none"):
+   old addresses sent on, and the "page not found" page.
 
    Two kinds of address reach it:
    - The site (chrisjones.org.uk, www, and dev.chrisjones.org.uk): visitors see the published content.
@@ -14,10 +15,14 @@
                           and one view however you arrive. Its title and link-preview details are the painting's,
                           with <base href="/"> so the page's own files are found from the top folder.
      /gallery/list/       every painting as a plain grid
+     anything else        templates/404.html, with status 404
+   Every page gets the site's header (templates/header.html) as it's served. Old addresses: /gallery/ (once the
+   floating gallery's own page) goes to the home page's gallery section.
    Images kept in R2 (binding MEDIA): /media/images/<file>, published paintings' only, except to the editor. */
 
-import { load, homeRewriter, listRewriter, esc } from './site.js';
+import { load, rewriter, homeRewriter, listRewriter, esc } from './site.js';
 import { signedIn, api } from './editor.js';
+import notFoundPage from './templates/404.html';   // .html files are imported as text (Wrangler's default rules)
 
 const SITE = 'Christopher Jones - Fine Art';
 const LIVE_HOSTS = ['chrisjones.org.uk', 'www.chrisjones.org.uk'];
@@ -44,6 +49,9 @@ export default {
     } else if (path === '/admin' || path.startsWith('/admin/')) {
       return notFound(env, url);
     }
+    if (path === '/gallery' || path === '/gallery/' || path === '/gallery/index.html') {
+      return Response.redirect(`${url.origin}/#paintings`, 301);
+    }
 
     const mode = editor ? 'draft' : 'published';
     if (path === '/' || path === '/index.html') return home(env, url, mode, editor);
@@ -54,20 +62,25 @@ export default {
       if (!path.endsWith('/')) return Response.redirect(`${url.origin}${path}/${url.search}`, 301);
       return home(env, url, mode, editor, m[1]);
     }
-    return env.ASSETS.fetch(request);
+    // Reached only where there's no file (or under the run_worker_first addresses above): try the files once more
+    const res = await env.ASSETS.fetch(request);
+    return res.status === 404 ? notFound(env, url, mode) : res;
   },
 };
 
-function notFound(env, url) {
-  return env.ASSETS.fetch(new URL('/404.html', url)).then((r) => new Response(r.body, { status: 404, headers: r.headers }));
+/* The "page not found" page, with the header and the footer's text, and status 404. */
+async function notFound(env, url, mode = 'published') {
+  const c = await load(env, mode);
+  const page = new Response(notFoundPage, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+  return respond(rewriter(c).transform(page), mode === 'draft', 404);
 }
 
-function respond(res, editor) {
+function respond(res, editor, status = 200) {
   const h = new Headers(res.headers);
   h.delete('etag');
   h.set('content-type', 'text/html; charset=utf-8');
   h.set('cache-control', editor ? 'no-store' : 'no-cache');
-  return new Response(res.body, { status: 200, headers: h });
+  return new Response(res.body, { status, headers: h });
 }
 
 /* Everything except the live site says so to search engines; the editor's pages also get its bar. */
@@ -82,7 +95,7 @@ function finish(rw, c, url, editor) {
 async function home(env, url, mode, editor, name) {
   const c = await load(env, mode);
   const p = name && c.byName[name];
-  if (name && !p) return notFound(env, url);
+  if (name && !p) return notFound(env, url, mode);
   const page = await env.ASSETS.fetch(new URL('/', url));
   const rw = finish(homeRewriter(c), c, url, editor);
   if (p) {

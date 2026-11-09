@@ -1,11 +1,13 @@
 /* The site's content, from the database, put into its pages.
 
-   The pages themselves are still the hand-written files (index.html, gallery/list/index.html). What visitors
+   The pages themselves are the hand-written files (index.html, gallery/list/index.html, 404.html). What visitors
    see of the paintings and the marked page text now comes from the content database (D1, binding DB; tables
    in db/schema.sql), so this fills those parts in on the way out, with Cloudflare's HTMLRewriter:
      - the floating gallery's data (<script id="gallery-data">) and the paintings hung around the invitation;
      - text marked data-text="key" (replaced) and data-paragraphs="key" (its <p>s replaced);
-     - the list page's grid.
+     - the list page's grid;
+     - the site's header, one copy for every page (templates/header.html, bundled into the Worker as text), in
+       place of <header data-partial="header">.
    mode 'published' is what visitors see; mode 'draft' is the editor's preview (admin.chrisjones.org.uk).
 
    A painting's images are <base><file>-<width>.<ext> (and <base><file>-preview.jpg), from the site's top
@@ -14,13 +16,16 @@
      Nov 2026): in R2, served by worker.js.
    R2 holds images/ (what the site shows) and originals/ (each painting's photo as uploaded, never served). */
 
+import header from './templates/header.html';   // .html files are imported as text (Wrangler's default rules)
+
+const PARTIALS = { header };
 const INVITE_COUNT = 5;
 const SIZES_GRID = '(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw';
 const SIZES_WIDE = '(max-width: 1200px) 100vw, 1200px';
 const SIZE_RE = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/;   // "60 x 90 cm": height x width
 
 export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-// Text on the page: escaped, with hyphens inside words kept from breaking onto two lines (as build_site.py)
+// Text on the page: escaped, with hyphens inside words kept from breaking onto two lines 
 const shown = (s) => esc(s).replace(/(?<=\w)-(?=\w)/g, '&#8209;');
 export function slug(title) {
   return title.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ')
@@ -97,6 +102,10 @@ function listHtml(c, prefix) {
 /* The rewriter for any page: the marked text, plus whatever extra handlers the page needs. */
 export function rewriter(c) {
   const r = new HTMLRewriter()
+    .on('[data-partial]', { element(el) {
+      const part = PARTIALS[el.getAttribute('data-partial')];
+      if (part != null) el.replace(part, { html: true });
+    } })
     .on('[data-text]', { element(el) {
       const t = c.texts[el.getAttribute('data-text')];
       if (t != null) el.setInnerContent(t);
@@ -121,5 +130,5 @@ export function homeRewriter(c) {
 }
 
 export function listRewriter(c) {
-  return rewriter(c).on('.list-page .wrapper', { element(el) { el.setInnerContent(listHtml(c, '../../'), { html: true }); } });
+  return rewriter(c).on('.list-page .wrapper', { element(el) { el.setInnerContent(listHtml(c, '/'), { html: true }); } });
 }

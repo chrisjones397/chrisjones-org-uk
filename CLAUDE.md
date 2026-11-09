@@ -12,7 +12,7 @@ Namecheap, a local Apache copy) is vestigial: don't build on it or patch around 
 proper replacement, and redesign it. When choosing an approach, say what the standard way is and why.
 Consistency matters to him: all text below the header shares one shadow (`--shadow` on body; the header has its
 own lighter one), links glow when pointed at, and all titles (h1, section h2) share one size and weight, set
-once at the top of index.html's styles. Section headings mirror the opening title's position (22%).
+once at the top of site.css. Section headings mirror the opening title's position (22%).
 
 ## Branches and hosting
 
@@ -20,20 +20,18 @@ once at the top of index.html's styles. Section headings mirror the opening titl
 - **main** is live, chrisjones.org.uk. It only ever moves by fast-forwarding to dev, after Christopher approves.
 - **painted-forest-tools** holds the scripts that made the opening video. Never merged, never published.
 - Cloudflare: two Workers build from this repository. chrisjones397-github-io builds main (`npx wrangler deploy`);
-  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). Both have the build command
-  `sh tools/cloudflare_build.sh` (set in each Worker's build settings). Settings in wrangler.jsonc (no workers.dev or preview
-  addresses; Worker logs kept);
-  `.assetsignore` lists what isn't published (this file, the README, tools/, db/,
+  chrisjones397-github-io-dev builds dev (`npx wrangler deploy --env dev`). No build command (removed in step
+  1b): nothing is built. Settings in wrangler.jsonc (no workers.dev or preview addresses; Worker logs kept);
+  `.assetsignore` lists what isn't published (this file, the README, db/, templates/,
   the server code...). Anchor root files there with / (a bare name matches in every folder).
 
 ## Who does what
 
-- Claude works in a cloud clone of the repository: edits, runs `python3 tools/build_site.py` (needs Pillow:
-  `pip install --break-system-packages pillow`), commits and pushes to dev. Christopher reviews on
-  dev.chrisjones.org.uk and says when to put it live.
-- Christopher works on his Mac in /Library/WebServer/Documents/prd/sync (a clone on dev, served by local Apache,
-  Python in a venv there). He pushes some things himself (e.g. new master images), and prefers not to run
-  build_site.py locally until he has checked it; he asks Claude to run it.
+- Claude works in a cloud clone of the repository: edits, commits and pushes to dev (nothing to build).
+  Christopher reviews on dev.chrisjones.org.uk and says when to put it live.
+- Christopher works on his Mac in /Library/WebServer/Documents/prd/sync (a clone on dev, once served by local
+  Apache, which can't run the Worker: see the vestigial list below). He pushes some things himself, and prefers
+  not to run code locally until he has checked it.
 
 ## Starting a session (both sides must be in sync with GitHub)
 
@@ -49,10 +47,9 @@ Christopher, on the Mac before working, and again before pushing anything (Claud
     git status                  # anything uncommitted? commit it (or git stash) first
     git pull --rebase           # bring in what Claude pushed; his own unpushed commits go on top
 
-If `git pull --rebase` stops with a conflict, stop and ask rather than guess. Generated files (index.html's
-built blocks, gallery/, 404.html) can always be remade by running build_site.py.
+If `git pull --rebase` stops with a conflict, stop and ask rather than guess.
 
-Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's styles or header changed.
+Claude, before pushing: `git pull --rebase` too.
 
 ## Putting dev live (only when Christopher says so)
 
@@ -62,15 +59,25 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
 
 ## How the site is made
 
-- **tools/build_site.py** knows nothing of paintings (step 1, Nov 2026, removed masters/, img/, paintings.yaml,
-  gallery/paintings.json and tools/import_content.py from git; they're in the commit before "Remove the old
-  painting files"). It writes: med/contact-<width>.webp from CONTACT_SOURCE (med/jpg/paint-palette.jpg),
-  gallery/ (only forwards to the home page's gallery section), gallery/list/ (its grid left empty for
-  worker.js), 404.html, and the built blocks inside index.html (between `<!-- ... start/end -->` markers:
-  contact picture; gallery section, with the invitation wall and gallery-data left empty for worker.js). It
-  copies index.html's `<style>` and header into every other page, so shared styles live in index.html. It
-  fingerprints local script addresses (`?v=<hash>`) so browsers never run stale scripts.
-  Never edit generated files by hand; change index.html or the script and rebuild.
+- **Nothing is built (step 1b, Nov 2026).** The repository is the site as served, plus the Worker's code;
+  tools/build_site.py and tools/cloudflare_build.sh are gone (in the history before "Retire build_site.py").
+  Each shared piece exists once: styles in **site.css** (linked by every page; all of index.html's old <style>,
+  the gallery caption's styles, and the list and 404 pages' bits, scoped by `body.page`, `.list-page`,
+  `.notfound`); the header in **templates/header.html**, which site.js's rewriter() puts in place of
+  `<header data-partial="header">` on every page as it's served (imported as text: Wrangler's default module
+  rules treat .html as Text, so it's bundled into the Worker, no extra fetch; its links start with / so they work
+  at any address, and on the home page they're same-page fragment links, so they scroll without reloading;
+  gallery.js handles them while a painting's address shows); "page not found" in **templates/404.html**, sent
+  by worker.js notFound() with status 404 and the header and footer text filled in. templates/ isn't published.
+  wrangler.jsonc has not_found_handling "none", so an address with no file reaches worker.js (run_worker_first
+  is a list, which also stops the navigation-request shortcut to asset handling); worker.js sends /gallery and
+  /gallery/ to /#paintings (301) and anything else missing to notFound(). Scripts have plain addresses, no
+  `?v=` stamps: Workers static assets are sent with `Cache-Control: public, max-age=0, must-revalidate` and an
+  ETag (a hash of the file), so browsers always revalidate and get a changed file at once (304 if unchanged;
+  checked with wrangler dev). Fingerprinted names with year-long caching would save those revalidations but
+  need a build step, which isn't worth it here. Pages from worker.js are no-cache (no-store for the editor).
+  The gallery section's markup and the contact picture's <img> (sizes med/contact-<width>.webp, plain files
+  until step 1c) are hand-written in index.html. Never reintroduce copies of shared markup or styles.
 - **Home page order**: opening forest video (.hero) / gallery section (#paintings, .invite) / contact
   (#contact) / profile with the head animation (.face-section, three windows tall) / footer (copyright only).
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
@@ -102,9 +109,9 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
   History records from before the move to R2 (releases 1 and 2) were pointed at media/images/ in step 1, so
   "Bring back" never asks for img/.
 - **worker.js** runs first (wrangler.jsonc run_worker_first) for /, /paintings/*, /gallery/list/, /media/* and
-  /admin*. It fills the pages from the database with HTMLRewriter (site.js): the gallery-data JSON, the
+  /admin*, and for any address with no file. It fills the pages from the database with HTMLRewriter (site.js): the gallery-data JSON, the
   invitation wall, the list page's grid, `data-text="key"` elements and `data-paragraphs="key"` blocks in
-  index.html (entries t-<key>). Each page section has a data-paragraphs block (hero, gallery, contact,
+  index.html (entries t-<key>), and the header partial (data-partial). Each page section has a data-paragraphs block (hero, gallery, contact,
   profile, footer; entries t-hero etc., a blank line between paragraphs; the server lets those five be created
   by the first paragraph typed, PARAGRAPHS in editor.js); a block's own <p>s are replaced only when the database
   has text for it. The opening title and its paragraphs drift together (.hero-words). A painting's address is the home page with that painting brought forward (its
@@ -207,7 +214,7 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
 
 ## Next steps (agreed with Christopher, Nov 2026; start each in a new chat)
 
-1. Tidy git: done (Nov 2026), see build_site.py above.
+1. Tidy git: done (Nov 2026).
    See Christopher's standing principle at the top. build_site.py (1b) is one example of something vestigial,
    not the only one. Candidates found so far, to go through with him (each: what it was for, the proper
    Cloudflare way, then replace or remove), as part of 1b or straight after:
@@ -225,30 +232,13 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
    - Local Apache copy on his Mac (/Library/WebServer/Documents/prd/sync) as a way to view the site: LAMP-era;
      it can't run the Worker, database or R2. The proper local preview is `npx wrangler dev` (or just dev);
      his clone stays for git. Mind his preference not to run code locally he hasn't vetted.
-   - gallery/index.html forwarding page and other leftovers of old addresses (covered in 1b).
+   - gallery/index.html forwarding page: done in 1b (worker.js redirect).
+   - med/jpg/paint-palette.jpg and the other masters in med/jpg/: sources kept from the build-script days;
+     the contact one goes with step 1c.
    Keep looking for more as work goes on (e.g. anything in index.html, worker.js or the README written for
    the static or Apache setup) and add them here.
-1b. Retire build_site.py (agreed Nov 2026, next; before detail images). It's a leftover from static hosting,
-   where pages had to be put together in advance. Now the Worker runs for every visit, so nothing should need
-   building and the repository should hold only what's served, plus the Worker's code. Plan:
-   - Shared styles: index.html's <style> becomes one stylesheet (e.g. site.css) that every page links to;
-     FLOAT_UI_CSS and the extras block go into it too. No copies of styles in any page.
-   - Shared header: one copy. The Worker adds it to the other pages (list page, 404) as it serves them, the
-     way it already fills in content, e.g. from a partial imported into worker.js as text (wrangler rules), or
-     taken from index.html. Choose the standard way and explain the choice to Christopher.
-   - The gallery section's markup (invitation wall, float stage, gallery-data, script tag) is written once in
-     index.html by hand, with no built-block markers; likewise the contact picture's <img>.
-   - Script version stamps (?v=<hash>): replace with the standard Cloudflare approach (check what caching
-     headers and ETags Workers static assets send by default, and whether that alone ensures browsers fetch
-     a changed script; if not, set headers or fingerprint file names in the proper way). Explain it.
-   - gallery/index.html (forwarding page): becomes a redirect (worker.js, or a _redirects file if static
-     assets support it), not a page.
-   - 404.html: a plain hand-written page linking the stylesheet; header added by the Worker.
-   - Contact picture: keep its four sizes in med/ as plain files for now (they go to R2 in step 1c).
-   - Then delete tools/build_site.py and tools/cloudflare_build.sh, and remove the build command from both
-     Workers' build settings (Cloudflare API; leave the deploy commands). Update README and these notes.
-   - Test: the home page, list page, a painting's address, a missing address (404) and the old /gallery/
-     address on dev, after Cloudflare's build; and on admin-dev, that the editor's preview still works.
+1b. Retire build_site.py: done (Nov 2026), see "Nothing is built" above. The build command was removed from
+   both Workers' build settings.
 1c. Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
    content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
    sizes made at upload like the paintings, published through Review like everything else. What stays in git

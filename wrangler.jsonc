@@ -2,8 +2,9 @@
 //   chrisjones397-github-io      builds main, deploy command: npx wrangler deploy
 //   chrisjones397-github-io-dev  builds dev,  deploy command: npx wrangler deploy --env dev
 // The dev Worker MUST use --env dev: without it, it would deploy under the live Worker's name.
-// Most of the site is served straight from the files. worker.js runs first only for the pages filled in from
-// the content database (the home page, painting addresses, the list), uploaded images and the editor.
+// Nothing is built: the repository is the site. Most of it is served straight from the files. worker.js runs
+// first only for the pages filled in from the content database (the home page, painting addresses, the list),
+// uploaded images and the editor; and, where no file matches, for old addresses and "page not found".
 //
 // Each Worker has its own content database and editor address:
 //   live: database site-content,     images site-media,     site chrisjones.org.uk,     editor admin.chrisjones.org.uk
@@ -20,7 +21,7 @@
   "assets": {
     "directory": ".",                    // the site is the repository itself (less .assetsignore)
     "binding": "ASSETS",                 // how worker.js reaches the files
-    "not_found_handling": "404-page",    // unknown addresses get 404.html, not a blank page
+    "not_found_handling": "none",        // an address with no file goes to worker.js (old addresses, 404.html with the header)
     "run_worker_first": ["/", "/index.html", "/paintings/*", "/gallery/list", "/gallery/list/*", "/media/*", "/admin", "/admin/*"]
   },
   "d1_databases": [
@@ -42,7 +43,7 @@
       "assets": {
         "directory": ".",
         "binding": "ASSETS",
-        "not_found_handling": "404-page",
+        "not_found_handling": "none",
         "run_worker_first": ["/", "/index.html", "/paintings/*", "/gallery/list", "/gallery/list/*", "/media/*", "/admin", "/admin/*"]
       },
       "d1_databases": [

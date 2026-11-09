@@ -1,0 +1,536 @@
+/* The site's styles, shared by every page (the home page, the list page and the "page not found" page).
+   Linked from each page's <head>; nothing is copied into the pages. */
+/* Fundamentals */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+:root {
+  --header-height: 180px; /* room kept above a section when a menu link jumps to it (see scroll-padding-top) */
+}
+html {
+  scrollbar-gutter: stable;
+  scroll-padding-top: calc(var(--header-height) - 3rem);
+}
+/* Menu links within the page glide there; but arriving from another page (e.g. the gallery's Contact
+   link) jumps straight to the place, so smooth scrolling is only switched on once the page has loaded */
+html.smooth { scroll-behavior: smooth; }
+/* Snapping is done by motion.js, in the direction the visitor is scrolling. The contact link still needs
+   to land with the section filling the window: */
+#contact, #paintings { scroll-margin-top: calc(3rem - var(--header-height)); }   /* cancels the page's room for the header */
+@media screen and (prefers-reduced-motion: reduce) {
+  html.smooth {
+    scroll-behavior: auto;
+  }
+}
+body, html {
+  color: #fff;
+  font-family: "Inter", sans-serif;
+  background-color: rgb(100, 100, 100);
+}
+/* Text, the same everywhere: one soft shadow behind all the text below the header, so it reads the same
+   over the video, the paintings, the pictures and plain grey alike; the header has its own lighter one.
+   Links glow on top of whichever shadow they have when pointed at (see "Text links" below). */
+body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); }
+.header { --shadow: 0 1px 6px rgba(0, 0, 0, 0.25); text-shadow: var(--shadow); }
+/* Headings: one look everywhere below the header. Titles (the opening title, each section's heading, a
+   painting's name on its page, the list's) share one size and weight; the list's section names are smaller. */
+h1, h2, h3 { font-weight: 300; letter-spacing: 0.01em; }
+h1, h2 { font-size: clamp(1.6rem, 4.5vw, 4.2rem); }
+h3 { font-size: clamp(1.15rem, 1.8vw, 1.4rem); }
+ul {
+  list-style: none;
+}
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Header */
+.header {
+  background-color: rgba(255,255,255,0.4);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px rgba(255, 255, 255, 0.4) solid;
+  position: fixed;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+}
+.header-block {
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.nav-list {
+  display: flex;
+  align-items: center;
+  column-gap: 20px;
+}
+/* Email, Instagram and Bluesky buttons beside the menu */
+.nav-icons {
+  display: flex;
+  align-items: center;
+  column-gap: 14px;
+}
+.nav-icon {
+  display: inline-flex;
+  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.25));
+}
+/* "Email address copied", shown briefly under the header after the email button is pressed */
+.copied-tip {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 20px;
+  padding: 0.45em 0.9em;
+  border-radius: 6px;
+  background: rgba(40, 40, 40, 0.85);
+  color: #fff;
+  font-size: 0.85rem;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+.copied-tip.show {
+  opacity: 1;
+  transform: none;
+}
+.footer-email { position: relative; }
+#footer-email { cursor: pointer; }
+.footer-tip {
+  top: auto;
+  right: auto;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  white-space: nowrap;
+  transform: translate(-50%, 4px);
+}
+.footer-tip.show { transform: translate(-50%, 0); }
+.site-title {
+  display: flex;
+  align-items: baseline;
+  column-gap: 0.55em;
+  flex-wrap: wrap;
+  color: #fff;
+  line-height: 1.15;
+}
+.site-name {
+  font-size: clamp(1.45rem, 2.6vw, 2.1rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.site-tag {
+  font-size: clamp(0.95rem, 1.5vw, 1.2rem);
+  font-weight: 300;
+  opacity: 0.9;
+}
+.nav-link {
+  font-size: 16px;
+}
+
+/* Text links, the same everywhere on the site: a little dimmed, then bright white with a soft glow when
+   pointed at (or reached with the keyboard). Icons follow, as they're drawn in the text's colour. */
+.nav-link, .contact-line a, .contact-line #footer-email, .invite-alt a, .site-footer a, .float-caption .t, .float-list,
+.float-link a {
+  color: rgba(255,255,255,0.75);
+  transition: color 0.3s, text-shadow 0.3s, filter 0.3s;
+}
+.nav-link:hover, .nav-link:focus-visible, .contact-line a:hover, .contact-line a:focus-visible,
+.contact-line #footer-email:hover, .contact-line #footer-email:focus-visible, .invite-alt a:hover, .invite-alt a:focus-visible,
+.site-footer a:hover, .site-footer a:focus-visible, .float-caption .t:hover, .float-caption .t:focus-visible,
+.float-list:hover, .float-list:focus-visible,
+.float-link a:hover, .float-link a:focus-visible, .site-title:hover, .site-title:focus-visible {
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255,255,255,0.75), var(--shadow);
+}
+a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
+
+/* Thick-glass header over the pictures that pass under it (drawn by glass.js) */
+.glass-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.header-block {
+  position: relative;
+  z-index: 1;
+}
+.header.glass-on {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Opening image: full window width, starting under the see-through header */
+.hero {
+  position: relative;
+  overflow: hidden;   /* the title drifts down with the scroll; it stays within the picture */
+}
+.hero img, .hero video {
+  display: block;
+  width: 100%;
+  height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
+  height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
+  object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
+}
+/* The opening video is a backdrop, not something to operate. Firefox on iPhone shows the
+   player's controls over it uninvited (Safari doesn't), so taps pass straight through it
+   and WebKit's controls are hidden. */
+.hero video {
+  pointer-events: none;
+}
+.hero video::-webkit-media-controls,
+.hero video::-webkit-media-controls-panel,
+.hero video::-webkit-media-controls-overlay-play-button,
+.hero video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
+/* The opening title and any paragraphs under it (edited as the Hero section) */
+.hero-words {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22%;   /* measured from the bottom, so a title that wraps onto two lines still fits */
+  padding: 0 5vw;
+  text-align: center;
+}
+/* Paragraphs added in the editor under a section's heading: styled like the contact lines */
+.hero-words p, .words-paras p {
+  font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+  font-weight: 300;
+  line-height: 1.4;
+  margin-top: 0.4em;
+}
+.words-paras:empty { display: none; }
+.footer-words { text-align: center; }
+.footer-words p + p { margin-top: 0.4em; }
+
+/* The menu's Profile link lands at the end of the profile animation, on the finished head and text
+   (with smooth scrolling, the animation fast-forwards on the way there) */
+.face-anchor {
+  position: absolute;
+  top: calc(100% - var(--vh, 1vh) * 100);
+  left: 0;
+}
+
+/* Profile text */
+.face-words h2 {
+  margin-bottom: 0.8em;
+}
+.face-words p {
+  line-height: 1.5;
+}
+.face-words p + p {
+  margin-top: 0.9em;
+}
+
+/* Contact: a full-window picture with the details over it, styled like the opening title */
+.contact {
+  position: relative;
+  overflow: hidden;
+  height: 100svh;
+  height: calc(var(--vh, 1svh) * 100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.contact-pic {
+  position: absolute;
+  left: 0;
+  top: -10%;            /* a little taller than the section, so the parallax never shows an edge */
+  width: 100%;
+  height: 120%;
+  object-fit: cover;
+  object-position: 85% 100%;   /* the palette and brush are low and to the right: keep them in view */
+}
+.contact::after {       /* a light shade over the picture, so the words always read */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.12);
+}
+.contact-words {
+  position: relative;
+  z-index: 1;
+  padding: 0 5vw;
+  text-align: center;
+}
+.contact-title {
+  margin-bottom: 0.6em;
+}
+.contact-line {
+  font-size: clamp(1.1rem, 2.2vw, 1.8rem);
+  font-weight: 300;
+  margin-top: 0.4em;
+}
+#footer-email { cursor: pointer; }                                     /* clicking the address copies it */
+.contact-line a { display: inline-flex; align-items: center; gap: 0.35em; }
+.contact-line svg { width: 0.95em; height: 0.95em; }
+
+/* The gallery's invitation: a full window, with five paintings hung loosely around the words. Each moves
+   at its own pace as the page scrolls (motion.js), so they seem to hang at different depths. */
+.invite {
+  position: relative;
+  overflow: hidden;
+  height: 100svh;
+  height: calc(var(--vh, 1svh) * 100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.invite-wall { position: absolute; inset: 0; transition: opacity 1s; }
+.gallery-3d .invite-wall, .gallery-live .invite-wall { opacity: 0; pointer-events: none; }   /* the floating gallery takes their place */
+/* The floating wall in the page (gallery/gallery.js). The section is as tall as the wall (the script sets
+   the exact height); the view of it stays in place while the page scrolls through, and the paintings
+   rise past. It fades in once its paintings have loaded. The heading scrolls away with the page. */
+.float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
+.float-section canvas { display: block; width: 100%; height: 100%; }
+.float-section .float-text { display: none; }
+.gallery-3d .invite { display: block; overflow: clip; height: calc(var(--vh, 1svh) * 800); }
+.gallery-3d .float-section {
+  inset: auto;
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  height: calc(var(--vh, 1svh) * 100);
+}
+.gallery-live .float-section { opacity: 1; }
+.gallery-live .float-section .float-text { display: flex; }
+.gallery-3d .invite-words { position: absolute; inset: 0; padding: 0; }
+/* The heading mirrors the opening title: that title's bottom is 22% of the window up from the bottom of
+   its section; this heading's top is 22% down from the top of its section */
+.gallery-3d .invite-title {
+  position: absolute;
+  top: calc(var(--vh, 1svh) * 22);
+  margin: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  transition: opacity 0.5s;
+}
+/* While a painting is brought forward, everything else steps back: the other paintings dim (gallery.js)
+   and the heading fades, so the painting never sits under it */
+.painting-forward .invite-title { opacity: 0; }
+.gallery-3d .invite-button, .gallery-3d .invite-alt { display: none; }   /* the wall has its own list link */
+.invite-pic {
+  position: absolute;
+  display: block;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.3s;
+}
+.invite-pic img { display: block; width: 100%; height: auto; }
+.invite-pic:nth-child(1) { width: 17vw; left: 7vw;  top: 14%; }
+.invite-pic:nth-child(2) { width: 24vw; left: 68vw; top: 15%; }
+.invite-pic:nth-child(3) { width: 19vw; left: 12vw; top: 58%; }
+.invite-pic:nth-child(4) { width: 11vw; left: 80vw; top: 52%; }
+.invite-pic:nth-child(5) { width: 15vw; left: 41vw; top: 74%; }
+.invite-words {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+  text-align: center;
+  padding: 1.5em 2em;
+}
+.invite-title {
+  margin-bottom: 0.7em;
+}
+.invite-words a { pointer-events: auto; }
+.invite-button {
+  display: inline-block;
+  font-size: clamp(1.1rem, 2vw, 1.6rem);
+  font-weight: 300;
+  padding: 0.65em 1.6em;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  text-shadow: none;
+  transition: background 0.3s, color 0.3s;
+}
+.invite-button:hover, .invite-button:focus { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
+.invite-alt { margin-top: 1.1em; font-size: clamp(0.95rem, 1.3vw, 1.1rem); font-weight: 300; }
+@media (max-width: 700px) {        /* phones: three paintings, larger, above and below the words */
+  .invite-pic:nth-child(1) { width: 34vw; left: 6vw;  top: 8%; }
+  .invite-pic:nth-child(2) { width: 46vw; left: 48vw; top: 13%; }
+  .invite-pic:nth-child(3) { width: 40vw; left: 30vw; top: 67%; }
+  .invite-pic:nth-child(n+4) { display: none; }
+}
+
+/* iPhones held sideways: the page now runs right across the screen, under the rounded corners and
+   beside the camera cut-out (viewport-fit=cover, above), so backgrounds such as the header's bar reach
+   the edges; the words and buttons are kept clear of them (env(safe-area-inset-...) is 0 elsewhere) */
+.header {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  html .gallery-block, html .notfound, html .site-footer, html .float-text, html .contact-words, html .invite-words {
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+  }
+}
+
+/* Footer, as on the painting pages */
+.site-footer {
+  max-width: 1200px;
+  margin: 3rem auto 0;
+  padding: 1.5rem 20px 2.5rem;
+  border-top: 1px solid rgba(255,255,255,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.75);
+}
+.site-footer a { display: inline-flex; }
+
+/* Gallery */
+section#gallery {
+  min-height: calc(var(--vh, 1vh) * 100);
+}
+.gallery-block {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.wrapper {
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* responsive columns */
+  gap: 10px;
+  grid-auto-rows: auto; /* let height be flexible */
+}
+.wrapper > div {
+  border-top: 1px solid rgb(255 255 250 / 50%);   /* a line above each section heading, not a box */
+  padding: 1em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wrapper > div img {
+  max-width: 100%;
+  height: auto;
+}
+.wrapper > div p {
+  text-align: center;
+  margin-top: 0.5em;
+  font-size: 0.9rem; /* make captions smaller */
+}
+.wrapper > div.entire:has(> a) {
+  border: none;
+}
+.entire {
+  grid-column: 1 / -1;
+}
+.portrait {
+  grid-row: span 2; /* Span two rows for portrait images */
+}
+
+/* Desktop */
+@media (min-width: 900px) {
+  .gallery-block { padding: 0 120px; }
+  .wrapper { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Tablet */
+@media (max-width: 899px) and (min-width: 541px) {
+  .gallery-block { padding: 0 24px; }
+  .wrapper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Narrow windows: header stacks, name centred */
+@media (max-width: 720px) {
+  .header-block {
+    flex-direction: column;
+    padding: 18px 0 14px;
+    row-gap: 12px;
+  }
+  .site-title { justify-content: center; }
+  /* Phones: the header slims to the name bar while scrolling down (header.js) */
+  .header-block { transition: padding 0.35s ease, row-gap 0.35s ease; }
+  .site-name, .site-tag { transition: font-size 0.35s ease; }
+  .nav { max-height: 3rem; overflow: hidden; transition: max-height 0.35s ease, opacity 0.25s ease; }
+  .header.compact .header-block { min-height: 0; padding: 10px 0; row-gap: 0; }
+  .header.compact .site-name { font-size: 1.25rem; }
+  .header.compact .site-tag { font-size: 0.85rem; }
+  .header.compact .nav { max-height: 0; opacity: 0; pointer-events: none; }
+  .header.no-anim, .header.no-anim * { transition: none !important; }
+  .gallery-block {
+    padding: 0 10px;
+  }
+  .wrapper {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+/* Phones */
+@media (max-width: 540px) {
+  .gallery-block { padding: 0 12px; }
+  .wrapper { grid-template-columns: 1fr; }
+}
+
+/* No outline on the paintings in the list; keep it round the section headings. */
+.wrapper > div:not(.entire) { border: none; }
+
+/* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right
+   edges line up with the name and the menu above */
+.float-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(24px, 5vh);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  pointer-events: none;
+}
+.float-text a { pointer-events: auto; }
+.float-caption {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.float-caption.on { opacity: 1; transform: none; }
+.float-caption .t { display: block; font-size: 1.5rem; font-weight: 300; }
+.float-caption:not(.on) a { pointer-events: none; }
+.float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
+.float-list {
+  font-size: 0.95rem;                                                    /* as Previous / Next */
+  white-space: nowrap;
+}
+.float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
+@media (max-width: 720px) {
+  .float-text { flex-direction: column; align-items: flex-start; gap: 0.9rem; bottom: 20px; }
+  .float-caption .t { font-size: 1.25rem; }
+}
+
+/* Pages other than the home page (<body class="page">): the list and "page not found" */
+.page .site-footer { margin-top: 0; }
+.notfound {
+  max-width: 1200px;
+  min-height: 60vh;
+  margin: 0 auto;
+  padding: 115px 20px 3rem;   /* starts below the fixed header */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+.notfound p a { text-decoration: underline; text-underline-offset: 0.2em; }
+.list-page { padding-top: 130px; }
+.list-page h1 { text-align: center; }
+.list-page .float-link { text-align: center; margin: 0.6rem 0 1.5rem; font-size: 0.95rem; }

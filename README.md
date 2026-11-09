@@ -35,14 +35,24 @@ moved into R2 too.
 `masters/`, `img/` and `paintings.yaml` were removed from git in November 2026 (they're in the history, in the
 commit before "Remove the old painting files").
 
-`tools/build_site.py` now only makes the contact picture's sizes (from `med/jpg/paint-palette.jpg`) and the
-pages that share the home page's header and styles (`404.html`, `gallery/list/`, `gallery/index.html`). Run
-it after changing index.html's styles or header: `python3 tools/build_site.py` (needs Pillow).
+Nothing is built: the repository is the site, as it's served, plus the Worker's code. Shared pieces are kept
+once each:
+
+- **Styles**: `site.css`, linked from every page.
+- **The header**: `templates/header.html`. `worker.js` puts it into each page as it's served, in place of
+  `<header data-partial="header">`. Change it there and every page changes.
+- **"Page not found"**: `templates/404.html`, sent by `worker.js` (status 404) for any address with no file.
+  `templates/` isn't published itself.
+- **Scripts** keep plain addresses (`motion.js`, no `?v=...`): Cloudflare sends every file with an ETag and
+  "check before using" (`Cache-Control: public, max-age=0, must-revalidate`), so a browser always asks whether a
+  file has changed, and gets the new one if it has (or a quick "not modified" if not).
+- The contact picture's sizes are plain files in `med/` (made once from `med/jpg/paint-palette.jpg`).
 
 A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
 forward in the gallery. On Cloudflare, `worker.js` answers the home page, those addresses and the list page,
-filling in the content from the database (`site.js`). Your local Apache copy has no Worker or database, so it
-shows the pages with no paintings in them. Check the site on dev.chrisjones.org.uk instead.
+filling in the content from the database (`site.js`), and adds the header. The old /gallery/ address is sent
+on to the home page's gallery section. Your local Apache copy can't run the Worker, so it shows pages with no
+header and no paintings: check the site on dev.chrisjones.org.uk instead.
 To run your local code as Cloudflare would, against the dev database and dev image storage (needs Node, and
 signing in to Cloudflare once with `npx wrangler login`): `npx wrangler dev --env dev --remote`, then open
 http://localhost:8787. Without `--remote` it uses an empty local database.
@@ -69,9 +79,9 @@ Create pull request, then Merge.
 
 `wrangler.jsonc` holds the settings. Two Workers build from this repository: the live one builds main
 with the deploy command `npx wrangler deploy`; the dev one builds dev with `npx wrangler deploy --env dev`.
-The dev Worker must keep `--env dev`, or it would deploy under the live Worker's name.
-Unknown addresses get `404.html` (made by the build script).
+The dev Worker must keep `--env dev`, or it would deploy under the live Worker's name. There is no build
+command: Cloudflare publishes the files as they are.
 
 ## What isn't published
 
-`.assetsignore` lists what Cloudflare leaves out: the tools, the database files, the server code, wrangler.jsonc and this README.
+`.assetsignore` lists what Cloudflare leaves out: the database files, the server code and its templates, wrangler.jsonc and this README.
