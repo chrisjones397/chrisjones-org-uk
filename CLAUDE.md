@@ -222,10 +222,9 @@ Claude, before pushing: `git pull --rebase` too.
    - The names (Nov 2026): repository renamed chrisjones-org-uk (was chrisjones397.github.io; GitHub
      redirects the old address; his Mac's remote is git@github.com:chrisjones397/chrisjones-org-uk.git). Workers
      chrisjones-org-uk and chrisjones-org-uk-dev, renamed by API (PATCH /workers/workers/{id} {name}: same IDs,
-     so custom domains and builds stay attached); dev done; live still chrisjones397-github-io, to be renamed
-     just before main next moves (main's wrangler.jsonc must match the connected Worker's name). Zero Trust team
-     domain to become chrisjones.cloudflareaccess.com at the same moment (PUT /access/organizations auth_domain;
-     ACCESS_TEAM "chrisjones" in both envs of wrangler.jsonc), then he signs in on admin-dev and admin to check.
+     so custom domains and builds stay attached); both done.
+     Zero Trust team domain chrisjones-org-uk.cloudflareaccess.com (was the random still-mountain-1dde; "chrisjones" was
+     taken), changed by PUT /access/organizations auth_domain, with ACCESS_TEAM "chrisjones-org-uk" in both envs.
      The display name is already "Christopher Jones - Fine Art". bigsas may become bigsas-co-uk when
      bigsas.co.uk moves to Cloudflare (check how it's hosted first).
    - .github/workflows/ssl-monitor.yml: removed (Nov 2026); Cloudflare issues and renews certificates itself.
