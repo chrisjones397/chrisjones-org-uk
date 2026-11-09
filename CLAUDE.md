@@ -286,10 +286,12 @@ Claude, before pushing: `git pull --rebase` too.
      reduced motion gets the still, footer full width. Not tested on a real phone or Safari.
    Where things stand (9 Nov 2026, 02:25): all of the above is on dev only; live has none of it yet.
    dev's database: bg-hero moved into storage by Christopher with the button (three versions, 3840, 2560 and
-   1536 wide), a draft not yet published; bg-contact his own earlier upload, published but only 1200 pixels wide
-   (replace it with the 3840 master med/jpg/paint-palette.jpg for sharpness); bg-footer none.
+   1536 wide), a draft not yet published; bg-contact was only his test upload of the editor (a blue picture),
+   so Claude deleted that entry from dev's database: dev shows the built-in contact photo again, and "Move them
+   into storage" now offers it; bg-footer none.
    Still to do in 1c, in this order:
-   - Christopher: publish bg-hero on dev (Review), check the opening and contact on dev on his phone and Mac
+   - Christopher: on admin-dev press "Move them into storage" again (for the contact photo), publish both under
+     Review, check the opening and contact on dev on his phone and Mac
      (Safari too), then say when to put dev live; then on the live editor press "Move them into storage"
      (moves both the opening video and the contact photo there) and publish.
    - Then Claude: remove the stand-ins (index.html <video>/<img> data-stand-in and their scripts, STAND_INS and
