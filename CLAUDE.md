@@ -464,6 +464,26 @@ Claude, before pushing: `git pull --rebase` too.
      making nothing, closing straight after a change; Undo resetting an open form. Not tested on a phone or Safari.
    - Next slices, in order: backgrounds as lists of Library items (with the upright-screen settings below);
      paintings usable as backgrounds by reference.
+   - Slice 5 design (agreed with Christopher by voice, 9 Nov 2026). He thinks in decoupled entities (data
+     warehousing background): each thing its own entity, linked by ids, not coupled. Three layers, plainly
+     normalised in D1 (our own design, not copied from Drupal or Sanity):
+     1. Library item: just the file(s) (exists: table `library`, media/<code>/).
+     2. Treatment (name to settle): how one item is used as a background, an entity in its own right, reusable:
+        points at a Library item; focus point and crop for wide screens and for upright screens (art direction:
+        per-shape settings, so the framing ideas below live here); for a video, how it plays (once or loop)
+        and what reduced-motion visitors get.
+     3. Section: points at a list of treatments (one shown for now; carousel later), and keeps the shade, since
+        how dark it must be depends on the words over it, not the picture.
+     Turning a phone (Christopher's concern): photos follow the turn by themselves (CSS crop; <picture>/media
+     picks the other shape's crop). Videos: a browser picks its version once and doesn't switch on a turn, so
+     never restart or swap a playing video (it keeps playing, re-cropped round the new shape's focus); when it's
+     resting (on its last frame, or a reduced-motion visitor's still), swap to the other shape's still or
+     version, unnoticed. Listen for the orientation/resize change in backgrounds.js.
+   - After that, edit in place (step 4) replaces the Content tab (Christopher, 9 Nov 2026: the Gallery tab stays,
+     a list suits it; the Content tab's design is the weak one, so don't spend effort redesigning it now). For
+     backgrounds and contact links, which aren't text to click into, he liked the idea of a floating panel over
+     the preview like the gallery's ?tune sliders. He's also conscious that much recent work isn't visible to
+     visitors and wants to put effort into the public-facing site soon.
    - Framing on upright screens (Christopher thinking aloud, 9 Nov 2026, not decided): the forest works on wide
      screens because the bright fern sits against dark trees; an upright phone's full-height crop of the 4:3
      video shows only about 35% of its width, so the trees are lost (moving the focus helped landscape phones).
