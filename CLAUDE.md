@@ -354,7 +354,7 @@ Claude, before pushing: `git pull --rebase` too.
      removing it from the revisions too (the 9 Nov case above).
    - Backgrounds point at media ids: a list per section ({ items: [ids], show: 'one' }; 'carousel' later); an item
      may be a painting, used by reference (its processed images), so it follows reprocessing.
-   - Video frames per shape, not per version: one first/last set for the landscape versions, one for upright, at
+   - Video frames per shape, not per version (done in slice 2): one first/last set for the landscape versions, one for upright, at
      sensible JPEG quality (today each version gets its own set: 24 stills, about 18 megabytes, for one video;
      the 2560-wide first frame is 1.9 megabytes). Clear dev's leftovers (bg-hero-*, bg-contact, bg-contact-v2)
      with the new delete.
@@ -382,9 +382,23 @@ Claude, before pushing: `git pull --rebase` too.
      (green dot on the site, pencil in a draft, clock only in History; named only when it differs from the
      item's name), size, bin (dimmed with the users in its tooltip while in use). The header's Preview is now
      an eye symbol so the tabs fit one line on a phone. Tested locally (wrangler dev, Playwright).
-   - Next slices, in order: clear dev's leftovers with it (Christopher's go-ahead); one row per video in the
-     Library (its versions inside it, deleted together; agreed 9 Nov 2026) with frames per shape; one saving
-     rule and Hide; backgrounds as lists of media ids.
+   - Slice 2, a video as a set, and frames per shape: done on dev (9 Nov 2026). A background video's versions are
+     one set (Christopher: the client chooses them as a set for the design, so uploading keeps them together):
+     "Choose a video…" and "Add a version…" take several files at once (one set); the Library shows one row per
+     set, id videos/<file> (the entry's file), with each version as a small outline of its shape (tooltip: size,
+     megabytes); a stored version no entry lists any more is its own row ("Opening background video, W × H"),
+     unused, so it can be deleted. Frames once per shape (frames.js, shared like links.js: holder(), holders()):
+     the largest level version and the largest upright one hold first/last frames (stills), the others none;
+     editor.js accepts a version without stills if its shape has a holder. admin/editor.js withFrames() keeps
+     that true on adding (frames only from a new version that becomes its shape's largest; while checking
+     several files only the largest of each shape keeps its frames in memory) and on removing (frames read
+     back from the stored video, framesOf(), if the holder went). Frames: FRAME_WIDTHS up to 2560, JPEG 0.8
+     (photos stay 0.88 up to 3840); storeSizes() treats "already exists" as done. Older videos (the forest)
+     keep a set per version until replaced. Tested locally (wrangler dev, Playwright, VP9 test videos, as
+     Playwright's Chromium has no H.264): three at once, frames only on 1280 x 960 and 360 x 640, removing the
+     1280 retook them from the 640, the page's sources and poster use each shape's frames.
+   - Next slices, in order: clear dev's leftovers (Christopher's go-ahead); one saving rule and Hide;
+     backgrounds as lists of media ids (with the upright-screen settings below).
    - Framing on upright screens (Christopher thinking aloud, 9 Nov 2026, not decided): the forest works on wide
      screens because the bright fern sits against dark trees; an upright phone's full-height crop of the 4:3
      video shows only about 35% of its width, so the trees are lost (moving the focus helped landscape phones).

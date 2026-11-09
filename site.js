@@ -19,6 +19,7 @@
 
 import header from './templates/header.html';   // .html files are imported as text (Wrangler's default rules)
 import { ticked, icon } from './links.js';
+import { holder } from './frames.js';
 
 const PARTIALS = { header };
 const INVITE_COUNT = 5;
@@ -77,8 +78,8 @@ function imgTag(p, prefix, sizes, indent) {
    --shade darkens it so the words over it read.
    A video's versions are <source>s, the browser taking the first that matches: portrait versions first, for
    screens held upright, then by width, each needing a screen that shows more pixels across (window width x pixel
-   density) than the next smaller version has. Each source carries its own first and last frames (data-first,
-   data-last), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
+   density) than the next smaller version has. Each source carries its shape's first and last frames (data-first,
+   data-last; frames.js), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
    the frames of the version chosen, starts it, and gives visitors who ask for reduced motion or less data the
    still (calm: last frame, or a fade from first to last) instead. */
 const at = (name, w) => `/media/images/${name}-${w}.jpg`;
@@ -100,12 +101,15 @@ function bgTag(b) {
     if (upright) return wide ? wide.map((q) => `(orientation: portrait) and ${q}`).join(', ') : '(orientation: portrait)';
     return wide ? wide.join(', ') : null;
   };
-  const frames = (v) => ` data-first="${at(`${v.name}-first`, near(v.stills, Math.min(v.w, 1920)))}"`
-    + ` data-last="${at(`${v.name}-last`, near(v.stills, Math.min(v.w, 1920)))}"`
-    + ` data-first-set="${srcsetOf(`${v.name}-first`, v.stills)}" data-last-set="${srcsetOf(`${v.name}-last`, v.stills)}"`;
+  const frames = (v) => {     // its shape's frames (frames.js), at about the version's own width
+    const f = holder(b.versions, v);
+    return ` data-first="${at(`${f.name}-first`, near(f.stills, Math.min(v.w, 1920)))}"`
+      + ` data-last="${at(`${f.name}-last`, near(f.stills, Math.min(v.w, 1920)))}"`
+      + ` data-first-set="${srcsetOf(`${f.name}-first`, f.stills)}" data-last-set="${srcsetOf(`${f.name}-last`, f.stills)}"`;
+  };
   const sources = [...portrait.map((v, i) => [v, media(portrait, i, true)]), ...landscape.map((v, i) => [v, media(landscape, i, false)])]
     .map(([v, m]) => `\n        <source src="/media/videos/${v.name}.mp4" type="video/mp4"${m ? ` media="${m}"` : ''}${frames(v)}>`).join('');
-  const lead = landscape[0] || portrait[0];
+  const lead = holder(b.versions, landscape[0] || portrait[0]);
   return `<video class="section-bg" poster="${at(`${lead.name}-first`, near(lead.stills, 1536))}" muted playsinline preload="metadata"`
     + ` disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" aria-hidden="true"`
     + ` data-play="${b.play}" data-calm="${b.calm}" style="${pos}">${sources}\n      </video>`
@@ -136,7 +140,7 @@ export function homePreview(c) {
   const b = c.backgrounds && c.backgrounds.hero;
   if (!b) return null;
   if (b.type !== 'video') { const w = near(b.widths, 1200); return { src: at(b.file, w), w, h: Math.round(b.h * w / b.w) }; }
-  const v = b.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || b.versions[0];
+  const v = holder(b.versions, b.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || b.versions[0]);
   const w = near(v.stills, 1200);
   return { src: at(`${v.name}-last`, w), w, h: Math.round(v.h * w / v.w) };
 }

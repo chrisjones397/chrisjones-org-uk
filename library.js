@@ -3,12 +3,14 @@
    One item for each thing uploaded, with every file that came from it:
      a photo     originals/<...>.<ext> as uploaded, plus each set of sizes made from it (images/<file>-<width>.jpg,
                  or .webp for paintings moved from git, and -preview.jpg); a painting reprocessed has several sets
-     a video     videos/<name>.mp4 (one version of a background video), plus its first and last frames
-                 (images/<name>-first-<width>.jpg and -last-)
+     a video     every version of one background video (a set: its sizes for wide screens and any for phones
+                 held upright), videos/<file>-<w>x<h>.mp4, plus their first and last frames
+                 (images/<version>-first-<width>.jpg and -last-); its id is videos/<file>, the set's own name.
+                 A stored version that nothing has ever listed is an item of its own.
    Anything that fits neither (sizes whose original is missing) is an item of its own.
 
    The catalogue is the `media` table (db/schema.sql). Its id is the storage key of the item's main file
-   (originals/apple-1.webp, videos/bg-hero-1536x1152.mp4, or images/<file> for sizes with no original): fixed for
+   (originals/apple-1.webp; videos/bg-hero for a video's set; images/<file> for sizes with no original): fixed for
    good. R2 can't rename (only copy and delete), and renaming would break History and every cached copy, so the
    name shown is only the catalogue's `name`, changed freely. The table is brought up to date with R2 every time
    the library is looked at, so nothing else has to remember to add to it.
@@ -39,7 +41,7 @@ async function allObjects(env) {
    with no extension for paintings moved from git, which have no record of theirs) and video versions; links say
    which original each set of sizes was made from. */
 function refsOf(kind, id, text) {
-  const r = { stems: [], originals: [], videos: [], links: [], label: '', site: false };
+  const r = { stems: [], originals: [], videos: [], links: [], label: '', site: false, sets: [], dims: [] };
   if (!text) return r;
   let d;
   try { d = JSON.parse(text); } catch { return r; }
@@ -54,6 +56,8 @@ function refsOf(kind, id, text) {
     if (d.type === 'video') {
       for (const v of d.versions || []) {
         r.videos.push(v.name);
+        r.sets.push([v.name, `videos/${d.file}`]);
+        r.dims.push([v.name, v.w, v.h]);
         r.links.push([`${v.name}-first`, `videos/${v.name}`], [`${v.name}-last`, `videos/${v.name}`]);
       }
       r.label = `${where} background video`;
@@ -86,7 +90,14 @@ async function survey(env) {
   }
   for (const v of revisions.results) uses.push([refsOf(v.kind, v.entry_id, v.data), { entry: v.entry_id, state: 'history', revision: v.id }]);
   const link = new Map();                       // stem of a set of sizes -> its original (or video)
-  for (const [r] of uses) for (const [s, o] of r.links) if (!link.has(s)) link.set(s, o);
+  const setOf = new Map(), dims = new Map();    // video version -> its set (videos/<file>), and its size
+  for (const [r] of uses) {
+    for (const [s, o] of r.links) if (!link.has(s)) link.set(s, o);
+    for (const [v, set] of r.sets) if (!setOf.has(v)) setOf.set(v, set);
+    for (const [v, w, h] of r.dims) if (!dims.has(v)) dims.set(v, [w, h]);
+  }
+  // a stored video version's item: its set, or itself if nothing ever listed it
+  const videoItem = (name) => setOf.get(name) || `videos/${name}.mp4`;
 
   // The originals and videos actually stored, by key without extension
   const originals = new Map(), videos = new Set();
@@ -108,17 +119,24 @@ async function survey(env) {
   // which item a set of sizes (or a video's frames) belongs to
   const owner = (stem) => {
     const to = link.get(stem);
-    if (to && to.startsWith('videos/') && videos.has(to)) return `${to}.mp4`;
+    if (to && to.startsWith('videos/') && videos.has(to)) return videoItem(to.slice(7));
     if (to && originals.has(noExt(to))) return originals.get(noExt(to));
     if (originals.has(`originals/${stem}`)) return originals.get(`originals/${stem}`);
     const frames = /^(.*)-(?:first|last)$/.exec(stem);
-    if (frames && videos.has(`videos/${frames[1]}`)) return `videos/${frames[1]}.mp4`;
+    if (frames && videos.has(`videos/${frames[1]}`)) return videoItem(frames[1]);
     return `images/${frames ? frames[1] : stem}`;
   };
   for (const o of objects) {
     const img = /^images\/([a-z0-9-]+)-(?:\d{2,4}|preview)\.(?:jpg|webp)$/.exec(o.key);
     if (img) { const it = item(owner(img[1])); add(it, o); it.stems.add(img[1]); continue; }
-    add(item(o.key), o);   // an original, a video, or anything else: an item of its own (or its main file)
+    const vid = /^videos\/([a-z0-9-]+)\.mp4$/.exec(o.key);
+    if (vid) {                                       // a version: its set's item
+      const it = item(videoItem(vid[1])); add(it, o);
+      const [w, h] = dims.get(vid[1]) || (/-(\d+)x(\d+)(?:-v\d+)?$/.exec(vid[1]) || []).slice(1).map(Number);
+      (it.versions ||= []).push({ name: vid[1], w: w || 0, h: h || 0, bytes: o.size });
+      continue;
+    }
+    add(item(o.key), o);   // an original, or anything else: an item of its own (or its main file)
   }
 
   // Who uses what
@@ -126,7 +144,7 @@ async function survey(env) {
     const hit = new Set();
     for (const s of r.stems) { const id = owner(s); if (items.has(id)) hit.add(id); }
     for (const o of r.originals) { const k = originals.get(noExt(o)); if (k) hit.add(k); }
-    for (const v of r.videos) if (videos.has(`videos/${v}`)) hit.add(`videos/${v}.mp4`);
+    for (const v of r.videos) if (videos.has(`videos/${v}`)) hit.add(videoItem(v));
     for (const id of hit) {
       const it = items.get(id);
       it.uses.push({ ...how, label: r.label });
@@ -155,7 +173,8 @@ async function survey(env) {
     }
     rows.delete(it.id);
     out.push({ id: it.id, kind: row.kind, grp: row.grp, name: row.name, added: row.added, bytes: it.bytes,
-      files: it.files, thumb: thumbOf(it, kind), uses: it.uses });
+      files: it.files, thumb: thumbOf(it, kind), uses: it.uses,
+      ...(it.versions ? { versions: it.versions.sort((a, b) => (a.h > a.w) - (b.h > b.w) || b.w - a.w) } : {}) });
   }
   for (const gone of rows.keys()) stmts.push(env.DB.prepare('DELETE FROM media WHERE id = ?').bind(gone));
   if (stmts.length) await env.DB.batch(stmts);
@@ -165,8 +184,10 @@ async function survey(env) {
 /* The name an item is first given: what uses it (a painting's title, "Opening background"), or else its file
    name made readable. Changed in the Library afterwards as wished. */
 function nameFor(it) {
-  const dims = /-(\d+)x(\d+)\.mp4$/.exec(it.id);    // a video version: which one (bg-hero-1536x1152)
-  if (it.labels.length) return `${it.labels[0]}${dims ? `, ${dims[1]} × ${dims[2]}` : ''}`.slice(0, 120);
+  // a lone video version (removed from its set, or never listed): its section and size, from its name
+  const lone = /^videos\/bg-([a-z]+)(?:-v\d+)?-(\d+)x(\d+)(?:-v\d+)?\.mp4$/.exec(it.id);
+  if (it.labels.length) return it.labels[0].slice(0, 120);
+  if (lone) return `${SECTIONS[lone[1]] || lone[1]} background video, ${lone[2]} × ${lone[3]}`;
   const base = it.id.replace(/^[a-z]+\//, '').replace(/\.[a-z0-9]+$/, '').replace(/^[0-9a-f]{12}-/, '');
   const words = base.replace(/-/g, ' ').trim();
   return (words.charAt(0).toUpperCase() + words.slice(1)).slice(0, 120) || it.id;

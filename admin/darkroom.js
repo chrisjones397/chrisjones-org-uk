@@ -29,9 +29,9 @@ export function scaled(src, w) {
 }
 
 /* A JPEG of the picture at width w. (Safari can't write WebP from a page, so uploads are JPEG.) */
-export function resized(src, w) {
+export function resized(src, w, quality = 0.88) {
   const c = scaled(src, w);
-  return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Couldn\'t make an image size'))), 'image/jpeg', 0.88));
+  return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Couldn\'t make an image size'))), 'image/jpeg', quality));
 }
 
 const copy = (c) => { const d = canvas(c.width, c.height); d.getContext('2d').drawImage(c, 0, 0); return d; };

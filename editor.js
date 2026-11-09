@@ -15,6 +15,7 @@
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
 import { library, rename, remove } from './library.js';
+import { upright } from './frames.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -213,7 +214,8 @@ function normalise(id, kind, d) {
    it, fractions across and down) and shade (how much it's darkened so the words over it read, 0 to 0.6).
    A photo: sizes images/<file>-<width>.jpg made in the browser, w and h, and original (the photo as uploaded).
    A video: one or more versions, each a file uploaded as made (the browser can't re-encode video), stored as
-   videos/<name>.mp4, with its first and last frames as images/<name>-first-<width>.jpg and -last-; play 'once'
+   videos/<name>.mp4; first and last frames as images/<name>-first-<width>.jpg and -last-, once per shape (the
+   largest version held level, and the largest upright, list them as stills; see frames.js); play 'once'
    (it stops on its last frame) or 'loop'; calm 'last' or 'fade': what visitors who ask for reduced motion or less
    data see instead (the last frame, or a slow fade from the first to the last). */
 function backgroundOf(id, d) {
@@ -242,8 +244,13 @@ function backgroundOf(id, d) {
     num(v.seconds, 'Length');
     if (!(v.seconds > 0 && v.seconds < 600)) throw new Bad('A video must be under ten minutes');
     return { name: v.name, w: int(v.w, 'Width'), h: int(v.h, 'Height'), bytes: bytesOf(v.bytes),
-      seconds: Math.round(v.seconds * 100) / 100, stills: widths(v.stills) };
+      seconds: Math.round(v.seconds * 100) / 100, ...(v.stills != null ? { stills: widths(v.stills) } : {}) };
   });
+  // frames are kept once per shape (frames.js): each shape a video has needs one version with them
+  for (const up of [false, true]) {
+    const group = versions.filter((v) => upright(v) === up);
+    if (group.length && !group.some((v) => v.stills)) throw new Bad(`The video's ${up ? 'upright' : 'level'} versions have no first and last frames`);
+  }
   if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
   if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
   return { type: 'video', ...common, versions, play: d.play, calm: d.calm };

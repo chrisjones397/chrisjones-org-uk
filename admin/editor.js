@@ -9,6 +9,7 @@
    from strings of HTML, so nothing typed in can become part of the page. */
 
 import { SITES, tidy, ok, icon } from '/links.js';
+import { holder, holders, upright } from '/frames.js';
 import { SOURCE_MAX, scaled, resized, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
@@ -43,6 +44,10 @@ const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
 /* Sections with bg can have a photo or video behind them (entries bg-<section>; BACKGROUNDS in editor.js, the
    server, must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
 const BG_WIDTHS = [768, 1024, 1536, 2560, 3840];
+/* A video's first and last frames (frames.js: once per shape): shown while it loads, where it rests, and to
+   visitors who ask for reduced motion. Up to 2560 across and a little more compressed than photos: the video
+   itself takes over on larger screens, and a painted frame at 3840 was 3 to 4 megabytes. */
+const FRAME_WIDTHS = [768, 1024, 1536, 2560], FRAME_QUALITY = 0.8;
 
 // ---- talking to the server ---------------------------------------------------------------------------------
 
@@ -272,7 +277,7 @@ const bgBusy = {};                    // section -> what it's doing, while a pho
 const bgNotes = {};                   // section -> the checks' findings for the video version last added
 const MB = (b) => `${(b / 1048576).toFixed(1)} megabytes`;
 const lastStill = (d) => {
-  const v = d.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || d.versions[0];
+  const v = holder(d.versions, d.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || d.versions[0]);
   return `/media/images/${v.name}-last-${v.stills.find((w) => w >= 1024) || v.stills[v.stills.length - 1]}.jpg`;
 };
 
@@ -285,8 +290,9 @@ function backgroundBox(key) {
   const say = (t) => { bgBusy[key] = t; status.textContent = t; };
   const store = (data, msg) => save([{ id, kind: 'background', data }], msg);
   const pickPhoto = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => pickPhoto.files[0] && run(() => addPhoto(pickPhoto.files[0])) });
-  const pickVideo = h('input', { type: 'file', accept: 'video/mp4,.mp4,.m4v', hidden: true,
-    onchange: () => pickVideo.files[0] && run(() => addVideo(pickVideo.files[0], d && d.type === 'video' ? d : null)) });
+  // several files at once are one video's versions (a set: e.g. sizes for wide screens and one framed for phones)
+  const pickVideo = h('input', { type: 'file', accept: 'video/mp4,.mp4,.m4v', hidden: true, multiple: true,
+    onchange: () => pickVideo.files.length && run(() => addVideo([...pickVideo.files], d && d.type === 'video' ? d : null)) });
 
   if (d) {
     const src = d.type === 'video' ? lastStill(d)
@@ -316,7 +322,7 @@ function backgroundBox(key) {
         h('label', {}, 'Versions (the browser picks one for each screen)'),
         ...versionRows(d).map(([v, text]) => h('div', { class: 'row bg-version' }, h('span', { class: 'grow' }, text),
           d.versions.length > 1 ? h('button', { class: 'danger', disabled: busy, title: 'Remove this version',
-            onclick: () => confirm('Remove this version?') && store({ ...d, versions: d.versions.filter((x) => x !== v) }, 'Version removed in the draft') }, 'Remove') : null)));
+            onclick: () => confirm('Remove this version?') && run(() => removeVersion(v)) }, 'Remove') : null)));
       if (bgNotes[key]) box.append(h('div', { class: 'bg-notes' }, ...bgNotes[key].map((n) => h('p', { class: 'hint' }, n))));
     } else {
       box.append(h('p', { class: 'hint' }, `Photo, ${d.w} × ${d.h} pixels.`));
@@ -326,8 +332,10 @@ function backgroundBox(key) {
   }
   box.append(pickPhoto, pickVideo, status, h('div', { class: 'actions' },
     h('button', { disabled: busy, onclick: () => pickPhoto.click() }, d && d.type === 'photo' ? 'Replace with a photo…' : 'Choose a photo…'),
-    h('button', { disabled: busy, onclick: () => { addingFresh = true; pickVideo.click(); } }, d ? 'Replace with a video…' : 'Choose a video…'),
-    d && d.type === 'video' ? h('button', { disabled: busy || d.versions.length >= 6, onclick: () => { addingFresh = false; pickVideo.click(); } }, 'Add a version…') : null,
+    h('button', { disabled: busy, title: 'One video, or several versions of it at once (sizes for wide screens, one made for phones held upright)',
+      onclick: () => { addingFresh = true; pickVideo.click(); } }, d ? 'Replace with a video…' : 'Choose a video…'),
+    d && d.type === 'video' ? h('button', { disabled: busy || d.versions.length >= 6, title: 'Another size of this video, or one made for phones held upright',
+      onclick: () => { addingFresh = false; pickVideo.click(); } }, 'Add a version…') : null,
     d ? h('button', { class: 'danger', disabled: busy, onclick: () => confirm('Remove this section\'s background?') && store(null, 'Removed in the draft') }, 'Remove') : null,
     e && changed(e) ? h('button', { disabled: busy, onclick: () => discard([id]) }, 'Undo change') : null));
   return box;
@@ -346,22 +354,59 @@ function backgroundBox(key) {
     await store({ type: 'photo', file: stem, focus: extra.focus || [0.5, 0.5], shade: extra.shade ?? (d ? d.shade : 0.12),
       w: top, h: Math.round(src.height * top / src.width), widths, original }, 'Photo saved as a draft: tap it to choose the part to keep in view');
   }
-  /* A video version: checked, uploaded as it is, its first and last frames stored as pictures. into: the
-     section's video to add it to (Add a version…), or null for a new video (Choose / Replace with a video…). */
-  async function addVideo(file, into) {
+  /* One or more versions of a video: each checked, then uploaded as it is. into: the section's video to add them
+     to (Add a version…), or null for a new video (Choose / Replace with a video…). Frames are made once per shape
+     (frames.js), from its largest version, so a smaller version added later needs none. */
+  async function addVideo(files, into) {
     if (addingFresh) into = null;
-    const facts = await videoFacts(file, say);
+    const added = [], notes = [], grabbed = new Map();
+    const best = {};    // shape -> the largest so far, whose frames are kept (a 4K frame is about 45 megabytes in memory)
+    for (const v of into ? into.versions : []) if (!best[upright(v)] || v.w > best[upright(v)].w) best[upright(v)] = v;
+    for (const [i, file] of files.entries()) {
+      const tell = files.length > 1 ? (t) => say(`Video ${i + 1} of ${files.length}: ${t}`) : say;
+      const facts = await videoFacts(file, tell);
+      const shape = upright(facts), was = best[shape];
+      if (!was || facts.w > was.w) { if (was && 'first' in was) { was.first = was.last = null; } best[shape] = facts; }
+      else { facts.first = facts.last = null; }
+      added.push({ file, facts });
+      notes.push(...facts.notes.map((n) => (files.length > 1 ? `${facts.w} × ${facts.h}: ${n}` : n)));
+    }
     const stem = into ? into.file : (await call('GET', `free?name=${id}`)).file;
-    const { file: name } = await call('GET', `free?name=${stem}-${facts.w}x${facts.h}`);
-    say(`Uploading the video (${MB(file.size)})…`);
-    await put(`videos/${name}.mp4`, file, 'video/mp4', 15 * 60000);
-    const stills = await storeSizes(`${name}-first`, facts.first, say, 'first frame');
-    await storeSizes(`${name}-last`, facts.last, say, 'last frame');
-    const version = { name, w: facts.w, h: facts.h, bytes: file.size, seconds: facts.seconds, stills };
-    bgNotes[key] = facts.notes;
+    const versions = [...(into ? into.versions : [])];
+    for (const [i, { file, facts }] of added.entries()) {
+      const { file: name } = await call('GET', `free?name=${stem}-${facts.w}x${facts.h}`);
+      say(`Uploading ${files.length > 1 ? `video ${i + 1} of ${files.length}` : 'the video'} (${MB(file.size)})…`);
+      await put(`videos/${name}.mp4`, file, 'video/mp4', 15 * 60000);
+      const v = { name, w: facts.w, h: facts.h, bytes: file.size, seconds: facts.seconds };
+      grabbed.set(v, facts);
+      versions.push(v);
+    }
+    const done = await withFrames(versions, (v) => grabbed.get(v));
+    bgNotes[key] = notes;
     delete bgBusy[key];
-    const base = into || { type: 'video', file: stem, focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0, versions: [], play: 'once', calm: 'last' };
-    await store({ ...base, type: 'video', versions: [...(base.versions || []), version] }, 'Video saved as a draft');
+    const base = into || { type: 'video', file: stem, focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0, play: 'once', calm: 'last' };
+    await store({ ...base, type: 'video', versions: done }, files.length > 1 ? `${files.length} versions saved as a draft` : 'Video saved as a draft');
+  }
+  /* Take a version out; if its shape's frames went with it, the next largest of that shape gets them. */
+  async function removeVersion(v) {
+    const versions = await withFrames(d.versions.filter((x) => x !== v));
+    delete bgBusy[key];
+    await store({ ...d, versions }, 'Version removed in the draft');
+  }
+  /* The versions with frames for each shape held by its largest version alone (frames.js holders): made from what
+     was just taken from a new file (grabbed), or else read from the stored video. */
+  async function withFrames(versions, grabbed = () => null) {
+    const out = versions.map((v) => ({ ...v }));
+    for (const { top, rest } of holders(out)) {
+      if (!top.stills) {
+        const got = grabbed(versions[out.indexOf(top)]);
+        const src = got && got.first ? got : await framesOf(`/media/videos/${top.name}.mp4`, say);
+        top.stills = await storeSizes(`${top.name}-first`, src.first, say, 'first frame', FRAME_WIDTHS, FRAME_QUALITY);
+        await storeSizes(`${top.name}-last`, src.last, say, 'last frame', FRAME_WIDTHS, FRAME_QUALITY);
+      }
+      for (const v of rest) delete v.stills;
+    }
+    return out;
   }
 }
 let addingFresh = false;
@@ -390,12 +435,13 @@ async function photoOf(blob, say) {
 
 /* Make a background's JPEG sizes (BG_WIDTHS, never larger than the picture) and store them as
    images/<stem>-<width>.jpg; returns the widths. */
-async function storeSizes(stem, src, say, what = 'sizes') {
-  const widths = [...new Set(BG_WIDTHS.filter((w) => w < src.width).concat(Math.min(src.width, BG_WIDTHS[BG_WIDTHS.length - 1])))];
+async function storeSizes(stem, src, say, what = 'sizes', list = BG_WIDTHS, quality) {
+  const widths = [...new Set(list.filter((w) => w < src.width).concat(Math.min(src.width, list[list.length - 1])))];
   let n = 0;
   for (const w of widths) {
     say(`Making and uploading the ${what}: ${++n} of ${widths.length}`);
-    await put(`images/${stem}-${w}.jpg`, await resized(src, w), 'image/jpeg');
+    try { await put(`images/${stem}-${w}.jpg`, await resized(src, w, quality), 'image/jpeg'); }
+    catch (e) { if (!/already exists/.test(e.message)) throw e; }   // a version's frames made before: the same picture
   }
   return widths;
 }
@@ -436,27 +482,9 @@ async function videoFacts(file, say) {
   if (mdat && mdat.at < moov.at) notes.push('Its index is at the end of the file, so it can\'t start until it has all arrived: export it with "optimise for web" (or "fast start").');
   if (desc.includes('soun')) notes.push('It has a sound track, which is never heard (backgrounds play muted): leaving it out makes the file smaller.');
 
-  const v = document.createElement('video');
-  v.muted = true; v.playsInline = true; v.preload = 'auto';
-  v.src = URL.createObjectURL(file);
-  const event = (name, ms = 20000) => new Promise((ok, no) => {
-    const t = setTimeout(() => no(new Error('This browser can\'t play that video: export it as MP4 with H.264.')), ms);
-    v.addEventListener(name, () => { clearTimeout(t); ok(); }, { once: true });
-    v.addEventListener('error', () => { clearTimeout(t); no(new Error('This browser can\'t play that video: export it as MP4 with H.264.')); }, { once: true });
-  });
+  const url = URL.createObjectURL(file);
   try {
-    await event('loadeddata');
-    const w = v.videoWidth, hh = v.videoHeight, seconds = v.duration;
-    if (!w || !hh || !isFinite(seconds)) throw new Error('This browser can\'t read that video\'s size or length.');
-    const grab = async (t) => {
-      say('Taking its first and last frames…');
-      v.currentTime = t; await event('seeked');
-      const c = document.createElement('canvas'); c.width = w; c.height = hh;
-      c.getContext('2d').drawImage(v, 0, 0, w, hh);
-      return c;
-    };
-    const first = await grab(0);
-    const last = await grab(Math.max(0, seconds - 0.05));
+    const { w, h: hh, seconds, first, last } = await framesOf(url, say);
     const rate = file.size * 8 / seconds / 1e6, guide = 1 + 3.5 * (w * hh) / (3840 * 2160);
     if (seconds > 30) notes.push(`It runs ${Math.round(seconds)} seconds: most visitors will have moved on well before the end.`);
     if (rate > guide * 1.25) notes.push(`It's ${rate.toFixed(1)} megabits a second; about ${guide.toFixed(1)} would do for its size, so it's heavier than it needs to be.`);
@@ -465,8 +493,37 @@ async function videoFacts(file, say) {
     if (!notes.length) notes.push('Checked: it plays everywhere, starts quickly and is a sensible weight for its size.');
     return { w, h: hh, seconds, first, last, notes };
   } finally {
-    URL.revokeObjectURL(v.src);
+    URL.revokeObjectURL(url);
   }
+}
+
+/* A video's size, length, and first and last frames (as canvases at full size), from a file's object URL or a
+   stored video's address (the editor's own, so the frames can be read). */
+async function framesOf(src, say) {
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.preload = 'auto';
+  const event = (name, ms = 60000) => new Promise((ok, no) => {
+    const t = setTimeout(() => no(new Error('This browser can\'t play that video: export it as MP4 with H.264.')), ms);
+    v.addEventListener(name, () => { clearTimeout(t); ok(); }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(t); no(new Error('This browser can\'t play that video: export it as MP4 with H.264.')); }, { once: true });
+  });
+  const loaded = event('loadeddata');
+  v.src = src;
+  await loaded;
+  const w = v.videoWidth, hh = v.videoHeight, seconds = v.duration;
+  if (!w || !hh || !isFinite(seconds)) throw new Error('This browser can\'t read that video\'s size or length.');
+  const grab = async (t) => {
+    say('Taking its first and last frames…');
+    const seeked = event('seeked');
+    v.currentTime = t; await seeked;
+    const c = document.createElement('canvas'); c.width = w; c.height = hh;
+    c.getContext('2d').drawImage(v, 0, 0, w, hh);
+    return c;
+  };
+  const first = await grab(0);
+  const last = await grab(Math.max(0, seconds - 0.05));
+  v.removeAttribute('src'); v.load();
+  return { w, h: hh, seconds, first, last };
 }
 
 /* The painting's medium, size in centimetres and year, as separate fields (the server makes the details line
@@ -1304,8 +1361,21 @@ function libraryRow(it) {
         uses.length ? uses.map((u) => h('span', { class: `lib-use ${u.state}`, title: u.label === it.name ? STATES[u.state][1] : `${u.label}: ${STATES[u.state][1].toLowerCase()}` },
           glyph(GLYPHS[STATES[u.state][0]], 13), u.label === it.name ? null : u.label))
           : h('span', { class: 'badge gone', title: 'Nothing uses it' }, 'Unused'),
+        it.versions ? versionShapes(it.versions) : null,
         h('span', { class: 'lib-size', title: `${it.files.length} file${it.files.length === 1 ? '' : 's'}` }, MB(it.bytes)))),
     bin);
+}
+
+/* A video's versions as small outlines of their shapes, sized to each other (wide ones level, phone ones upright);
+   the numbers are in each one's tooltip. */
+function versionShapes(versions) {
+  const top = Math.max(...versions.map((v) => Math.max(v.w, v.h) || 1));
+  return h('span', { class: 'lib-vers' }, ...versions.map((v) => {
+    const long = 8 + 18 * (Math.max(v.w, v.h) || top) / top, ratio = v.w && v.h ? Math.min(v.w, v.h) / Math.max(v.w, v.h) : 0.75;
+    const [w, hh] = v.h > v.w ? [long * ratio, long] : [long, long * ratio];
+    return h('span', { class: 'lib-ver', style: `width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px`,
+      title: `${v.w} × ${v.h}${v.h > v.w ? ', for phones held upright' : ''}, ${MB(v.bytes)}` });
+  }));
 }
 
 function deleteForGood(it, pastOnly) {
