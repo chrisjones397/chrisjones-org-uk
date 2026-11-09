@@ -144,7 +144,8 @@ Claude, before pushing: `git pull --rebase` too.
   groupings are "genres" in the editor, kind 'section' in the data), Content (a box per page section, Hero,
   Gallery, Contact, Profile, Footer: its heading, then a box per paragraph, added, moved and deleted there;
   PAGE in admin/editor.js), Review with ticks, History with "Bring back"); its API is /admin/api/* in
-  editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload).
+  editor.js (state, history, save, discard, publish, which pulls in what a change needs, restore, upload), and the
+  Library's in library.js (see 1d).
   A painting has medium, cm [height, width] (numbers, centimetres only, by Christopher's choice) and year as
   fields; the server makes `details` ("Oil on canvas, 60 x 90 cm, 2020") from them, and site.js gives the
   gallery `cm` (older entries with only a details line still work; all were converted Nov 2026). The add form
@@ -364,6 +365,25 @@ Claude, before pushing: `git pull --rebase` too.
      Delete for good (library, when unused).
    - Not a git repository, nor Cloudflare Artifacts (closed beta, made for text and code, 1 gigabyte included):
      R2 holds the files by content and D1 the catalogue and history, which is already how git works inside.
+   Progress (9 Nov 2026), in slices, each pushed to dev for Christopher to try:
+   - Slice 1, the catalogue and Library tab: done on dev. library.js (server; editor.js routes GET library,
+     POST library/name and library/delete). An item is one thing uploaded with every file made from it: a photo
+     (its original plus each set of sizes, linked through the entries' process.original/original, or
+     originals/<name>.* for paintings moved from git) or a video version (videos/<name>.mp4 plus its -first/-last
+     frames); sizes with no original are an item of their own (images/<stem>). Its id is its main file's key,
+     fixed; the `media` table (db/schema.sql; created in both databases 9 Nov 2026) holds id, kind, grp
+     (site/painting), name, files, bytes, added, and is brought up to date with R2 on every GET library (rows
+     added, files updated, rows whose files are gone dropped; names kept). Uses: entries' draft and published,
+     and revisions' data only (previous is never restored). Delete for good: refused (409) while a draft or the
+     published site uses it; with history: true, its revisions go and any release left empty; then R2, the row,
+     and the cache: caches.default locally, and Cloudflare's purge by URL if secret PURGE_TOKEN (Zone > Cache
+     Purge) is set beside var ZONE_ID. Editor: Library tab (admin/editor.js libraryView), Site pictures and
+     Paintings, newest first: picture, name (edited in place, saved on Enter or leaving it, tick), what uses it
+     (green dot on the site, pencil in a draft, clock only in History; named only when it differs from the
+     item's name), size, bin (dimmed with the users in its tooltip while in use). The header's Preview is now
+     an eye symbol so the tabs fit one line on a phone. Tested locally (wrangler dev, Playwright).
+   - Next slices, in order: clear dev's leftovers with it (Christopher's go-ahead); frames per shape; one
+     saving rule and Hide; backgrounds as lists of media ids.
    Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:

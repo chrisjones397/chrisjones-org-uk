@@ -1,7 +1,8 @@
-/* The editor page (admin/index.html). Three views:
+/* The editor page (admin/index.html). Its views:
      #gallery  add a painting (at the top), and change the genres and paintings
      #content  change the page's words, section by section. Every change is saved as a draft
                at once; the preview (the site at this address) shows drafts in place.
+     #library  every file in storage (Site pictures, Paintings): what uses each, its name, Delete for good
      #review   every unpublished change, each with a tick: publish the ticked ones, or all, or discard them.
      #history  each publication, and every earlier version of anything, which can be brought back as a draft.
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
@@ -114,7 +115,11 @@ const label = (e) => {
 // ---- the views ---------------------------------------------------------------------------------------------
 
 function view() { return (location.hash.slice(1) || 'gallery'); }
-window.addEventListener('hashchange', () => { if (view() === 'history') historyData = null; render(); });
+window.addEventListener('hashchange', () => {
+  if (view() === 'history') historyData = null;
+  if (view() === 'library') libraryData = null;
+  render();
+});
 
 function render() {
   const n = entries.filter(changed).length;
@@ -122,7 +127,7 @@ function render() {
   document.querySelectorAll('.bar a[data-view]').forEach((a) => a.classList.toggle('on', a.dataset.view === view()));
   const main = $('#main');
   const y = scrollY;
-  main.replaceChildren(...({ gallery: galleryView, content: contentView, review: reviewView, history: historyView }[view()] || galleryView)());
+  main.replaceChildren(...({ gallery: galleryView, content: contentView, library: libraryView, review: reviewView, history: historyView }[view()] || galleryView)());
   if (view() !== 'history') scrollTo(0, y);
 }
 
@@ -1219,6 +1224,103 @@ function historyView() {
       })));
   }
   return out;
+}
+
+// ---- the library -------------------------------------------------------------------------------------------
+
+/* Every file in storage (library.js on the server), as Site pictures and Paintings: each thing uploaded with what
+   uses it. The name is the library's own (the stored files keep theirs for good), saved as soon as it's changed,
+   with a tick to say so. Delete for good only when no draft or published page uses it. */
+let libraryData = null;
+const glyph = (d, size = 18) => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('width', size); svg.setAttribute('height', size);
+  svg.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor');
+  p.setAttribute('stroke-width', '1.5'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+  svg.append(p);
+  return svg;
+};
+const GLYPHS = {
+  bin: 'M3.5 5.5h13M8 5.5V3.5h4v2M5 5.5l1 11h8l1-11M8.5 8.5v5.5M11.5 8.5v5.5',
+  tick: 'M4 10.5l4 4L16 6',
+  play: 'M7 5v10l8-5z',
+  photo: 'M3 4.5h14v11H3zM3 13l4-4 3.5 3.5L13 10l4 4M13 7.5h.01',
+  live: 'M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',                                // published
+  draft: 'M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3',                                        // a pencil: in a draft
+  past: 'M3.5 10a6.5 6.5 0 1 0 2-4.7M3.5 3.5v3h3M10 6.5V10l2.5 1.5',                    // a clock turning back: History
+};
+const STATES = { published: ['live', 'On the site'], draft: ['draft', 'In a draft'], history: ['past', 'Only in History'] };
+
+function libraryView() {
+  if (!libraryData) {
+    call('GET', 'library').then((d) => { libraryData = d; render(); }).catch((e) => toast(e.message, true));
+    return [h('h1', {}, 'Library'), h('p', { class: 'muted' }, 'Loading…')];
+  }
+  const out = [h('h1', {}, 'Library')];
+  const groups = [['site', 'Site pictures'], ['painting', 'Paintings']];
+  for (const [grp, title] of groups) {
+    const items = libraryData.items.filter((it) => it.grp === grp).sort((a, b) => b.added.localeCompare(a.added));
+    const total = items.reduce((s, it) => s + it.bytes, 0);
+    out.push(h('h2', {}, title, h('span', { class: 'muted', style: 'font-size:0.85rem' }, `  ${items.length} · ${MB(total)}`)));
+    if (items.length) out.push(h('div', { class: 'card' }, ...items.map(libraryRow)));
+  }
+  return out;
+}
+
+function libraryRow(it) {
+  // what uses it: one mark per thing using it, its strongest state (on the site, in a draft, or only in History)
+  const by = new Map();
+  for (const u of it.uses) {
+    const rank = { published: 0, draft: 1, history: 2 }[u.state];
+    const key = u.entry;
+    if (!by.has(key) || rank < by.get(key).rank) by.set(key, { label: u.label, state: u.state, rank });
+  }
+  const uses = [...by.values()].sort((a, b) => a.rank - b.rank);
+  const live = uses.filter((u) => u.state !== 'history');
+  const pastOnly = !live.length && uses.length > 0;
+  const pic = it.thumb
+    ? h('img', { src: `/media/${it.thumb}`, alt: '', loading: 'lazy' })
+    : h('span', { class: 'lib-none', title: 'No picture to show' }, glyph(GLYPHS.photo, 28));
+  const saved = h('span', { class: 'lib-saved', title: 'Name saved', hidden: true }, glyph(GLYPHS.tick));
+  const name = h('input', { type: 'text', class: 'lib-name', value: it.name, maxLength: 120, 'aria-label': 'Name',
+    onkeydown: (ev) => { if (ev.key === 'Enter') ev.target.blur(); },
+    onchange: async (ev) => {
+      const v = ev.target.value.trim();
+      if (!v) { ev.target.value = it.name; return; }
+      try { await call('POST', 'library/name', { id: it.id, name: v }); it.name = v; saved.hidden = false; }
+      catch (e) { toast(e.message, true); ev.target.value = it.name; }
+    } });
+  const bin = h('button', { class: 'lib-bin danger', disabled: live.length > 0,
+    title: live.length ? `In use: ${live.map((u) => u.label).join(', ')}` : 'Delete for good',
+    'aria-label': 'Delete for good', onclick: () => deleteForGood(it, pastOnly) }, glyph(GLYPHS.bin));
+  return h('div', { class: 'painting lib-item' },
+    h('span', { class: 'lib-pic' }, pic, it.kind === 'video' ? h('span', { class: 'lib-video', title: 'Video' }, glyph(GLYPHS.play, 14)) : null),
+    h('div', { class: 'what' },
+      h('div', { class: 'row lib-top' }, name, saved),
+      h('span', { class: 'd' },
+        // the thing using it is named only when it isn't what the item is called (a painting's photo is named after it)
+        uses.length ? uses.map((u) => h('span', { class: `lib-use ${u.state}`, title: u.label === it.name ? STATES[u.state][1] : `${u.label}: ${STATES[u.state][1].toLowerCase()}` },
+          glyph(GLYPHS[STATES[u.state][0]], 13), u.label === it.name ? null : u.label))
+          : h('span', { class: 'badge gone', title: 'Nothing uses it' }, 'Unused'),
+        h('span', { class: 'lib-size', title: `${it.files.length} file${it.files.length === 1 ? '' : 's'}` }, MB(it.bytes)))),
+    bin);
+}
+
+function deleteForGood(it, pastOnly) {
+  const n = it.files.length;
+  const versions = new Set(it.uses.map((u) => u.revision)).size;
+  const sure = pastOnly
+    ? `Delete "${it.name}" for good?\n\nIts ${n} file${n === 1 ? '' : 's'} (${MB(it.bytes)}) go from storage, and the ${versions} version${versions === 1 ? '' : 's'} in History that use it go from History. This can't be undone.`
+    : `Delete "${it.name}" for good?\n\nIts ${n} file${n === 1 ? '' : 's'} (${MB(it.bytes)}) go from storage. This can't be undone.`;
+  if (!confirm(sure)) return;
+  act(async () => {
+    const out = await call('POST', 'library/delete', { id: it.id, history: pastOnly });
+    libraryData.items = libraryData.items.filter((x) => x.id !== it.id);
+    historyData = null;
+    return out;
+  }, (out) => `Deleted for good${out.purged === 'this data centre only' ? ' (cached copies elsewhere may linger)' : ''}`);
 }
 
 // ---- start -------------------------------------------------------------------------------------------------

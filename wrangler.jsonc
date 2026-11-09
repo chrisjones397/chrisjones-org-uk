@@ -32,6 +32,7 @@
   ],
   "vars": {
     "ACCESS_TEAM": "chrisjones-org-uk",
+    "ZONE_ID": "de7244c21e7d293994f4b6a18014fb3f",   // chrisjones.org.uk: for purging cached files (library.js; secret PURGE_TOKEN)
     "ACCESS_AUD": "ca39b2c971b595c36e1479cb521c66718da1fe939ea614b90a1fcc85ed6c1ef2"
   },
   "env": {
@@ -54,6 +55,7 @@
       ],
       "vars": {
         "ACCESS_TEAM": "chrisjones-org-uk",
+        "ZONE_ID": "de7244c21e7d293994f4b6a18014fb3f",
         "ACCESS_AUD": "3b28d37f6295867b106354e6e8a4d4d00ffd9e21dce71b311daf8a9b87e3e362"
       }
     }

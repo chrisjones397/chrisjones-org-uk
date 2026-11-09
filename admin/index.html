@@ -21,10 +21,12 @@
   a:hover { text-shadow: 0 0 8px var(--glow); }
   header { position: sticky; top: 0; z-index: 5; background: rgba(26,26,26,0.94); backdrop-filter: blur(8px);
            border-bottom: 1px solid var(--line); }
-  .bar { max-width: 46rem; margin: 0 auto; padding: 0.7rem 1rem; display: flex; gap: 0.9rem; align-items: center; flex-wrap: wrap; }
+  .bar { max-width: 46rem; margin: 0 auto; padding: 0.7rem 1rem; display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
   .bar .site { font-weight: 300; font-size: 1.2rem; margin-right: auto; }
-  @media (max-width: 440px) { .bar .site { display: none; } .bar a[data-view="content"] { margin-left: 0; } }
+  @media (max-width: 440px) { .bar .site { display: none; } .bar a[data-view="content"] { margin-left: 0; }
+                              .bar { gap: 0.6rem; padding-left: 0.75rem; padding-right: 0.75rem; } }
   .bar a:last-child { margin-left: auto; }
+  .bar a.preview { display: inline-flex; }
   .bar a.on { color: #fff; border-bottom: 2px solid #ddd; }
   .count { display: inline-block; min-width: 1.4em; padding: 0 0.35em; margin-left: 0.25em; border-radius: 999px;
            background: var(--changed); color: #111; font-size: 0.8rem; text-align: center; }
@@ -154,6 +156,23 @@
   .dr-canvas { flex: 1; width: 100%; min-height: 0; touch-action: none; display: block; cursor: crosshair; }
   .dr-loupe { position: absolute; border-radius: 50%; border: 2px solid #fff;
               box-shadow: 0 2px 14px rgba(0,0,0,0.7); pointer-events: none; display: none; margin-top: 0; }
+  .lib-item { align-items: center; }
+  .lib-pic { position: relative; flex: none; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;
+             background: #111; border-radius: 4px; color: var(--dim); }
+  .lib-pic img { width: 64px; height: 64px; }
+  .lib-video { position: absolute; right: 3px; bottom: 3px; display: flex; padding: 2px; border-radius: 50%;
+               background: rgba(0,0,0,0.65); color: #fff; }
+  .lib-top { flex-wrap: nowrap; gap: 0.3rem; }
+  input.lib-name { flex: 1; min-width: 0; padding: 0.15rem 0.3rem; margin-left: -0.3rem; border-color: transparent; background: transparent; }
+  input.lib-name:hover { border-color: var(--line); }
+  input.lib-name:focus { border-color: #888; background: #1c1c1c; }
+  .lib-saved { color: var(--new); display: inline-flex; flex: none; }
+  .lib-item .d { white-space: normal; display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; align-items: center; }
+  .lib-use { display: inline-flex; gap: 0.25rem; align-items: center; }
+  .lib-use.published svg { color: var(--new); } .lib-use.published path { fill: currentColor; } .lib-use.draft svg { color: var(--changed); }
+  .lib-use.history { opacity: 0.75; }
+  .lib-size { margin-left: auto; white-space: nowrap; }
+  button.lib-bin { flex: none; display: inline-flex; padding: 0.45rem; }
   #upload-progress { color: var(--dim); font-size: 0.9rem; margin-top: 0.6rem; min-height: 1.4em; }
 </style>
 </head>
@@ -163,9 +182,10 @@
     <span class="site">Editor</span>
     <a href="#gallery" data-view="gallery">Gallery</a>
     <a href="#content" data-view="content">Content</a>
+    <a href="#library" data-view="library">Library</a>
     <a href="#review" data-view="review">Review<span class="count" id="count" hidden></span></a>
     <a href="#history" data-view="history">History</a>
-    <a href="/" target="_blank" rel="noopener">Preview ↗</a>
+    <a href="/" target="_blank" rel="noopener" class="preview" title="Preview the site, with drafts (new tab)" aria-label="Preview"><svg viewBox="0 0 20 20" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 10S5 4.5 10 4.5 18.2 10 18.2 10 15 15.5 10 15.5 1.8 10 1.8 10z"/><circle cx="10" cy="10" r="2.6"/></svg></a>
   </div>
 </header>
 <div id="signin" role="alert" hidden>Your sign-in has run out. <a href="/admin/" target="_blank" rel="opener">Sign in again ↗</a>

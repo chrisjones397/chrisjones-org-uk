@@ -14,6 +14,7 @@
 
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
+import { library, rename, remove } from './library.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -64,6 +65,7 @@ export async function api(request, env, url, who) {
       if (path === 'free') return json(await free(env, url.searchParams.get('name') || ''));
       if (path === 'original') return await original(env, url.searchParams.get('key') || '');
       if (path === 'stored') return json({ key: await stored(env, url.searchParams.get('hash') || '') });
+      if (path === 'library') return json(await library(env));
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -76,6 +78,8 @@ export async function api(request, env, url, who) {
     if (path === 'discard') return json(await discard(env, body.ids));
     if (path === 'publish') return json(await publish(env, who, body.ids, body.note));
     if (path === 'restore') return json(await restore(env, who, body.revision));
+    if (path === 'library/name') return json(await rename(env, String(body.id || ''), body.name));
+    if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.history === true));
     throw new Bad('Not found', 404);
   } catch (e) {
     return json({ error: e.message || String(e) }, e.status || 500);

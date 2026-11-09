@@ -6,6 +6,7 @@ wrangler.jsonc
 worker.js
 /site.js
 /editor.js
+/library.js
 db/
 templates/
 .dev.vars

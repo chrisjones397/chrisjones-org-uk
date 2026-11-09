@@ -34,3 +34,18 @@ CREATE TABLE IF NOT EXISTS revisions (
   previous   TEXT
 );
 CREATE INDEX IF NOT EXISTS revisions_entry ON revisions(entry_id, id);
+
+-- The library (library.js): one row for each thing uploaded to R2 (a photo with every set of sizes made from it,
+-- or a video version with its frames). id is the storage key of its main file, fixed for good; name is what the
+-- editor shows, changed freely. Kept up to date with R2 by library.js whenever the Library is looked at.
+--   kind: photo | video     grp: site (backgrounds and other site pictures) | painting
+--   files: JSON list of its storage keys     bytes: their total size     added: when first uploaded
+CREATE TABLE IF NOT EXISTS media (
+  id     TEXT PRIMARY KEY,
+  kind   TEXT NOT NULL,
+  grp    TEXT NOT NULL,
+  name   TEXT NOT NULL,
+  files  TEXT NOT NULL,
+  bytes  INTEGER NOT NULL,
+  added  TEXT NOT NULL
+);
