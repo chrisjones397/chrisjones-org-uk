@@ -227,8 +227,11 @@ Claude, before pushing: `git pull --rebase` too.
      logo are set there too). The display name is harmless to change; changing the team domain
      (<name>.cloudflareaccess.com, which sign-in uses, and ACCESS_TEAM in wrangler.jsonc) needs a sign-in test
      on admin-dev and admin straight after. Do it with the repository rename, as one naming tidy-up.
-   - .github/workflows/ssl-monitor.yml: weekly certificate-expiry check from when certificates weren't managed
-     for him; Cloudflare issues and renews them itself.
+   - .github/workflows/ssl-monitor.yml: removed (Nov 2026); Cloudflare issues and renews certificates itself.
+   - GitHub Pages is still switched on for the repository (has_pages true), a leftover from the GitHub Pages
+     days; CNAME only keeps it pointing at the domain. For a username.github.io repository Pages can't simply be
+     switched off: renaming the repository makes it an ordinary one, then Settings > Pages > Unpublish. Then
+     delete CNAME (not before, or chrisjones397.github.io would serve the raw repository as a second site).
    - Local Apache copy on his Mac (/Library/WebServer/Documents/prd/sync) as a way to view the site: LAMP-era;
      it can't run the Worker, database or R2. The proper local preview is `npx wrangler dev` (or just dev);
      his clone stays for git. Mind his preference not to run code locally he hasn't vetted.
