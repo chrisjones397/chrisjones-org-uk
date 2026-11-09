@@ -462,6 +462,20 @@ Claude, before pushing: `git pull --rebase` too.
      Library mark, Review lines); each Edit field saving with its tick; typing in the next field while a save lands;
      the picture saving itself after Find the paper and a slider, the superseded set deleted, Back to as it was
      making nothing, closing straight after a change; Undo resetting an open form. Not tested on a phone or Safari.
+   - Slice 4b, next (agreed with Christopher 9 Nov 2026, before slice 5), from his first use of slice 4 on dev:
+     a. Hide acts at once: Publish puts a thing on the site, Hide takes it off, both straight away (his original
+        model: Hide is the opposite of Publish). The eye changes the published version (and the draft) at once,
+        recorded in History as a release so it can be brought back; showing again is immediate too; other
+        unpublished edits stay waiting in Review; a never-published painting has no eye. Replaces slice 4's
+        "hiding goes through Review".
+     b. Comparing in the Library: tap a thumbnail to see it large; tick two or three items to compare side by
+        side (original's pixels, megabytes, date added, name). Fill in the original's size for items moved from
+        the old layout (their data has no `original`, so rows show none). (He had three uploads of Small
+        Composition in Yellow on dev and couldn't tell which was best; he kept af4e9259, the full-resolution one.)
+     c. Library routes: "Make a painting" on a Library photo (the add form with that photo in the darkroom, no
+        upload); "Back into the gallery" on an item only History uses (a published removal otherwise leaves only
+        History's Bring back); the uses marks link to where it's used (painting's Edit form, section background);
+        "Replace photo…" also "From the Library…".
    - Next slices, in order: backgrounds as lists of Library items (with the upright-screen settings below);
      paintings usable as backgrounds by reference.
    - Slice 5 design (agreed with Christopher by voice, 9 Nov 2026). He thinks in decoupled entities (data
