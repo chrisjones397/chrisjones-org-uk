@@ -37,7 +37,7 @@ once at the top of site.css. Section headings mirror the opening title's positio
 
 Claude, before any change:
 
-    git clone https://github.com/chrisjones397/chrisjones397.github.io && cd chrisjones397.github.io
+    git clone https://github.com/chrisjones397/chrisjones-org-uk && cd chrisjones-org-uk
     git checkout dev && git pull --rebase       # (in an existing clone: git checkout dev && git pull --rebase)
 
 Christopher, on the Mac before working, and again before pushing anything (Claude may have pushed meanwhile):
@@ -218,23 +218,19 @@ Claude, before pushing: `git pull --rebase` too.
    See Christopher's standing principle at the top. build_site.py (1b) is one example of something vestigial,
    not the only one. Candidates found so far, to go through with him (each: what it was for, the proper
    Cloudflare way, then replace or remove), as part of 1b or straight after:
-   - CNAME (chrisjones.org.uk.): GitHub Pages' custom-domain file; Cloudflare's Workers custom domains do this.
-   - The names (chosen Nov 2026): repository chrisjones-org-uk (Christopher renames it on GitHub; the proxy
-     here can't), Workers chrisjones-org-uk and chrisjones-org-uk-dev (renamed by API, PATCH
-     /workers/workers/{id} {name}: same IDs, so custom domains and builds stay attached; dev renamed, live to be
-     renamed just before main next moves, as main's wrangler.jsonc must match), Zero Trust team domain
-     chrisjones.cloudflareaccess.com (with going live: ACCESS_TEAM changes on both Workers at once). bigsas may
-     be renamed bigsas-co-uk to match.
-   - The Zero Trust team name: randomly generated, and shown on the editor's sign-in page. Christopher wants a
-     suitable, friendly name (Zero Trust > Custom pages > Team name and domain; the sign-in page's title and
-     logo are set there too). The display name is harmless to change; changing the team domain
-     (<name>.cloudflareaccess.com, which sign-in uses, and ACCESS_TEAM in wrangler.jsonc) needs a sign-in test
-     on admin-dev and admin straight after. Do it with the repository rename, as one naming tidy-up.
+   - CNAME: GitHub Pages' custom-domain file; removed (Nov 2026). Cloudflare's Workers custom domains do this.
+   - The names (Nov 2026): repository renamed chrisjones-org-uk (was chrisjones397.github.io; GitHub
+     redirects the old address; his Mac's remote is git@github.com:chrisjones397/chrisjones-org-uk.git). Workers
+     chrisjones-org-uk and chrisjones-org-uk-dev, renamed by API (PATCH /workers/workers/{id} {name}: same IDs,
+     so custom domains and builds stay attached); dev done; live still chrisjones397-github-io, to be renamed
+     just before main next moves (main's wrangler.jsonc must match the connected Worker's name). Zero Trust team
+     domain to become chrisjones.cloudflareaccess.com at the same moment (PUT /access/organizations auth_domain;
+     ACCESS_TEAM "chrisjones" in both envs of wrangler.jsonc), then he signs in on admin-dev and admin to check.
+     The display name is already "Christopher Jones - Fine Art". bigsas may become bigsas-co-uk when
+     bigsas.co.uk moves to Cloudflare (check how it's hosted first).
    - .github/workflows/ssl-monitor.yml: removed (Nov 2026); Cloudflare issues and renews certificates itself.
-   - GitHub Pages is still switched on for the repository (has_pages true), a leftover from the GitHub Pages
-     days; CNAME only keeps it pointing at the domain. For a username.github.io repository Pages can't simply be
-     switched off: renaming the repository makes it an ordinary one, then Settings > Pages > Unpublish. Then
-     delete CNAME (not before, or chrisjones397.github.io would serve the raw repository as a second site).
+   - GitHub Pages: switched off (Nov 2026): after the rename, Settings > Pages, Unpublish site and branch None
+     (has_pages false). Then CNAME was deleted.
    - Local Apache copy on his Mac (/Library/WebServer/Documents/prd/sync) as a way to view the site: LAMP-era;
      it can't run the Worker, database or R2. The proper local preview is `npx wrangler dev` (or just dev);
      his clone stays for git. Mind his preference not to run code locally he hasn't vetted.
