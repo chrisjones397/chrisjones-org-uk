@@ -493,6 +493,18 @@ Claude, before pushing: `git pull --rebase` too.
      never restart or swap a playing video (it keeps playing, re-cropped round the new shape's focus); when it's
      resting (on its last frame, or a reduced-motion visitor's still), swap to the other shape's still or
      version, unnoticed. Listen for the orientation/resize change in backgrounds.js.
+   - Uploads generally (Christopher, 9 Nov 2026, proposed by Claude, to confirm at the start of slice 4b/5):
+     every photo may need the darkroom, painting or not, so "site picture" vs "painting" stops being a property
+     of the file. Layers: (1) Library item: the file as uploaded, untouched, plus what's true of the picture
+     itself (alt text, credit/photographer); (2) development (name to settle): a darkroom recipe on an item (white
+     balance, then either four-corner squaring up for flat things (paintings, drawings, documents) or straighten
+     and crop for scenes (rooms, people, buildings), where squaring up would distort), producing its sets of
+     sizes; several per item allowed; (3) uses, each its own entity pointing at a development: artwork (title,
+     medium, size, year, genre, detail crops, shown in the gallery; its measured size drives the squaring-up
+     shape), background treatment (focus and crops per screen shape), later portrait/team member etc. The
+     Library's Site pictures / Paintings split becomes a filter by use. Moves the painting's `process` record out
+     of the painting into the development. Videos: the browser can't re-encode, so no colour work after upload;
+     their "development" is only crops/focus per shape and the still frames; colour is fixed before upload.
    - After that, edit in place (step 4) replaces the Content tab (Christopher, 9 Nov 2026: the Gallery tab stays,
      a list suits it; the Content tab's design is the weak one, so don't spend effort redesigning it now). For
      backgrounds and contact links, which aren't text to click into, he liked the idea of a floating panel over
