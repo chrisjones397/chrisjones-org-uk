@@ -10,6 +10,10 @@ development through this site (and may build for clients) and wants to learn the
 habits, nor workarounds. Anything that exists only because of an earlier setup (static pages on GitHub Pages,
 Namecheap, a local Apache copy) is vestigial: don't build on it or patch around it; point it out, propose the
 proper replacement, and redesign it. When choosing an approach, say what the standard way is and why.
+Interface principle (Christopher, Nov 2026), for the site, the editor and client work: symbols rather than text,
+for looks and because he imagines the client has ADD and can't search a haystack of words for the needle (AI
+agents are too keen on text). E.g. a change saved automatically shows a tick on the right with a tooltip, plainly
+not a button, rather than a message. The client uses the editor for years, so a short learning curve is fine.
 Consistency matters to him: all text below the header shares one shadow (`--shadow` on body; the header has its
 own lighter one), links glow when pointed at, and all titles (h1, section h2) share one size and weight, set
 once at the top of site.css. Section headings mirror the opening title's position (22%).
@@ -329,6 +333,37 @@ Claude, before pushing: `git pull --rebase` too.
      cache for their addresses. The editor has no way to do this: removed things stay in storage for History by
      design. Propose a "Delete for good" in History or on a removed item (files from R2, the item from every
      revision, cache purged), for clients too.
+   - Head animation, measured 9 Nov 2026 (40 frames rendered at 1920 x 1080 and 750 x 1688, plus two seconds of
+     consecutive frames, encoded with ffmpeg): live is about 1.8 megabytes (face-model.bin 1.1, textures 0.7;
+     Three.js shared with the gallery). Scrubbed video needs about 750 frames (24 per second of its 32 seconds):
+     every frame a keyframe (smooth in Safari) about 25 to 30 kilobytes a frame, so about 20 megabytes per version,
+     two versions (upright and wide frame the head differently); a keyframe every 6 frames about 5 megabytes but
+     uneven seeking on iPhone; a WebP sequence drawn on a canvas 10 to 20 megabytes. Claude recommended staying
+     live and making the drawing's background see-through so the profile can take a background like any section.
+     Christopher hasn't decided.
+1d. The library (agreed 9 Nov 2026: before carousels). Christopher's points: basic file management (rename,
+   delete for good) without over-engineering; one clear saving rule; Hide as the opposite of Publish; backgrounds
+   not tied to names like bg-hero; a list per section (carousel later), which may use gallery paintings; site
+   pictures kept apart from paintings. Plan (Claude's proposal, agreed in outline):
+   - A `media` table in D1: one record per uploaded file (id, kind photo/video, the name shown, group 'site' or
+     'painting', sizes, frames, original, added). Storage keys are fixed, from the id, never renamed (R2 can only
+     copy and delete; renaming would break History and caches); renaming edits the name in D1.
+   - A Library tab: Site pictures and Paintings, each file with what uses it; "Delete for good" only when nothing
+     (draft, published or History) uses it, removing all its files and purging the cache; or, from History,
+     removing it from the revisions too (the 9 Nov case above).
+   - Backgrounds point at media ids: a list per section ({ items: [ids], show: 'one' }; 'carousel' later); an item
+     may be a painting, used by reference (its processed images), so it follows reprocessing.
+   - Video frames per shape, not per version: one first/last set for the landscape versions, one for upright, at
+     sensible JPEG quality (today each version gets its own set: 24 stills, about 18 megabytes, for one video;
+     the 2560-wide first frame is 1.9 megabytes). Clear dev's leftovers (bg-hero-*, bg-contact, bg-contact-v2)
+     with the new delete.
+   - One saving rule: every change saves itself as a draft at once (paintings too, no Save button), shown by a
+     tick on the right with a tooltip; nothing reaches visitors until Publish. Hide/Hidden: a painting, picture or
+     section comes off the site but stays in the editor; it goes through Review and Publish like any change.
+     Three distinct actions: Hide (off the site, kept), Remove (out of the page, file stays in the library),
+     Delete for good (library, when unused).
+   - Not a git repository, nor Cloudflare Artifacts (closed beta, made for text and code, 1 gigabyte included):
+     R2 holds the files by content and D1 the catalogue and history, which is already how git works inside.
    Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
