@@ -490,9 +490,10 @@ Claude, before pushing: `git pull --rebase` too.
    - Uploads generally: confirmed by Christopher (9 Nov 2026), next, before backgrounds as lists (his order:
      restructure, then lists on top of it, so backgrounds are built once). Three layers, each its own entity:
      (1) Library item: the file as uploaded, untouched, plus what's true of the picture itself (alt text,
-     credit/photographer); (2) the darkroom recipe on an item (name not settled: he's weighing Framing, Treatment,
-     Handling, Rendering; Claude suggested Rendition, matching the r1, r2 folders it makes; Framing is taken, see
-     below): white balance, then either four-corner squaring up for flat things (paintings, drawings, documents)
+     credit/photographer); (2) the darkroom recipe on an item (name not settled: he's weighing Treatment, Handling,
+     Rendering; Framing is taken, see below. Not "Rendition": that's what r1, r2... already are, each one frozen
+     output of a recipe (a recipe adjusted makes the next rN; old ones stay for History and caches), so the recipe,
+     the thing that's edited, needs a name of its own; Claude's suggestion of it was withdrawn, 9 Nov): white balance, then either four-corner squaring up for flat things (paintings, drawings, documents)
      or straighten and crop for scenes (rooms, people, buildings), where squaring up would distort; it produces
      its sets of sizes; several per item allowed; (3) uses, each pointing at a recipe: artwork (title, medium,
      size, year, genre, detail crops, shown in the gallery; its measured size drives the squaring-up shape),
