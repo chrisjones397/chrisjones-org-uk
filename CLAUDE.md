@@ -382,8 +382,17 @@ Claude, before pushing: `git pull --rebase` too.
      (green dot on the site, pencil in a draft, clock only in History; named only when it differs from the
      item's name), size, bin (dimmed with the users in its tooltip while in use). The header's Preview is now
      an eye symbol so the tabs fit one line on a phone. Tested locally (wrangler dev, Playwright).
-   - Next slices, in order: clear dev's leftovers with it (Christopher's go-ahead); frames per shape; one
-     saving rule and Hide; backgrounds as lists of media ids.
+   - Next slices, in order: clear dev's leftovers with it (Christopher's go-ahead); one row per video in the
+     Library (its versions inside it, deleted together; agreed 9 Nov 2026) with frames per shape; one saving
+     rule and Hide; backgrounds as lists of media ids.
+   - Framing on upright screens (Christopher thinking aloud, 9 Nov 2026, not decided): the forest works on wide
+     screens because the bright fern sits against dark trees; an upright phone's full-height crop of the 4:3
+     video shows only about 35% of its width, so the trees are lost (moving the focus helped landscape phones).
+     His idea: a section height for upright screens (full, three-quarters, half: about 35, 46 and 69% of the
+     width shown). Also possible: a separate focus for upright screens; an upright version framed for it
+     (art direction; already served to upright screens), e.g. rendered from painted-forest-tools. All are
+     per-shape settings, so they go with "backgrounds as lists of media ids": each section keeps settings for
+     wide and for upright screens.
    Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:
