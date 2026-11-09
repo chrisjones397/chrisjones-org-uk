@@ -215,6 +215,11 @@ Claude, before pushing: `git pull --rebase` too, then rebuild if index.html's st
    - The names: repository chrisjones397.github.io and Workers chrisjones397-github-io(-dev) follow GitHub
      Pages' naming. Renaming (repository, Workers, wrangler.jsonc, his Mac's remote, the notes) is possible;
      weigh it with him.
+   - The Zero Trust team name: randomly generated, and shown on the editor's sign-in page. Christopher wants a
+     suitable, friendly name (Zero Trust > Custom pages > Team name and domain; the sign-in page's title and
+     logo are set there too). The display name is harmless to change; changing the team domain
+     (<name>.cloudflareaccess.com, which sign-in uses, and ACCESS_TEAM in wrangler.jsonc) needs a sign-in test
+     on admin-dev and admin straight after. Do it with the repository rename, as one naming tidy-up.
    - .github/workflows/ssl-monitor.yml: weekly certificate-expiry check from when certificates weren't managed
      for him; Cloudflare issues and renews them itself.
    - Local Apache copy on his Mac (/Library/WebServer/Documents/prd/sync) as a way to view the site: LAMP-era;
