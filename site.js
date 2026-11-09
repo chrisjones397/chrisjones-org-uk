@@ -7,7 +7,8 @@
      - text marked data-text="key" (replaced) and data-paragraphs="key" (its <p>s replaced);
      - the list page's grid;
      - the site's header, one copy for every page (templates/header.html, bundled into the Worker as text), in
-       place of <header data-partial="header">.
+       place of <header data-partial="header">, with an icon for each ticked contact link (links.js);
+     - the contact section's links (data-links), from the same entry.
    mode 'published' is what visitors see; mode 'draft' is the editor's preview (admin.chrisjones.org.uk).
 
    A painting's images are <base><file>-<width>.<ext> (and <base><file>-preview.jpg), from the site's top
@@ -17,6 +18,7 @@
    R2 holds images/ (what the site shows) and originals/ (each painting's photo as uploaded, never served). */
 
 import header from './templates/header.html';   // .html files are imported as text (Wrangler's default rules)
+import { ticked, icon } from './links.js';
 
 const PARTIALS = { header };
 const INVITE_COUNT = 5;
@@ -37,6 +39,7 @@ export async function load(env, mode) {
   const { results } = await env.DB.prepare('SELECT id, kind, draft, published FROM entries').all();
   const pick = (r) => (mode === 'draft' ? r.draft : r.published);
   const sections = [], paintings = [], texts = {}, settings = {}, backgrounds = {};
+  let links = null;
   let changes = 0;
   for (const r of results) {
     if (r.draft !== r.published) changes++;
@@ -48,6 +51,7 @@ export async function load(env, mode) {
     else if (r.kind === 'text') texts[r.id.slice(2)] = d.text;
     else if (r.kind === 'settings') settings[r.id.slice(9)] = d;
     else if (r.kind === 'background') backgrounds[r.id.slice(3)] = d;
+    else if (r.kind === 'links') links = d;
   }
   const byOrder = (a, b) => a.order - b.order || a.title.localeCompare(b.title);
   sections.sort(byOrder);
@@ -55,7 +59,7 @@ export async function load(env, mode) {
   for (const p of paintings.sort(byOrder)) if (sec[p.section]) sec[p.section].paintings.push(p);
   const ordered = sections.flatMap((s) => s.paintings);
   const byName = Object.fromEntries(ordered.map((p) => [p.name, p]));
-  return { mode, sections, paintings: ordered, byName, texts, settings, backgrounds, changes };
+  return { mode, sections, paintings: ordered, byName, texts, settings, backgrounds, links, changes };
 }
 
 export const stem = (p) => p.file || p.name;
@@ -108,6 +112,23 @@ function bgTag(b) {
     + '<script>window.bgVideo && bgVideo(document.currentScript.previousElementSibling)</script>';
 }
 
+/* The contact links (entry 'links', links.js): in the contact section a line each, with its icon and username, and
+   in the header an icon each. The email address isn't written out in the page, so address-collecting robots don't
+   find it: data-addr holds it backwards, and index.html's script turns it round, shows it and copies it when
+   clicked (the header's email icon copies it too). */
+const backwards = (s) => [...s].reverse().join('');
+function contactLinks(links) {
+  return ticked(links || {}).map(([s, u]) => (s.key === 'email'
+    ? `\n          <p class="footer-email contact-line"><span id="footer-email" role="button" tabindex="0" title="Copy email address" data-addr="${esc(backwards(u))}"></span>`
+      + '<span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>'
+    : `\n          <p class="contact-line"><a href="${esc(s.url(u))}" target="_blank" rel="noopener" aria-label="${esc(`${s.name}: ${u}`)}">${icon(s.key)}${shown(s.shown(u))}</a></p>`)).join('') + '\n        ';
+}
+function headerLinks(links) {
+  return ticked(links || {}).map(([s, u]) => (s.key === 'email'
+    ? `\n          <a href="/#contact" class="nav-link nav-icon" id="header-email" aria-label="Copy email address" title="Copy email address">${icon(s.key, 20)}</a>`
+    : `\n          <a href="${esc(s.url(u))}" target="_blank" rel="noopener" class="nav-link nav-icon" aria-label="${esc(`${s.name}: ${u}`)}" title="${esc(s.name)}">${icon(s.key, 20)}</a>`)).join('') + '\n        ';
+}
+
 export function galleryData(c) {
   const items = c.paintings.map((p) => {
     const m = SIZE_RE.exec(p.details || '');
@@ -145,7 +166,7 @@ export function rewriter(c) {
   const r = new HTMLRewriter()
     .on('[data-partial]', { element(el) {
       const part = PARTIALS[el.getAttribute('data-partial')];
-      if (part != null) el.replace(part, { html: true });
+      if (part != null) el.replace(part.replace(/(<li class="nav-icons">)[\s\S]*?(<\/li>)/, (_, a, b) => a + headerLinks(c.links) + b), { html: true });
     } })
     .on('[data-text]', { element(el) {
       const t = c.texts[el.getAttribute('data-text')];
@@ -159,6 +180,7 @@ export function rewriter(c) {
       el.setAttribute('style', `--shade: ${b.shade}`);
       el.prepend(bgTag(b), { html: true });
     } })
+    .on('[data-links]', { element(el) { el.setInnerContent(contactLinks(c.links), { html: true }); } })
     .on('[data-paragraphs]', { element(el) {
       const t = c.texts[el.getAttribute('data-paragraphs')];
       if (t == null) return;

@@ -289,6 +289,20 @@ Claude, before pushing: `git pull --rebase` too.
    1536 wide), a draft not yet published; bg-contact was only his test upload of the editor (a blue picture),
    so Claude deleted that entry from dev's database: dev shows the built-in contact photo again, and "Move them
    into storage" now offers it; bg-footer none.
+   Contact links: done (9 Nov 2026, on dev). links.js (published, imported by site.js, editor.js and
+   admin/editor.js: one copy) lists Email, Instagram, Bluesky, Facebook, Threads, X, LinkedIn, TikTok, YouTube,
+   Mastodon (user@instance), each with its username pattern, address, shown form and icon (SVG lines, drawn by
+   Claude; Instagram's and Bluesky's as before). Entry 'links', kind 'links': { <site>: { name, on } } in that
+   order (editor.js linksOf; tidy() takes off a leading @ and reads a pasted profile address; an unticked site
+   keeps its username). site.js: the contact section's <div data-links> gets a line each, and the header's
+   <li class="nav-icons"> an icon each (templates/header.html has it empty). The email address is written
+   backwards in data-addr on #footer-email; index.html's script turns it round, shows it, and both it and the
+   header's icon copy it. Editor: Content, Contact, Links box (tick, icon, username, the built link to try).
+   The hand-written links are gone from index.html and the header; the entry (email, Instagram, Bluesky, as
+   before) was put straight into both databases, published, with a History release "Contact links moved from
+   the page into the editor" (dev release 30, live release 3), so live keeps its links when dev goes live.
+   Tested locally (wrangler dev, Playwright): checks refuse bad usernames and ticked-but-empty, all ten render
+   in the contact section and header, email copies. Not tested on a phone.
    Still to do in 1c, in this order:
    - Christopher: on admin-dev press "Move them into storage" again (for the contact photo), publish both under
      Review, check the opening and contact on dev on his phone and Mac
@@ -296,9 +310,6 @@ Claude, before pushing: `git pull --rebase` too.
      (moves both the opening video and the contact photo there) and publish.
    - Then Claude: remove the stand-ins (index.html <video>/<img> data-stand-in and their scripts, STAND_INS and
      moveInBox in admin/editor.js) and med/*.mp4, med/contact-*, med/jpg/ from git, and put that live too.
-   - Contact links (agreed Nov 2026): a tick and a username for each of Email, Instagram, Bluesky, Facebook,
-     Threads, X, LinkedIn, TikTok, YouTube, Mastodon (user@instance), the link built from it; replaces the
-     hand-written links in index.html and the header's icons.
    - Pause control (agreed Nov 2026: header icon): shown only while something on the page moves; pauses the
      background videos and the parallax and drift; remembered across the site (WCAG 2.2.2).
    - Profile: Christopher asked whether the head animation is just a video scrubbed by scrolling. It's a live

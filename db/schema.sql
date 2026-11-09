@@ -1,7 +1,7 @@
 -- The site's content database (Cloudflare D1: site-content for live, site-content-dev for dev).
 -- Every piece of content is one row in entries, holding its draft and its published version side by side
 -- as JSON. A change waiting to be published is any row whose draft differs from its published version.
---   kind:      painting | section | text | settings
+--   kind:      painting | section | text | settings | background | links
 --   draft:     what the editor shows; NULL means deleted in the draft (still live until published)
 --   published: what visitors see; NULL means not published yet
 -- Publishing copies draft to published for the chosen rows, as one release, and keeps a revision of each.

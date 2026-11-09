@@ -7,6 +7,7 @@
    It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
+import { SITES, tidy, ok, icon } from '/links.js';
 import { SOURCE_MAX, scaled, resized, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
@@ -30,7 +31,7 @@ const open = new Set();             // paintings whose edit form is open
 const PAGE = [
   { name: 'Hero', heading: 't-hero-title', paras: 't-hero', bg: 'hero' },
   { name: 'Gallery', heading: 't-gallery-title', extra: [['t-gallery-button', 'Button']], paras: 't-gallery' },
-  { name: 'Contact', heading: 't-contact-title', paras: 't-contact', bg: 'contact' },
+  { name: 'Contact', heading: 't-contact-title', paras: 't-contact', bg: 'contact', links: true },
   { name: 'Profile', heading: 't-profile-title', paras: 't-profile' },
   { name: 'Footer', paras: 't-footer', bg: 'footer' },
 ];
@@ -105,6 +106,7 @@ const label = (e) => {
   if (e.kind === 'painting') return d.title;
   if (e.kind === 'section') return `Genre: ${d.title}`;
   if (e.kind === 'text') return (TEXTS.find((t) => t[0] === e.id) || [0, e.id])[1].replace(/ \(.*/, '');
+  if (e.kind === 'links') return 'Contact links';
   if (e.kind === 'background') return `${(PAGE.find((p) => p.bg === e.id.slice(3)) || { name: e.id.slice(3) }).name} background picture`;
   return e.id === 'settings-gallery' ? 'Gallery settings' : 'Gallery invitation';
 };
@@ -202,9 +204,54 @@ function contentView() {
       e ? badge(e) : null,
       e && changed(e) ? h('button', { onclick: () => { extraParas[sec.paras] = 0; discard([sec.paras]); } }, 'Undo paragraph changes') : null,
       h('button', { onclick: () => { extraParas[sec.paras] = (extraParas[sec.paras] || 0) + 1; render(); } }, 'Add a paragraph')));
+    if (sec.links) card.append(linksBox());
     out.push(card);
   }
   return out;
+}
+
+/* The contact links (entry 'links', links.js): a tick and a username for each site; the ticked ones are shown in
+   the contact section and as icons in the header, in this order, each linking to the address built from the
+   username (shown beside it, to try). A pasted profile address is read for the username. A box ticked before
+   its username is typed waits here until it is. */
+const tickedEmpty = new Set();
+function linksBox() {
+  const e = byId('links'), d = (e && current(e)) || {};
+  const store = (key, change) => {
+    const next = {};
+    for (const s of SITES) {
+      const v = { ...(d[s.key] || { name: '', on: false }), ...(s.key === key ? change : {}) };
+      if (v.name || v.on) next[s.key] = { name: v.name, on: !!v.on };
+    }
+    save([{ id: 'links', kind: 'links', data: next }]);
+  };
+  const box = h('div', { class: 'box links' }, h('label', {}, 'Links ', e ? badge(e) : null),
+    h('p', { class: 'hint' }, 'Tick the ones to show, here and as icons in the header, and type the username (or paste the profile\'s address).'));
+  for (const s of SITES) {
+    const v = d[s.key] || { name: '', on: false };
+    const on = v.on || tickedEmpty.has(s.key);
+    const input = h('input', { type: s.key === 'email' ? 'email' : 'text', value: v.name, placeholder: s.sample,
+      autocapitalize: 'off', autocomplete: 'off', spellcheck: false, 'aria-label': `${s.name} ${s.key === 'email' ? 'address' : 'username'}`,
+      onchange: (ev) => {
+        const name = tidy(s.key, ev.target.value);
+        if (name && !ok(s.key, name)) { toast(`That doesn't look like ${s.key === 'email' ? 'an email address' : `a username for ${s.name}`}`, true); return; }
+        if (!name && on) tickedEmpty.add(s.key);
+        if (name) tickedEmpty.delete(s.key);
+        store(s.key, { name, on: on && !!name });
+      } });
+    const tick = h('input', { type: 'checkbox', checked: on, onchange: (ev) => {
+      if (ev.target.checked && !v.name) { tickedEmpty.add(s.key); render(); return; }
+      tickedEmpty.delete(s.key);
+      store(s.key, { on: ev.target.checked });
+    } });
+    const glyph = h('span', { class: 'link-icon' }); glyph.innerHTML = icon(s.key, 18);   // drawn by links.js, nothing typed in it
+    const tryIt = v.name && ok(s.key, v.name) && s.key !== 'email'
+      ? h('a', { href: s.url(v.name), target: '_blank', rel: 'noopener', class: 'muted link-try', title: 'Open it, to check' }, s.shown(v.name))
+      : h('span', { class: 'link-try' });
+    box.append(h('div', { class: 'row link-row' }, h('label', { class: 'link-name' }, tick, glyph, s.name), input, tryIt));
+  }
+  if (e && changed(e)) box.append(h('div', { class: 'actions' }, h('button', { onclick: () => { tickedEmpty.clear(); discard(['links']); } }, 'Undo link changes')));
+  return box;
 }
 
 /* A section's background: a photo or a video, shown as it is now (the photo, or the video's last frame), with
@@ -1164,6 +1211,11 @@ const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For r
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
+  if (e.kind === 'links') {
+    const show = (v) => (!v || !v.name ? '(none)' : `${v.name}${v.on ? '' : ' (not shown)'}`);
+    return SITES.filter((s) => JSON.stringify(a[s.key]) !== JSON.stringify(b[s.key])).map((s) =>
+      h('div', {}, h('b', {}, `${s.name}: `), h('del', {}, show(a[s.key])), ' → ', h('ins', {}, show(b[s.key]))));
+  }
   const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'section' ? ((byId(v) && current(byId(v)).title) || v)
     : k === 'cm' ? `${v[0]} × ${v[1]} cm` : k === 'focus' ? `${Math.round(v[0] * 100)}% across, ${Math.round(v[1] * 100)}% down`
     : k === 'shade' ? `${Math.round(v * 100)}%` : k === 'versions' ? v.map((x) => `${x.w} × ${x.h}`).join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));

@@ -153,9 +153,7 @@
       <div class="contact-words">
         <h2 class="contact-title" data-text="contact-title">Get in touch</h2>
         <div class="words-paras" data-paragraphs="contact"></div>
-        <p class="footer-email contact-line"><span id="footer-email" role="button" tabindex="0" title="Copy email address"></span><span class="copied-tip footer-tip" id="footer-copied" role="status" aria-live="polite">Email address copied</span></p>
-        <p class="contact-line"><a href="https://www.instagram.com/only1jones2/" target="_blank" rel="noopener" aria-label="Instagram: only1jones2"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/></svg>@only1jones2</a></p>
-        <p class="contact-line"><a href="https://bsky.app/profile/chrisjones.org.uk" target="_blank" rel="noopener" aria-label="Bluesky: chrisjones.org.uk"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" transform="translate(12 12) scale(0.86) translate(-12 -12)"/></svg>@chrisjones.org.uk</a></p>
+        <div class="contact-links" data-links><!-- a line for each ticked contact link (entry links, put in by site.js) --></div>
       </div>
     </section>
 
@@ -184,8 +182,9 @@
   <footer class="site-footer" data-background="footer">
     <script>
       (function () {
-        var addr = ['chrisjones.org.uk', '@', 'hello'].reverse().join('');   // put together here, so spam robots never find the address in the page
         var footer = document.getElementById('footer-email');
+        if (!footer) return;                                                 // no email link ticked in the editor
+        var addr = footer.getAttribute('data-addr').split('').reverse().join('');   // written backwards (site.js), so robots collecting addresses don't find it
         footer.textContent = addr;
         /* the header's email button and the address in the contact section both copy it, and say so for a moment */
         function copy(tip) {

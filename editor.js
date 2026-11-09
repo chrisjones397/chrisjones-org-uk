@@ -13,6 +13,7 @@
    signed-in browser change anything. Text is stored as typed and escaped wherever it's shown (site.js). */
 
 import { slug } from './site.js';
+import { SITES, tidy, ok } from './links.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -194,6 +195,7 @@ function normalise(id, kind, d) {
   }
   if (kind === 'background') return backgroundOf(id, d);
   if (kind === 'text') return { text: str(d.text, 5000, 'Text') };
+  if (kind === 'links') return linksOf(d);
   if (id === 'settings-gallery') return Object.fromEntries(GALLERY_SETTINGS.filter((k) => k in d).map((k) => [k, num(d[k], k)]));
   if (id === 'settings-invitation') {
     if (!Array.isArray(d.paintings) || d.paintings.length > 12) throw new Bad('Bad invitation list');
@@ -243,6 +245,22 @@ function backgroundOf(id, d) {
   return { type: 'video', ...common, versions, play: d.play, calm: d.calm };
 }
 
+/* The contact links (links.js): { <site>: { name, on } } in links.js's order; a ticked one needs a username that
+   fits its site, an unticked one may keep any it had, or none. */
+function linksOf(d) {
+  const out = {};
+  for (const s of SITES) {
+    const v = d[s.key];
+    if (v == null) continue;
+    if (typeof v !== 'object') throw new Bad(`Bad ${s.name} link`);
+    const name = tidy(s.key, str(v.name ?? '', 200, `The ${s.name} username`));
+    if (name && !ok(s.key, name)) throw new Bad(`That doesn't look like ${s.key === 'email' ? 'an email address' : `a username for ${s.name}`}: ${name}`);
+    if (v.on && !name) throw new Bad(`A ticked ${s.name} link needs ${s.key === 'email' ? 'an address' : 'a username'}`);
+    if (name || v.on) out[s.key] = { name, on: !!v.on };
+  }
+  return out;
+}
+
 /* items: [{ id, kind, data }], data null to delete. New paintings are "p-<name>"; new sections "s-<random>". */
 async function save(env, who, items) {
   if (!Array.isArray(items) || !items.length || items.length > 200) throw new Bad('Nothing to save');
@@ -256,9 +274,9 @@ async function save(env, who, items) {
     const old = byId[it.id];
     if (old && old.kind !== it.kind) throw new Bad('That entry is a different kind');
     if (!old && !((it.kind === 'painting' && it.id.startsWith('p-')) || (it.kind === 'section' && it.id.startsWith('s-'))
-        || (it.kind === 'text' && PARAGRAPHS.includes(it.id))
+        || (it.kind === 'text' && PARAGRAPHS.includes(it.id)) || (it.kind === 'links' && it.id === 'links')
         || (it.kind === 'background' && it.id.startsWith('bg-') && BACKGROUNDS.includes(it.id.slice(3))))) {
-      throw new Bad('Only paintings, genres, the sections\' paragraphs and background pictures can be added');
+      throw new Bad('Only paintings, genres, the sections\' paragraphs, background pictures and the contact links can be added');
     }
     if (it.data === null) {
       if (!old) continue;
