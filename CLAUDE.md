@@ -94,6 +94,7 @@ Claude, before pushing: `git pull --rebase` too.
   treats the tall section as free, like the profile. Its arrangement comes from the database's gallery settings (entry settings-gallery: size,
   spacing, spread, depth, nearness, drift, seed); adding `?tune` to the address shows live sliders and a Copy button. (Until Nov 2026 it was a fly-through with Enter/Exit
   Gallery buttons; that version is in the history before the commit "Gallery: a floating wall...".)
+- **pause.js**: the header's pause button and the shared paused state (window.pauser); see 1c below.
 - **face/face.js**: the head animation, driven by scrolling through .face-section; pauses while off screen.
 - **glass.js**: the header's thick glass (frost plus a bent bottom edge) over every picture that passes under it:
   the opening video and the contact photo; over the floating gallery only with `?glass=N` in the address (N frames
@@ -301,9 +302,22 @@ Claude, before pushing: `git pull --rebase` too.
    the page into the editor" (dev release 30, live release 3), so live keeps its links when dev goes live.
    Tested locally (wrangler dev, Playwright): checks refuse bad usernames and ticked-but-empty, all ten render
    in the contact section and header, email copies. Not tested on a phone.
+   Pause control: done (9 Nov 2026, on dev). pause.js (in <head>, before backgrounds.js) keeps the state:
+   window.pauser { paused, watch(fn), moving(name, on) }, class `paused` on <html>, localStorage 'paused' (and
+   the storage event, so other tabs follow). The button (#pause-motion, a circled pause or play symbol, drawn
+   like the contact icons) is its own <li class="nav-pause"> in templates/header.html (site.js only rewrites
+   <li class="nav-icons">), hidden until something registers as moving by itself: each background video until
+   it has played once and stopped, the gallery's drift (if drift > 0), the profile's sea. So it shows on the home
+   page, not on the list or 404 pages, and not for reduced-motion visitors (the sea is now still for them too).
+   Paused: videos pause where they are and play on from there; a page opened paused shows the video's last frame
+   (poster) with preload metadata, and play starts it from the beginning; the gallery's drift clock (driftT)
+   stops; the sea's waveClock stops; motion.js puts the title, gallery heading and profile text in place
+   (translate 0, fully shown) and drops parallax transforms; played again, they jump to where they should be,
+   no spring. Clicking paintings, the mouse shift and snapping still work: they answer the visitor.
+   Tested locally (wrangler dev, Playwright, a test video): pause, remembered on reload with the last frame,
+   play from the start, text and parallax still, hidden on the list page, lined up with the icons at phone and
+   desktop widths. Not tested on a phone or Safari.
    Still to do in 1c, in this order:
-   - Pause control (agreed Nov 2026: header icon): shown only while something on the page moves; pauses the
-     background videos and the parallax and drift; remembered across the site (WCAG 2.2.2).
    - Profile: Christopher asked whether the head animation is just a video scrubbed by scrolling. It's a live
      WebGL drawing (face.js), but could be rendered once to a video and scrubbed (play mode 'scroll'), making the
      profile a section like any other; smooth scrubbing needs every frame stored whole (all keyframes), so larger

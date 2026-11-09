@@ -7,7 +7,10 @@
    - Visitors who have asked their device to reduce motion, or (Chrome, Edge, Android) to save data, never get the
      video: they get its last frame, or a slow fade from the first frame to the last (the section's choice, calm).
    - Otherwise it plays, muted (as browsers require for playing by itself), once (stopping on its last frame) or
-     on a loop. */
+     on a loop.
+   - The header's pause button (pause.js) pauses it where it is, and plays it on from there. A page opened while
+     paused shows its last frame, the picture it would come to rest on, until play is pressed; it then plays
+     from the start. A video counts as moving (so the button shows) until it has played once and stopped. */
 (function () {
   function calm() {
     return matchMedia('(prefers-reduced-motion: reduce)').matches || !!(navigator.connection && navigator.connection.saveData);
@@ -25,6 +28,7 @@
     img.src = url;
     return img;
   }
+  let count = 0;
   window.bgVideo = function (v) {
     if (!v || v.tagName !== 'VIDEO') return;
     const s = chosen(v);
@@ -46,9 +50,24 @@
       return;
     }
     v.loop = v.dataset.play === 'loop';
-    v.preload = 'auto';
-    v.autoplay = true;
-    v.play().catch(() => {});      // muted, so allowed; if a browser refuses, the poster stays
+    const p = window.pauser, name = 'video ' + (++count);
+    if (p) {
+      p.moving(name, true);
+      v.addEventListener('ended', () => p.moving(name, false));
+      p.watch((paused) => {
+        if (paused) v.pause();
+        else if (!v.ended) { if (s && s.dataset.first) v.poster = s.dataset.first; v.play().catch(() => {}); }
+      });
+    }
+    if (p && p.paused) {
+      v.removeAttribute('autoplay');
+      v.preload = 'metadata';
+      if (s && s.dataset.last) v.poster = s.dataset.last;
+    } else {
+      v.preload = 'auto';
+      v.autoplay = true;
+      v.play().catch(() => {});    // muted, so allowed; if a browser refuses, the poster stays
+    }
     /* Firefox on iPhone switches the player's controls on by itself as the video starts; switch them straight
        back off whenever that happens */
     const noControls = () => { if (v.controls || v.hasAttribute('controls')) { v.controls = false; v.removeAttribute('controls'); } };

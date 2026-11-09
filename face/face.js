@@ -229,6 +229,10 @@ for (let i = 0; i < N; i++) {
   phi[i] = PHI_ALL * Math.min(1, R_SWIRL / Math.hypot(seaX[i] - axX, seaZ[i] - axZ));   // far points don't sweep wide arcs
 }
 let waveClock = 0;                                           // keeps the waves moving gently while the page rests
+                                                             // (held still while the header's pause button is on, pause.js,
+                                                             // and for visitors who have asked their device to reduce motion)
+const calmSea = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (window.pauser && !calmSea) pauser.moving('sea', true);
 function waveY(x, z, t) {
   t += waveClock;
   return SEA_Y + WAVE_HEIGHT * (Math.sin(x * 2.1 + t * 0.9) * 0.6 + Math.sin(z * 1.3 - t * 1.1) * 0.8 + Math.sin((x + z) * 3.7 + t * 1.7) * 0.25);
@@ -513,7 +517,7 @@ function frame(t) {
 }
 
 const section = document.querySelector('.face-section');
-let tShown = -1;
+let tShown = -1, lastNow = performance.now();
 function scrollTime() {
   const r = section.getBoundingClientRect(), travel = section.offsetHeight - stage.offsetHeight;   // the stage's height doesn't change when Safari's bars show or hide
   return clamp01(clamp01(-r.top / travel) / PLAY) * T_DONE;
@@ -523,8 +527,9 @@ function tick(now) {
   if (tShown >= 0 && (r.bottom < 0 || r.top > innerHeight)) { requestAnimationFrame(tick); return; }   // off screen: nothing to draw
   const target = scrollTime();
   const next = tShown < 0 ? target : tShown + (target - tShown) * 0.12;
-  const seaMoving = next < T_ARRIVE;                                   // the waves keep moving while the sea shows
-  if (seaMoving) waveClock = now / 1000;
+  const seaMoving = next < T_ARRIVE && !calmSea && !(window.pauser && pauser.paused);   // the waves keep moving while the sea shows
+  if (seaMoving) waveClock += Math.min(now - lastNow, 50) / 1000;
+  lastNow = now;
   if (seaMoving || Math.abs(next - tShown) > 1e-4) { tShown = next; frame(tShown); }
   requestAnimationFrame(tick);
 }

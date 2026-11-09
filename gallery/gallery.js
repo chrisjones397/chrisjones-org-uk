@@ -6,8 +6,8 @@
    site works here exactly as it does everywhere else. The section is as tall as the wall needs; the view of
    it stays in place while the page scrolls through it, and the paintings rise past. Paintings at the middle
    depth move exactly with the page (on a phone, with your finger); nearer ones move a little faster and
-   further ones a little slower, which is what makes them seem to hang in space. They drift gently, and the
-   view shifts a little with the mouse. Pointing at a painting names it in the caption; clicking or tapping it
+   further ones a little slower, which is what makes them seem to hang in space. They drift gently (held still
+   while the header's pause button is on, pause.js), and the view shifts a little with the mouse. Pointing at a painting names it in the caption; clicking or tapping it
    brings it forward to the middle of the view, and clicking it again sends it back (its name in the caption
    still leads to its own page). Otherwise the caption
    names the painting nearest the middle of the view.
@@ -371,18 +371,20 @@ function start() {
 
   const glassHeader = document.querySelector('.header');
   const clock = new THREE.Clock();
-  let first = true, lastT = 0;
+  let first = true, lastT = 0, driftT = 0;                          // driftT: the drift's own clock, stopped while paused
+  if (window.pauser && P.drift > 0) pauser.moving('gallery drift', true);
   const ease = (k) => k * k * (3 - 2 * k);
   renderer.setAnimationLoop(() => {
     const r = stage.getBoundingClientRect();
     if (!first && (r.bottom < 0 || r.top > innerHeight)) return;   // out of sight: nothing to draw
     const t = clock.getElapsedTime(), dt = Math.min(t - lastT, 0.05); lastT = t;
+    if (!(window.pauser && pauser.paused)) driftT += dt;
     px += (mx - px) * 0.05;
     const camY = -progress() * perPx;
     camera.position.set(px * 0.35 * scale, camY, 0);
     for (const m of planes) {
       const u = m.userData;
-      let x = u.x, y = u.y + Math.sin(t * 0.45 + u.phase) * 0.06 * scale * P.drift, z = -u.d;   // drifting, never turning
+      let x = u.x, y = u.y + Math.sin(driftT * 0.45 + u.phase) * 0.06 * scale * P.drift, z = -u.d;   // drifting, never turning
       // brought forward: to the middle of the view, near enough to fill most of it
       if (m === focus) u.k = Math.min((u.k || 0) + dt * 2.2, 1);
       else if (u.k) u.k = Math.max(u.k - dt * 2.2, 0);

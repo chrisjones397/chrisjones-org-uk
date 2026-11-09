@@ -2,7 +2,8 @@
    across the line between the two sections, drifts up the same amount; and the profile text rises and
    fades into its place as its section arrives, the heading first and each paragraph a beat later.
    Each follows the scroll a moment late and settles with a slight spring. Nothing moves for
-   visitors who have asked their device to reduce motion. */
+   visitors who have asked their device to reduce motion, nor while the header's pause button is on (pause.js):
+   the text then sits in its place and scrolls with the page. */
 (function () {
   const DELAY = 0.15;       // seconds the text waits before following the scroll (wide screens)
   const DELAY_TALL = 0.08;  // the same on phones, where scrolling is quicker
@@ -57,10 +58,14 @@
     p.el.style.translate = `0 ${p.x.toFixed(2)}px`;
     if (p.fade) p.el.style.opacity = Math.min(Math.max(1 - p.x / (FADE * VH), 0), 1).toFixed(3);
   }
-  for (const p of pieces) { p.x = p.target(); p.v = 0; show(p); }
+  const still = () => window.pauser && pauser.paused;
+  // in its place at once: paused (nothing moves), or just played again (jump to where it should be, no spring)
+  function place() { history.length = 0; for (const p of pieces) { p.x = still() ? 0 : p.target(); p.v = 0; show(p); } }
+  place();
   let last = 0, running = false;
 
   function step(ms) {
+    if (still()) { running = false; return; }
     const now = ms / 1000, dt = Math.min(now - last, 1 / 30); last = now;
     const goal = lateTargets(now);
     let busy = false;
@@ -73,15 +78,18 @@
     if (busy) requestAnimationFrame(step); else running = false;
   }
   function wake() {
+    if (still()) return;
     if (!running) { running = true; last = performance.now() / 1000; requestAnimationFrame(step); }
   }
   addEventListener('scroll', wake, { passive: true });
   addEventListener('resize', wake);
+  if (window.pauser) pauser.watch(() => { place(); wake(); });
   wake();
 })();
 
 /* Parallax: the sections' backgrounds (the opening's, the contact section's: .section-bg) move more slowly than the page as you
-   scroll, as if they were further away. Nothing moves for visitors who have asked their device to reduce motion. */
+   scroll, as if they were further away. Nothing moves for visitors who have asked their device to reduce motion,
+   nor while the header's pause button is on (pause.js). */
 (function () {
   const PARALLAX = 0.4;     // 0: scrolls with the page; 1: stays still in the window
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -106,7 +114,13 @@
     if (r.bottom < -50 || r.top > innerHeight + 50) return;
     hung.forEach((el, k) => { el.style.transform = `translate3d(0, ${(-r.top * DEPTHS[k % DEPTHS.length]).toFixed(1)}px, 0)`; });
   }
-  const all = () => { update(); if (hung.length) updateWall(); };
+  const still = () => window.pauser && pauser.paused;
+  const all = () => { if (still()) return; update(); if (hung.length) updateWall(); };
+  if (window.pauser) pauser.watch((paused) => {
+    if (!paused) { all(); return; }
+    for (const { pics } of items) for (const pic of pics) pic.style.transform = '';
+    for (const el of hung) el.style.transform = '';
+  });
   addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(all); } }, { passive: true });
   addEventListener('resize', all);
   all();
