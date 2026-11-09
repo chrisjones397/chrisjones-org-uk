@@ -422,6 +422,13 @@ Claude, before pushing: `git pull --rebase` too.
 
 ## Cloudflare account settings (set in the dashboard, not the repository)
 
+Secrets (not in wrangler.jsonc, never in git): PURGE_TOKEN (API token "Cache Purge" on zone chrisjones.org.uk only),
+set on chrisjones-org-uk-dev 9 Nov 2026; live still to add. Saving a secret in the dashboard only uploads a new
+version: it must then be deployed (Deployments, or POST .../workers/scripts/<name>/deployments with that version
+at 100%). Later `wrangler deploy` builds keep secrets. The Workers' Git connection (Builds) is one repository
+connection for both; its repo_name was renamed to chrisjones-org-uk by API (PUT /builds/repos/connections, same
+repo_id) on 9 Nov 2026, after the dashboard showed "Error fetching GitHub User or Organization details".
+
 Always Use HTTPS on; minimum TLS 1.2; DNSSEC on; Email Routing (catch-all to Gmail). The domain's address records
 are made and locked by the Workers' custom domains (including a wildcard), so they can't be edited by hand.
 
