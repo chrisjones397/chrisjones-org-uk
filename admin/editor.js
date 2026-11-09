@@ -9,8 +9,7 @@
    from strings of HTML, so nothing typed in can become part of the page. */
 
 import { SITES, tidy, ok, icon } from '/links.js';
-import { upright } from '/frames.js';
-import { paintingAt, photoAt, framesFor, versionAt } from '/paths.js';
+import { paintingAt, photoAt, framesFor, upright } from '/paths.js';
 import { SOURCE_MAX, scaled, resized, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
@@ -45,7 +44,7 @@ const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
 /* Sections with bg can have a photo or video behind them (entries bg-<section>; BACKGROUNDS in editor.js, the
    server, must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
 const BG_WIDTHS = [768, 1024, 1536, 2560, 3840];
-/* A video's first and last frames (frames.js: once per shape): shown while it loads, where it rests, and to
+/* A video's first and last frames (paths.js: once per shape): shown while it loads, where it rests, and to
    visitors who ask for reduced motion. Up to 2560 across and a little more compressed than photos: the video
    itself takes over on larger screens, and a painted frame at 3840 was 3 to 4 megabytes. */
 const FRAME_WIDTHS = [768, 1024, 1536, 2560], FRAME_QUALITY = 0.8;
@@ -123,7 +122,7 @@ const label = (e) => {
 function view() { return (location.hash.slice(1) || 'gallery'); }
 window.addEventListener('hashchange', () => {
   if (view() === 'history') historyData = null;
-  if (view() === 'library') { libraryData = null; moveState = null; }
+  if (view() === 'library') libraryData = null;
   render();
 });
 
@@ -358,7 +357,6 @@ function backgroundBox(key) {
      video (Choose / Replace with a video…), a new Library item. */
   async function addVideo(files, into) {
     if (addingFresh) into = null;
-    if (into && !into.media) throw new Error('Move the files into the new layout first (Library)');
     const id = into ? into.media : (await call('POST', 'library/new', { kind: 'video', grp: 'site', name: `${label} video` })).id;
     const got = await videoItem(id, files, into || { versions: [], frames: {} }, say);
     bgNotes[key] = got.notes;
@@ -371,7 +369,7 @@ function backgroundBox(key) {
      they're made again from the next largest of that shape. */
   async function removeVersion(v) {
     const versions = d.versions.filter((x) => x !== v);
-    const frames = d.media ? await withFrames(d.media, versions, d.frames, () => null, say) : d.frames;
+    const frames = await withFrames(d.media, versions, d.frames, () => null, say);
     delete bgBusy[key];
     await store({ ...d, versions, frames }, 'Version removed in the draft');
   }
@@ -711,14 +709,12 @@ function paintingRow(e, items, i, secs) {
           try {
             let orig = re.dr.original;                   // a replaced photo becomes a Library item (if not already stored)
             if (re.dr.replacement) orig = (await keepOriginal(re.dr.replacement, f.title.value || d.title, null, (t) => re.dr.say(t))).key;
-            if (!/^media\//.test(orig)) throw new Error('Move the files into the new layout first (Library)');
             pic = { ...(await storeImages(orig.slice(6), re.dr.result(), (t) => re.dr.say(t))),
               white_paper: re.dr.white === 'paper', process: re.dr.record(orig) };
           } catch (err) { f.go.disabled = false; re.dr.say(''); return toast(err.message, true); }
         }
         const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
           section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order, ...pic };
-        if (pic.media) { delete data.base; delete data.file; }   // from the old names to a Library item
         open.delete(e.id); reopened.delete(e.id);
         save([{ id: e.id, kind: 'painting', data }], pic.media ? (re && re.dr.replacement ? 'Saved, with the new photo' : 'Saved, with the new picture') : undefined);
       } }, 'Save draft'),
@@ -747,7 +743,7 @@ function pictureFields(e, d, f) {
       saved: d.process || { white },
       start: d.process ? { process: d.process } : { white, guess: false },
       fetch: async () => {
-        const key = d.process ? d.process.original : d.media ? `media/${d.media}` : `originals/${d.file || d.name}`;
+        const key = d.process ? d.process.original : `media/${d.media}`;
         const r = await fetchFor(`/admin/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
         return { original: r.headers.get('x-original') || key, blob: await r.blob() };
@@ -1353,9 +1349,8 @@ function historyView() {
    copy), what uses it, then a line for each part (the original, each set of sizes, each video version, each set of
    frames) with its weight, and a bin for a part nothing uses. The bin on the right deletes the whole item, only
    when no draft or published page uses it. Photos and videos for the site can be added here; paintings come in
-   through the Gallery (their pictures are prepared in the darkroom). While files are still in the old layout,
-   a card at the top moves them (migrate.js). */
-let libraryData = null, moveState = null, libBusy = '';
+   through the Gallery (their pictures are prepared in the darkroom). */
+let libraryData = null, libBusy = '';
 const glyph = (d, size = 18) => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('width', size); svg.setAttribute('height', size);
@@ -1382,17 +1377,12 @@ const STATES = { published: ['live', 'On the site'], draft: ['draft', 'In a draf
 const RANK = { published: 0, draft: 1, history: 2 };
 
 function loadLibrary() {
-  return call('GET', 'library').then(async (d) => {
-    libraryData = d;
-    moveState = d.old.files || d.moving ? await call('GET', 'move') : null;
-    render();
-  }).catch((e) => toast(e.message, true));
+  return call('GET', 'library').then((d) => { libraryData = d; render(); }).catch((e) => toast(e.message, true));
 }
 
 function libraryView() {
   if (!libraryData) { loadLibrary(); return [h('h1', {}, 'Library'), h('p', { class: 'muted' }, 'Loading…')]; }
   const out = [h('h1', {}, 'Library')];
-  if (moveState && (libraryData.old.files || moveState.planned)) out.push(moveCard());
   const pick = h('input', { type: 'file', accept: 'image/*,video/mp4,.mp4,.m4v', multiple: true, hidden: true,
     onchange: () => pick.files.length && addToLibrary([...pick.files]) });
   for (const [grp, title] of [['site', 'Site pictures'], ['painting', 'Paintings']]) {
@@ -1509,49 +1499,6 @@ function deleteForGood(it, pastOnly) {
     historyData = null;
     return out;
   }, (out) => `Deleted for good${out.purged === 'this data centre only' ? ' (cached copies elsewhere may linger)' : ''}`);
-}
-
-/* The one-off move into the new layout (migrate.js): plan, copy a few files a call until done, rewrite the
-   entries and History; then, once the site has been checked, remove the old folders. */
-function moveCard() {
-  const m = moveState, old = libraryData.old;
-  const card = h('div', { class: 'card lib-move' });
-  if (!m.finished) {
-    card.append(h('p', {}, `${old.files} files (${MB(old.bytes)}) are still in the old layout. Moving copies everything the site and History use into the Library's folders, with the opening video's frames trimmed to one set per shape, then points the content at the copies. The old files stay until you remove them.`),
-      m.planned ? h('p', { class: 'hint' }, `Copied ${m.done} of ${m.total}${m.missing ? ` (${m.missing} missing)` : ''}.`) : null,
-      h('div', { class: 'actions' }, h('button', { class: 'main', disabled: !!libBusy, onclick: runMove }, m.planned ? 'Carry on moving' : 'Move into the new layout')));
-  } else {
-    card.append(h('p', {}, `Moved. Check the site (and the preview) still looks right; then the old files, ${old.files} (${MB(old.bytes)}), can go. That includes any leftovers nothing used.`),
-      h('div', { class: 'actions' }, h('button', { class: 'danger', disabled: !!libBusy || !old.files, onclick: clearOld }, 'Remove the old files')));
-  }
-  if (libBusy) card.append(h('p', { class: 'hint' }, libBusy));
-  return card;
-}
-async function runMove() {
-  const say = (t) => { libBusy = t; render(); };
-  try {
-    say('Working out what to move…');
-    moveState = await call('POST', 'move/plan', {});
-    while (moveState.done < moveState.total) {
-      say(`Copying: ${moveState.done} of ${moveState.total} files`);
-      moveState = await call('POST', 'move/copy', { n: 8 });
-    }
-    say('Pointing the content at the copies…');
-    moveState = await call('POST', 'move/finish', {});
-    const all = await call('GET', 'state'); entries = all.entries;
-    toast(`Moved${moveState.missing ? `, but ${moveState.missing} files were missing` : ''}`);
-  } catch (e) { toast(e.message, true); }
-  libBusy = ''; libraryData = null; render();
-}
-async function clearOld() {
-  if (!confirm('Remove every file in the old layout for good? Check the site first. This can\'t be undone.')) return;
-  const say = (t) => { libBusy = t; render(); };
-  try {
-    let gone = 0;
-    for (let r = await call('POST', 'move/clear', {}); r.deleted; r = await call('POST', 'move/clear', {})) { gone += r.deleted; say(`Removed ${gone} files…`); }
-    toast('The old files are gone');
-  } catch (e) { toast(e.message, true); }
-  libBusy = ''; libraryData = null; render();
 }
 
 // ---- start -------------------------------------------------------------------------------------------------

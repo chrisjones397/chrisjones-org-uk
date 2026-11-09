@@ -7,7 +7,6 @@ worker.js
 /site.js
 /editor.js
 /library.js
-/migrate.js
 db/
 templates/
 .dev.vars

@@ -53,5 +53,3 @@ CREATE TABLE IF NOT EXISTS library (
   added_by  TEXT
 );
 CREATE INDEX IF NOT EXISTS library_hash ON library(hash);
--- (Until both sites have moved into this layout, migrate.js also keeps tables moves and migration, and reads
--- the first Library's names from a table media; all three are dropped when the old files are removed.)

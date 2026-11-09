@@ -60,7 +60,6 @@ export async function load(env, mode) {
   return { mode, sections, paintings: ordered, byName, texts, settings, backgrounds, links, changes };
 }
 
-export const stem = (p) => p.file || p.name;
 const file = (p, w, prefix = '') => `${prefix}${paintingAt(p, w)}`;
 
 function imgTag(p, prefix, sizes, indent) {
@@ -76,7 +75,7 @@ function imgTag(p, prefix, sizes, indent) {
    A video's versions are <source>s, the browser taking the first that matches: portrait versions first, for
    screens held upright, then by width, each needing a screen that shows more pixels across (window width x pixel
    density) than the next smaller version has. Each source carries its shape's first and last frames (data-first,
-   data-last; frames.js), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
+   data-last; paths.js), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
    the frames of the version chosen, starts it, and gives visitors who ask for reduced motion or less data the
    still (calm: last frame, or a fade from first to last) instead. */
 const srcsetOf = (urlAt, widths) => widths.map((w) => `${urlAt(w)} ${w}w`).join(', ');

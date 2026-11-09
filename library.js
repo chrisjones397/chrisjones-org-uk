@@ -12,8 +12,7 @@
    parts they name. "Delete for good": the whole item only while no draft or published version uses it (if
    History does, it must be asked for, and those versions leave History); a part only while nothing at all does.
 
-   Files from before this layout (images/, originals/, videos/) are counted here until they're moved
-   (migrate.js) and then removed. */
+*/
 
 import { CODE } from './paths.js';
 
@@ -22,7 +21,6 @@ class Bad extends Error { constructor(m, s = 400) { super(m); this.status = s; }
 export { Bad };
 
 const SECTIONS = { hero: 'Opening', contact: 'Contact', footer: 'Footer' };
-const OLD = ['images/', 'originals/', 'videos/'];
 
 /* Every key under a prefix, with its size and upload time. */
 export async function listAll(env, prefix) {
@@ -131,20 +129,12 @@ function thumbOf(code, parts, data) {
   return null;
 }
 
-async function oldFiles(env) {
-  let files = 0, bytes = 0;
-  for (const p of OLD) for (const o of await listAll(env, p)) { files++; bytes += o.size; }
-  return { files, bytes };
-}
-
 // ---- the API ----------------------------------------------------------------------------------------------
 
 /* GET /admin/api/library */
 export async function library(env) {
   if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on', 503);
-  const [items, old, moving] = await Promise.all([survey(env), oldFiles(env),
-    env.DB.prepare('SELECT count(*) n, sum(done) d FROM moves').first().catch(() => null)]);
-  return { items, old, moving: moving && moving.n ? { total: moving.n, done: moving.d || 0 } : null };
+  return { items: await survey(env) };
 }
 
 /* POST /admin/api/library/new { kind, grp, name, hash?, data? }: a new, empty item; answers its code. */
@@ -263,11 +253,11 @@ export async function remove(env, url, id, part, history) {
 /* Cloudflare keeps visitors' copies of published files for up to a year (worker.js), in every data centre. This
    Worker's cache.delete reaches only the one it runs in, so the proper purge is Cloudflare's API (purge by URL),
    with secret PURGE_TOKEN (Zone > Cache Purge) and var ZONE_ID. Keys are R2 keys (media/<code>/... is served at
-   /media/<code>/..., images/... at /media/images/...). */
+   /media/<code>/...). */
 export async function purge(env, url, keys) {
   const hosts = url.hostname.startsWith('admin-dev') ? ['dev.chrisjones.org.uk']
     : url.hostname.startsWith('admin') ? ['chrisjones.org.uk', 'www.chrisjones.org.uk'] : [url.host];
-  const paths = keys.filter((k) => !/(^originals\/|\/original\.)/.test(k)).map((k) => `/media/${k.replace(/^media\//, '')}`);
+  const paths = keys.filter((k) => !/\/original\./.test(k)).map((k) => `/${k}`);
   const urls = hosts.flatMap((h) => paths.map((p) => `https://${h}${p}`));
   await Promise.all(urls.map((u) => caches.default.delete(u).catch(() => false)));
   if (!urls.length) return 'nothing to purge';

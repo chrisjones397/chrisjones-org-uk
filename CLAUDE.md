@@ -122,21 +122,13 @@ Claude, before pushing: `git pull --rebase` too.
   profile, footer; entries t-hero etc., a blank line between paragraphs; the server lets those five be created
   by the first paragraph typed, PARAGRAPHS in editor.js); a block's own <p>s are replaced only when the database
   has text for it. The opening title and its paragraphs drift together (.hero-words). A painting's address is the home page with that painting brought forward (its
-  title, og:image from `preview`, canonical link, `<base href="/">`). Painting images are
-  `<base><file>-<width>.<ext>` (file = name, or name-v2... if R2 already had that name; stored only when it
-  differs): base always media/images/ (editor.js refuses any other), ext jpg (uploaded) or webp (moved out of git).
-  [Superseded by the Library's layout, 1d slice 3 below: media/<code>/...; what follows is the old layout, kept
-  until both sites have moved.] R2 layout, two folders only: images/ (served by worker.js at /media/images/..., to visitors only if a published
-  painting uses that file, checked in D1 then cached for a year; to the signed-in editor always) and
-  originals/ (as uploaded, never served). Originals are named by content: originals/<hash>-<name>.<ext>, hash
-  the first 12 hex digits of the file's SHA-256, worked out in the browser (keepOriginal in admin/editor.js;
-  hashing in the Worker would overrun the free plan's CPU), name the painting it was first uploaded for. GET
-  /admin/api/stored?hash= finds one already stored (the add form says so, and which paintings use it, as soon as
-  the photo is chosen), so choosing the same photo again skips the upload and the
-  new painting points at it (one photo, several paintings, each with its own corners); the upload itself also
-  answers with the existing key rather than storing a second copy. Older originals (originals/<file>.<ext>,
-  before Nov 2026, and those moved from git) keep their names and still work. Image uploads never overwrite
-  (409); GET /admin/api/free picks the images' file name. Everything but chrisjones.org.uk and www gets noindex.
+  title, og:image from `preview`, canonical link, `<base href="/">`). Files: one folder in R2 per Library item,
+  media/<code>/ (paths.js has the layout; see 1d slice 3), served by worker.js libraryFile() at /media/<code>/...,
+  to visitors only if a published entry's media is that code (checked in D1, then cached for a year), never an
+  original; to the signed-in editor always. A photo already stored (same content: the first 12 hex digits of its
+  SHA-256, worked out in the browser, as hashing in the Worker would overrun the free plan's CPU) is found by GET
+  /admin/api/stored?hash= (the add form says so, and which paintings use it), so it's never uploaded twice and
+  one photo can serve several paintings, each with its own set of sizes. Uploads never overwrite (409). Everything but chrisjones.org.uk and www gets noindex.
 - **The editor**: any host starting "admin" is the editor: admin.chrisjones.org.uk (live Worker, Access app
   "Site editor") and admin-dev.chrisjones.org.uk (dev Worker, "Site editor (dev)"), each guarded as a whole by
   Cloudflare Access (Christopher's email); editor.js also checks the Access token (vars ACCESS_TEAM and
@@ -164,7 +156,7 @@ Claude, before pushing: `git pull --rebase` too.
   length, so the true width/height; a typical phone lens, 26/36 of the longer side, when only one pair of edges
   converges; tested within 1% on simulated photos, where averaging the side lengths was up to 17% out).
   Changes must carry the editor's Origin. Uploads: the browser makes JPEG sizes (Safari can't encode WebP)
-  and the original goes to originals/ in R2, untouched. Before that, admin/darkroom.js prepares the picture
+  and the original goes into its Library item untouched (original.<ext>). Before that, admin/darkroom.js prepares the picture
   from a working copy (at most 4096 pixels along its longer side): white balance from spots (no drop-down since
   step 2c: no spots = none; process white 'picks'): one evens the colour, two follow the light along their line,
   three to five fit a flat slope, six or more (CURVE) a gentle curve (quadratic, ridge 0.005 x spots on the
@@ -207,10 +199,9 @@ Claude, before pushing: `git pull --rebase` too.
   painting's top left, top right, bottom right, bottom left; checked by editor.js processOf()), so the
   images can be made again from the original. These steps are one piece in admin/editor.js, darkroom(), used by
   the add form and by a painting's Edit form: opening one of its sections reads the original back from R2 (GET
-  /admin/api/original?key=, editor only; originals/<file> with no extension finds it, for paintings moved from
-  git, which have no process record and reopen as the whole photo, with "paper all round" if white_paper) and
-  starts from the saved choices. Saving makes new sizes only if the choices changed, under a fresh file name
-  from GET free (name-v2...), so the old images stay for History; the process keeps pointing at the original.
+  /admin/api/original?key=media/<code>, editor only; paintings moved from git have no process record and reopen
+  as the whole photo, with "paper all round" if white_paper) and starts from the saved choices. Saving makes new
+  sizes only if the choices changed, as the item's next set (r2, r3...), so the old images stay for History.
   Editor requests give up after 30 seconds (uploads 2 minutes) with
   a message, so a dropped signal can't leave a button disabled. In the browser, not a Worker: the free plan allows Workers 10 ms
   of CPU per request. Every painting on both sites is now in
@@ -425,16 +416,12 @@ Claude, before pushing: `git pull --rebase` too.
      names (stand-in files): the move (272 files into 38 items, 110 entries and History versions rewritten),
      all 162 addresses on the home, list and gallery data load, originals refused, + photo and video set,
      picking, adding a painting through the darkroom, part and item deletes, removing the old files.
-   - The move (migrate.js, temporary): a card at the top of the Library while old files exist: "Move into the
-     new layout" (POST move/plan: an item per original and per background video, from everything entries
-     and History use, names carried over from the first Library's table `media`; move/copy a batch a call;
-     move/finish rewrites entries and revisions, data and previous, through normalise), then "Remove the old
-     files" (move/clear, a batch a call; then drops tables moves, migration, media). Leftover files nothing
-     used aren't moved; they go with the old folders. Each site runs its own (dev and live hold different files):
-     dev from admin-dev once this is on dev; live from admin.chrisjones.org.uk after dev goes live (the live
-     site renders its old-style entries meanwhile: paths.js reads both). After both: remove migrate.js and its
-     routes, the old-name readers (paths.js's else-branches, frames.js holder, worker.js media()'s images/ and
-     videos/ branch, editor.js's free, stored, originals/ and videos/ uploads and old-format checks), and this note.
+   - The move: done on both sites by Christopher (9 Nov 2026; dev 37 items, live 21), with a one-off Library
+     button (migrate.js: plan, copy in batches, rewrite entries and History, remove the old folders and the
+     move's tables). No file, entry or History version uses the old names (images/, originals/, videos/) any
+     more, so the move and every old-name reader (frames.js, old branches in paths.js, worker.js, editor.js:
+     free, stored, originals/ and videos/ uploads, old entry formats) were removed: in the history before
+     "Library: old layout retired". Earlier notes above (1c backgrounds, slices 1 and 2) describe the old names.
    - Next slices, in order: one saving rule and Hide; backgrounds as lists of Library items (with the
      upright-screen settings below); paintings usable as backgrounds by reference.
    - Framing on upright screens (Christopher thinking aloud, 9 Nov 2026, not decided): the forest works on wide

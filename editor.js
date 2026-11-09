@@ -7,7 +7,8 @@
 
    Content lives in the database (db/schema.sql): each entry has a draft and a published version. Editing
    changes drafts only; publishing copies chosen drafts to published, as one release, keeping a revision of
-   each so any earlier version can be brought back as a draft. Uploaded images go to R2 (binding MEDIA).
+   each so any earlier version can be brought back as a draft. Uploaded files go to R2 (binding MEDIA), one folder
+   per Library item (library.js, paths.js).
 
    Every change is a POST (or PUT) with the editor's own address as its Origin, so another site can't make a
    signed-in browser change anything. Text is stored as typed and escaped wherever it's shown (site.js). */
@@ -15,9 +16,7 @@
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
 import { library, rename, remove, newItem, setData, nextPart, storedPhoto, uploadAllowed } from './library.js';
-import * as move from './migrate.js';
-import { upright } from './frames.js';
-import { CODE } from './paths.js';
+import { CODE, upright } from './paths.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -65,12 +64,10 @@ export async function api(request, env, url, who) {
     if (request.method === 'GET') {
       if (path === 'state') return json(await state(env, who));
       if (path === 'history') return json(await history(env));
-      if (path === 'free') return json(await free(env, url.searchParams.get('name') || ''));
       if (path === 'original') return await original(env, url.searchParams.get('key') || '');
       if (path === 'stored') return json({ key: await storedPhoto(env, url.searchParams.get('hash') || '') });
       if (path === 'library') return json(await library(env));
       if (path === 'library/next') return json(await nextPart(env, url.searchParams.get('id') || '', url.searchParams.get('part') || ''));
-      if (path === 'move') return json(await move.status(env));
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -87,10 +84,6 @@ export async function api(request, env, url, who) {
     if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.part ? String(body.part) : null, body.history === true));
     if (path === 'library/new') return json(await newItem(env, who, body));
     if (path === 'library/data') return json(await setData(env, String(body.id || ''), body.data));
-    if (path === 'move/plan') return json(await move.plan(env, who));
-    if (path === 'move/copy') return json(await move.copy(env, Number(body.n) || 8));
-    if (path === 'move/finish') return json(await move.finish(env, normalise));
-    if (path === 'move/clear') return json(await move.clear(env));
     throw new Bad('Not found', 404);
   } catch (e) {
     return json({ error: e.message || String(e) }, e.status || 500);
@@ -141,7 +134,7 @@ const BACKGROUNDS = ['hero', 'contact', 'footer'];
    the images can be made again from the original. */
 function processOf(p) {
   if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
-  if (typeof p.original !== 'string' || !/^(?:originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}|media\/[0-9a-f]{8})$/.test(p.original)) throw new Bad('Bad original');
+  if (typeof p.original !== 'string' || !/^media\/[0-9a-f]{8}$/.test(p.original)) throw new Bad('Bad original');
   if (!['none', 'paper', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
   const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
   const points = (a, lo, hi, what) => {
@@ -175,19 +168,11 @@ export function normalise(id, kind, d) {
     if (!title) throw new Bad('A painting needs a title');
     if (!/^[a-z0-9-]{1,100}$/.test(d.name || '')) throw new Bad('Bad painting name');
     if (!['webp', 'jpg'].includes(d.ext)) throw new Bad('Bad image type');
-    // its images: a Library item's set of sizes (media, rendition: paths.js), or, from before the move, files in images/
-    const lib = d.media != null;
-    const file = d.file || d.name;
-    if (lib) {
-      if (!CODE.test(d.media) || !/^r\d{1,3}$/.test(d.rendition || '')) throw new Bad('Bad Library item');
-    } else {
-      if (d.base !== 'media/images/') throw new Bad('Bad image location');
-      if (!/^[a-z0-9-]{1,110}$/.test(file) || !(file === d.name || file.startsWith(`${d.name}-v`))) throw new Bad('Bad file name');
-    }
+    // its images: a set of sizes of a Library item (media, rendition: paths.js)
+    if (!CODE.test(d.media || '') || !/^r\d{1,3}$/.test(d.rendition || '')) throw new Bad('Bad Library item');
     if (!Array.isArray(d.widths) || !d.widths.length || d.widths.length > 12) throw new Bad('Bad image sizes');
     const pv = d.preview || {};
-    const pvAt = lib ? `media/${d.media}/${d.rendition}/preview.jpg` : null;
-    if (typeof pv.src !== 'string' || (lib ? pv.src !== pvAt : (!pv.src.startsWith(d.base) || !/^[a-z0-9/.-]+$/.test(pv.src)))) throw new Bad('Bad preview image');
+    if (pv.src !== `media/${d.media}/${d.rendition}/preview.jpg`) throw new Bad('Bad preview image');
     if (!/^s-[a-z0-9-]{1,80}$/.test(d.section || '')) throw new Bad('Bad section');
     // Medium, size in centimetres (height, width) and year, kept separately; the details line visitors see is
     // made from them ("Oil on canvas, 60 x 90 cm, 2020"). Older entries with only a details line keep it.
@@ -210,9 +195,8 @@ export function normalise(id, kind, d) {
         ...(cm && shown !== !estimated ? { size_shown: shown } : {}) } : {}), details, section: d.section,
       order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
-      ...(lib ? { media: d.media, rendition: d.rendition } : { base: d.base }),
+      media: d.media, rendition: d.rendition,
       ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
-      ...(!lib && file !== d.name ? { file } : {}),     // only when it differs, so imported entries keep their exact text
       ...(d.process != null ? { process: processOf(d.process) } : {}),
     };
   }
@@ -227,52 +211,10 @@ export function normalise(id, kind, d) {
   throw new Bad('Unknown kind of content');
 }
 
-/* A section's background: a photo or a video. Both have file (bg-<section>, or bg-<section>-v2..., a free name
-   from GET free, so earlier files stay for History), focus (the point kept in view when the screen's shape crops
-   it, fractions across and down) and shade (how much it's darkened so the words over it read, 0 to 0.6).
-   A photo: sizes images/<file>-<width>.jpg made in the browser, w and h, and original (the photo as uploaded).
-   A video: one or more versions, each a file uploaded as made (the browser can't re-encode video), stored as
-   videos/<name>.mp4; first and last frames as images/<name>-first-<width>.jpg and -last-, once per shape (the
-   largest version held level, and the largest upright, list them as stills; see frames.js); play 'once'
-   (it stops on its last frame) or 'loop'; calm 'last' or 'fade': what visitors who ask for reduced motion or less
-   data see instead (the last frame, or a slow fade from the first to the last). */
+/* A section's background (entries bg-<section>): a Library item, see backgroundItem. */
 function backgroundOf(id, d) {
   if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background');
-  if (d.media != null) return backgroundItem(d);
-  if (!/^[a-z0-9-]{1,100}$/.test(d.file || '') || !(d.file === id || d.file.startsWith(`${id}-v`))) throw new Bad('Bad file name');
-  const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
-  if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
-  num(d.shade, 'Shade');
-  if (d.shade < 0 || d.shade > 0.6) throw new Bad('The shade must be between 0 and 60%');
-  const widths = (a) => {
-    if (!Array.isArray(a) || !a.length || a.length > 12) throw new Bad('Bad image sizes');
-    return a.map((w) => int(w, 'A size'));
-  };
-  const common = { file: d.file, focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100 };
-  if ((d.type ?? 'photo') === 'photo') {      // (the first few, Nov 2026, had no type: all photos)
-    if (typeof d.original !== 'string' || !/^originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}$/.test(d.original)) throw new Bad('Bad original');
-    return { type: 'photo', ...common, w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: widths(d.widths), original: d.original };
-  }
-  if (d.type !== 'video') throw new Bad('A background is a photo or a video');
-  if (!Array.isArray(d.versions) || !d.versions.length || d.versions.length > 6) throw new Bad('A video needs one to six versions');
-  const names = new Set();
-  const bytesOf = (b) => { if (!Number.isInteger(b) || b <= 0 || b > 2e8) throw new Bad('Bad file size'); return b; };
-  const versions = d.versions.map((v) => {
-    if (!/^[a-z0-9-]{1,120}$/.test(v.name || '') || !v.name.startsWith(`${d.file}-`) || names.has(v.name)) throw new Bad('Bad version name');
-    names.add(v.name);
-    num(v.seconds, 'Length');
-    if (!(v.seconds > 0 && v.seconds < 600)) throw new Bad('A video must be under ten minutes');
-    return { name: v.name, w: int(v.w, 'Width'), h: int(v.h, 'Height'), bytes: bytesOf(v.bytes),
-      seconds: Math.round(v.seconds * 100) / 100, ...(v.stills != null ? { stills: widths(v.stills) } : {}) };
-  });
-  // frames are kept once per shape (frames.js): each shape a video has needs one version with them
-  for (const up of [false, true]) {
-    const group = versions.filter((v) => upright(v) === up);
-    if (group.length && !group.some((v) => v.stills)) throw new Bad(`The video's ${up ? 'upright' : 'level'} versions have no first and last frames`);
-  }
-  if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
-  if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
-  return { type: 'video', ...common, versions, play: d.play, calm: d.calm };
+  return backgroundItem(d);
 }
 
 /* A background from a Library item (paths.js): what it uses of the item, so visitors see a change only once it's
@@ -451,90 +393,24 @@ async function restore(env, who, revision) {
   return { entries: await rows(env) };
 }
 
-/* The file name to use for a new painting's (or background's, or video version's) files: its name, or name-v2, -v3... if R2 already has files by
-   that name (a painting deleted earlier keeps its files, so History can bring it back). Originals are named by
-   their content now (see stored), but those moved from git are still originals/<name>.<ext>, so both count. */
-async function free(env, name) {
-  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
-  if (!/^[a-z0-9-]{1,100}$/.test(name)) throw new Bad('Bad name');
-  for (let v = 1; v < 100; v++) {
-    const file = v === 1 ? name : `${name}-v${v}`;
-    const found = await env.MEDIA.list({ prefix: `originals/${file}.`, limit: 1 });
-    // its sizes are images/<file>-<width>.<ext> (-preview.jpg for paintings; a video version's frames are
-    // <name>-first-<width>.jpg and -last-); digits and "first"/"last" sort before other names that start the same
-    // way ("apple" and "apple-tree"), and a video is videos/<name>.mp4
-    const own = new RegExp(`^images/${file}-(?:(?:first|last)-)?(?:\\d{2,4}|preview)\\.(?:jpg|webp)$`);
-    const sized = (await env.MEDIA.list({ prefix: `images/${file}-`, limit: 100 })).objects.some((o) => own.test(o.key))
-      || !!(await env.MEDIA.head(`videos/${file}.mp4`));
-    if (!found.objects.length && !sized) return { file };
-  }
-  throw new Bad('Too many versions of that name');
-}
-
-/* GET /admin/api/original?key=originals/<file>.<ext>, or originals/<file> to find it whatever its extension
-   (paintings moved from git have no record of it): a painting's original photo, for reopening its picture in
-   the editor. Only ever to the signed-in editor (this API); visitors never get originals. The key found is
-   sent back as x-original. */
+/* GET /admin/api/original?key=media/<code>: a Library item's original photo (original.<ext>), for reopening a
+   painting's picture in the editor. Only ever to the signed-in editor (this API); visitors never get originals.
+   x-original says what the darkroom records as the original (media/<code>). */
 async function original(env, key) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
   const item = /^media\/([0-9a-f]{8})$/.exec(key);
-  const ref = key;                                   // what the darkroom records as the original
-  if (item) {                                        // a Library item's original.<ext>
-    const found = (await env.MEDIA.list({ prefix: `media/${item[1]}/original.`, limit: 1 })).objects[0];
-    if (!found) throw new Bad('The original photo isn\'t in storage', 404);
-    key = found.key;
-  }
-  const m = item ? [0, 0, 1] : /^originals\/([a-z0-9-]{1,110})(\.[a-z0-9]{1,5})?$/.exec(key);
-  if (!m) throw new Bad('Bad file name');
-  if (!m[2]) {
-    const found = (await env.MEDIA.list({ prefix: `originals/${m[1]}.`, limit: 5 })).objects
-      .find((o) => /^originals\/[a-z0-9-]+\.[a-z0-9]{1,5}$/.test(o.key) && o.key.slice(0, o.key.lastIndexOf('.')) === `originals/${m[1]}`);
-    if (!found) throw new Bad('The original photo isn\'t in storage', 404);
-    key = found.key;
-  }
-  const obj = await env.MEDIA.get(key);
+  if (!item) throw new Bad('Bad file name');
+  const found = (await env.MEDIA.list({ prefix: `media/${item[1]}/original.`, limit: 1 })).objects[0];
+  const obj = found && await env.MEDIA.get(found.key);
   if (!obj) throw new Bad('The original photo isn\'t in storage', 404);
   return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType || 'application/octet-stream',
-    'x-original': item ? ref : key, 'cache-control': 'private, no-store' } });
+    'x-original': key, 'cache-control': 'private, no-store' } });
 }
 
-/* Originals are named by their content: originals/<hash>-<name>.<ext>, hash the first 12 hex digits of the
-   file's SHA-256 (worked out in the browser; the free plan's 10 ms of CPU won't stretch to hashing a large photo
-   here), name the painting it was first uploaded for (readable only: the hash alone identifies it). So a photo
-   already stored is found and shared, never uploaded twice: one photo can serve several paintings, each with
-   its own corners. Originals from before (originals/<file>.<ext>, and those moved from git) keep their names.
-   GET /admin/api/stored?hash=<12 hex>: the original with that content, or null. */
-async function stored(env, hash) {
-  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
-  if (!/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
-  const found = (await env.MEDIA.list({ prefix: `originals/${hash}-`, limit: 1 })).objects[0];
-  return found ? found.key : null;
-}
-
-/* PUT /admin/api/upload?key=images/<file>-<width>.jpg or images/<file>-preview.jpg (made in the browser), or
-   originals/<hash>-<name>.<ext> (the photo as sent). Never overwrites. An original whose content is already
-   stored (under any name) isn't stored again: the existing key is sent back instead. */
+/* PUT /admin/api/upload?key=media/<code>/<file> */
 async function upload(request, env, url) {
-  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on yet', 503);
-  const key = url.searchParams.get('key') || '';
-  if (key.startsWith('media/')) return uploadItem(request, env, key);
-  if (key.startsWith('videos/')) return uploadVideo(request, env, key);
-  const m = /^(?:images\/[a-z0-9-]{1,110}-(?:\d{2,4}|preview)\.jpg|originals\/([0-9a-f]{12})-[a-z0-9-]{1,96}\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff))$/.exec(key);
-  if (!m) throw new Bad('Bad file name');
-  const original = key.startsWith('originals/');
-  const type = request.headers.get('content-type') || '';
-  if (!/^image\/[a-z0-9.+-]+$/.test(type)) throw new Bad('Only images can be uploaded');
-  const size = Number(request.headers.get('content-length') || 0);
-  if (!size || size > 80 * 1024 * 1024) throw new Bad('Images must be under 80 megabytes');
-  if (original) {
-    const have = await stored(env, m[1]);
-    if (have) return { key: have, existed: true };
-  } else if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
-  const body = await request.arrayBuffer();
-  const b = new Uint8Array(body.slice(0, 4));
-  if (!original && !(b[0] === 0xff && b[1] === 0xd8)) throw new Bad('That file is not a JPEG');
-  await env.MEDIA.put(key, body, { httpMetadata: { contentType: original ? type : 'image/jpeg' } });
-  return { key };
+  if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on yet', 503);
+  return uploadItem(request, env, url.searchParams.get('key') || '');
 }
 
 /* PUT /admin/api/upload?key=media/<code>/<file>: a file of a Library item (library.js uploadAllowed has the
@@ -550,21 +426,6 @@ async function uploadItem(request, env, key) {
   const { readable, writable } = new FixedLengthStream(size);
   const piping = request.body.pipeTo(writable);
   await Promise.all([env.MEDIA.put(key, readable, { httpMetadata: { contentType: video ? 'video/mp4' : type } }), piping]);
-  return { key };
-}
-
-/* PUT /admin/api/upload?key=videos/<name>.mp4: a background video's version, stored as sent (checked in the
-   browser first: admin/editor.js videoFacts). Passed straight through to R2 as it arrives, not held in memory:
-   a Worker has 128 megabytes, and a request may be up to 100 on the free plan. Never overwrites. */
-async function uploadVideo(request, env, key) {
-  if (!/^videos\/[a-z0-9-]{1,120}\.mp4$/.test(key)) throw new Bad('Bad file name');
-  if ((request.headers.get('content-type') || '') !== 'video/mp4') throw new Bad('Only MP4 videos can be uploaded');
-  const size = Number(request.headers.get('content-length') || 0);
-  if (!size || size > 95 * 1024 * 1024) throw new Bad('A video must be under 95 megabytes');
-  if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
-  const { readable, writable } = new FixedLengthStream(size);
-  const piping = request.body.pipeTo(writable);
-  await Promise.all([env.MEDIA.put(key, readable, { httpMetadata: { contentType: 'video/mp4' } }), piping]);
   return { key };
 }
 

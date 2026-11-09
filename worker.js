@@ -18,8 +18,9 @@
      anything else        templates/404.html, with status 404
    Every page gets the site's header (templates/header.html) as it's served. Old addresses: /gallery/ (once the
    floating gallery's own page) goes to the home page's gallery section.
-   Files kept in R2 (binding MEDIA): /media/<code>/<file> (the Library's layout, paths.js), and until both sites
-   have moved into it /media/images/<file> and /media/videos/<file>: only what's published, except to the editor. */
+   Files kept in R2 (binding MEDIA): /media/<code>/<file> (the Library's layout, paths.js): only what's published,
+   except to the editor. Videos are sent in pieces when asked (range requests: 206 Partial Content), which is how
+   browsers play video, and Safari insists on it. */
 
 import { load, rewriter, homeRewriter, listRewriter, homePreview, esc } from './site.js';
 import { signedIn, api } from './editor.js';
@@ -34,7 +35,11 @@ export default {
     const editor = url.hostname.startsWith('admin') || (env.DEV_USER && url.hostname === 'localhost' && url.port === '8788');
     const path = url.pathname;
 
-    if (path.startsWith('/media/')) return media(request, env, ctx, url, editor);
+    if (path.startsWith('/media/')) {
+      // The Library's layout (paths.js): /media/<code>/<file> is R2's media/<code>/<file>
+      const item = /^\/media\/([0-9a-f]{8})\/((?:(?:r|wide-|tall-)\d{1,3}\/)?([a-z0-9-]+)\.([a-z0-9]{1,5}))$/.exec(decodeURIComponent(path));
+      return item ? libraryFile(request, env, ctx, url, editor, item) : notFound(env, url);
+    }
 
     if (editor) {
       const who = await signedIn(request, env, url);
@@ -176,46 +181,6 @@ function bar(c) {
   <a href="/admin/" style="color:#fff;text-decoration:none">Edit</a>
   ${n ? '<a href="/admin/#review" style="color:#fff;text-decoration:none">Review</a>' : ''}
 </div>`;
-}
-
-/* A file from R2: /media/images/<file>-<width>.<ext> or -preview.jpg, or /media/videos/<name>.mp4. Visitors get
-   it only if it belongs to something published: a painting, a background photo, or a background video's version
-   (its frames are images/<name>-first-<width>.jpg and -last-). On the editor's address (signed in) drafts' files
-   are shown too. Originals are never served. A file's address never changes once written, so browsers and
-   Cloudflare may keep it for a year. Videos are sent in pieces when asked (range requests: 206 Partial Content),
-   which is how browsers play video, and Safari insists on it. */
-async function media(request, env, ctx, url, editor) {
-  const key = decodeURIComponent(url.pathname.slice('/media/'.length));
-  // The Library's layout (paths.js): /media/<code>/<file> is R2's media/<code>/<file>
-  const item = /^([0-9a-f]{8})\/((?:(?:r|wide-|tall-)\d{1,3}\/)?([a-z0-9-]+)\.(jpg|webp|mp4|[a-z0-9]{1,5}))$/.exec(key);
-  if (item) return libraryFile(request, env, ctx, url, editor, item);
-  const img = /^images\/([a-z0-9-]+)-(?:\d{2,4}|preview)\.(jpg|webp)$/.exec(key);
-  const vid = /^videos\/([a-z0-9-]+)\.mp4$/.exec(key);
-  if (!env.MEDIA || !(img || vid)) return notFound(env, url);
-  const cache = caches.default;
-  if (!editor) {
-    if (img) { const hit = await cache.match(request); if (hit) return hit; }
-    const name = img ? img[1] : vid[1];
-    const version = name.replace(/-(?:first|last)$/, '');
-    const ok = await env.DB.prepare(`SELECT 1 FROM entries WHERE kind IN ('painting', 'background')
-        AND published IS NOT NULL AND (
-          (? AND coalesce(json_extract(published, '$.base'), 'media/images/') = 'media/images/'
-            AND json_extract(published, '$.type') IS NOT 'video'
-            AND coalesce(json_extract(published, '$.file'), json_extract(published, '$.name')) = ?)
-          OR EXISTS (SELECT 1 FROM json_each(published, '$.versions') v WHERE json_extract(v.value, '$.name') = ?))
-        LIMIT 1`).bind(img ? 1 : 0, name, vid ? name : version).first();
-    if (!ok) return notFound(env, url);
-  } else if (!(await signedIn(request, env, url))) {
-    return signInAgain(request, url);
-  }
-  const caching = editor ? 'private, max-age=3600' : 'public, max-age=31536000, immutable';
-  if (vid) return video(request, env, key, caching);
-  const obj = await env.MEDIA.get(key);
-  if (!obj) return notFound(env, url);
-  const res = new Response(obj.body, { headers: {
-    'content-type': img[2] === 'webp' ? 'image/webp' : 'image/jpeg', etag: obj.httpEtag, 'cache-control': caching } });
-  if (!editor) ctx.waitUntil(cache.put(request, res.clone()));
-  return res;
 }
 
 /* A file in a Library item's folder. Visitors get it only if something published uses the item (its code is the
