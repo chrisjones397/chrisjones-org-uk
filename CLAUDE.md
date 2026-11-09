@@ -76,8 +76,10 @@ Claude, before pushing: `git pull --rebase` too.
   ETag (a hash of the file), so browsers always revalidate and get a changed file at once (304 if unchanged;
   checked with wrangler dev). Fingerprinted names with year-long caching would save those revalidations but
   need a build step, which isn't worth it here. Pages from worker.js are no-cache (no-store for the editor).
-  The gallery section's markup and the stand-in backgrounds (the opening video, the contact photo: until their
-  entries are published on both sites, see 1c) are hand-written in index.html. Never reintroduce copies of shared markup or styles.
+  The gallery section's markup is hand-written in index.html. No pictures or videos are in git (med/ went in
+  1c): backgrounds, paintings and their frames are all in R2. The home page's og:image is added by worker.js:
+  the painting shown, or else site.js homePreview() (the opening's photo, or its video's last frame, at the
+  size nearest above 1200 pixels). Never reintroduce copies of shared markup or styles.
 - **Home page order**: opening forest video (.hero) / gallery section (#paintings, .invite) / contact
   (#contact) / profile with the head animation (.face-section, three windows tall) / footer (copyright only).
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
@@ -234,8 +236,8 @@ Claude, before pushing: `git pull --rebase` too.
      it can't run the Worker, database or R2. The proper local preview is `npx wrangler dev` (or just dev);
      his clone stays for git. Mind his preference not to run code locally he hasn't vetted.
    - gallery/index.html forwarding page: done in 1b (worker.js redirect).
-   - med/jpg/paint-palette.jpg and the other masters in med/jpg/: sources kept from the build-script days;
-     the contact one goes with step 1c.
+   - med/ (the opening video, contact photo and their masters in med/jpg/): removed in 1c (9 Nov 2026), once
+     both sites had them in R2. The masters are in the history before "Backgrounds: built-in copies removed".
    Keep looking for more as work goes on (e.g. anything in index.html, worker.js or the README written for
    the static or Apache setup) and add them here.
 1b. Retire build_site.py: done (Nov 2026), see "Nothing is built" above. The build command was removed from
@@ -271,24 +273,20 @@ Claude, before pushing: `git pull --rebase` too.
      video versions by name via json_each); video() answers single byte ranges with 206 (parsed from the Range
      header: R2's own range echo came back without offset/length locally), 416 when out of the file.
    - The editor (Content tab): backgroundBox() per section: the current background (photo, or the video's last
-     frame; a built-in stand-in from git shown as such), focus (tap), phone/wide crop previews, shade, Plays,
+     frame), focus (tap), phone/wide crop previews, shade, Plays,
      For reduced motion, the versions (size, length, megabytes, megabits a second, which screens get it; remove),
      Choose a photo / Replace with a video / Add a version / Remove / Undo. videoFacts() checks a video before
      upload: refuses only non-MP4 or unplayable; notes the codec (from the moov box: H.264 fine, HEVC/AV1/VP9
      warned), index after the picture data (no fast start), a sound track, over 30 seconds, megabits a second
      over 1.25 x (1 + 3.5 per 4K screen of pixels), over 20 megabytes, under 1920 pixels.
-   - moveInBox(): one-off "Move them into storage" at the top of Content, while a section with a stand-in
-     (STAND_INS: hero's three videos, contact's master paint-palette.jpg with focus 0.85, 1 and shade 0.12) has no
-     entry: fetches them from /med/ and stores them as drafts, to publish under Review. dev's bg-contact was
-     already Christopher's own upload (1200 pixels wide), converted to the typed form by hand.
+   - The built-in opening video and contact photo were moved into R2 on both sites by a one-off "Move them into
+     storage" editor button (moveInBox, STAND_INS), published by Christopher, then the button, the stand-ins in
+     index.html and med/ were removed (9 Nov 2026; in the history before "Backgrounds: built-in copies removed").
    - Tested locally with wrangler dev and Playwright: upload, versions, move-in, publish, ranges (206, suffix,
      416), unpublished 404, upright phone gets the upright version, desktop the landscape, plays once and stops,
      reduced motion gets the still, footer full width. Not tested on a real phone or Safari.
-   Where things stand (9 Nov 2026, 02:25): all of the above is on dev only; live has none of it yet.
-   dev's database: bg-hero moved into storage by Christopher with the button (three versions, 3840, 2560 and
-   1536 wide), a draft not yet published; bg-contact was only his test upload of the editor (a blue picture),
-   so Claude deleted that entry from dev's database: dev shows the built-in contact photo again, and "Move them
-   into storage" now offers it; bg-footer none.
+   Where things stand (9 Nov 2026): all of the above is live. Both databases have bg-hero (the forest video,
+   three versions) and bg-contact (the palette photo) published; bg-footer none.
    Contact links: done (9 Nov 2026, on dev). links.js (published, imported by site.js, editor.js and
    admin/editor.js: one copy) lists Email, Instagram, Bluesky, Facebook, Threads, X, LinkedIn, TikTok, YouTube,
    Mastodon (user@instance), each with its username pattern, address, shown form and icon (SVG lines, drawn by
@@ -304,12 +302,6 @@ Claude, before pushing: `git pull --rebase` too.
    Tested locally (wrangler dev, Playwright): checks refuse bad usernames and ticked-but-empty, all ten render
    in the contact section and header, email copies. Not tested on a phone.
    Still to do in 1c, in this order:
-   - Christopher: on admin-dev press "Move them into storage" again (for the contact photo), publish both under
-     Review, check the opening and contact on dev on his phone and Mac
-     (Safari too), then say when to put dev live; then on the live editor press "Move them into storage"
-     (moves both the opening video and the contact photo there) and publish.
-   - Then Claude: remove the stand-ins (index.html <video>/<img> data-stand-in and their scripts, STAND_INS and
-     moveInBox in admin/editor.js) and med/*.mp4, med/contact-*, med/jpg/ from git, and put that live too.
    - Pause control (agreed Nov 2026: header icon): shown only while something on the page moves; pauses the
      background videos and the parallax and drift; remembered across the site (WCAG 2.2.2).
    - Profile: Christopher asked whether the head animation is just a video scrubbed by scrolling. It's a live

@@ -46,7 +46,9 @@ once each:
 - **Scripts** keep plain addresses (`motion.js`, no `?v=...`): Cloudflare sends every file with an ETag and
   "check before using" (`Cache-Control: public, max-age=0, must-revalidate`), so a browser always asks whether a
   file has changed, and gets the new one if it has (or a quick "not modified" if not).
-- The contact picture's sizes are plain files in `med/` (made once from `med/jpg/paint-palette.jpg`).
+- **Pictures and videos** (paintings, and the backgrounds of the opening, contact and footer) are all in
+  Cloudflare's storage (R2), chosen in the editor; none are in git. The link-preview picture for the home page
+  is the opening's background (its last frame, if a video).
 
 A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
 forward in the gallery. On Cloudflare, `worker.js` answers the home page, those addresses and the list page,

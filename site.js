@@ -129,6 +129,18 @@ function headerLinks(links) {
     : `\n          <a href="${esc(s.url(u))}" target="_blank" rel="noopener" class="nav-link nav-icon" aria-label="${esc(`${s.name}: ${u}`)}" title="${esc(s.name)}">${icon(s.key, 20)}</a>`)).join('') + '\n        ';
 }
 
+/* The picture for link previews (og:image) of the home page: the opening's background, the photo or the video's
+   last frame (the picture a visitor's eye ends on), at the size nearest above 1200 pixels across, the width link
+   previews are drawn at. Null when the opening has none. */
+export function homePreview(c) {
+  const b = c.backgrounds && c.backgrounds.hero;
+  if (!b) return null;
+  if (b.type !== 'video') { const w = near(b.widths, 1200); return { src: at(b.file, w), w, h: Math.round(b.h * w / b.w) }; }
+  const v = b.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || b.versions[0];
+  const w = near(v.stills, 1200);
+  return { src: at(`${v.name}-last`, w), w, h: Math.round(v.h * w / v.w) };
+}
+
 export function galleryData(c) {
   const items = c.paintings.map((p) => {
     const m = SIZE_RE.exec(p.details || '');
@@ -187,10 +199,6 @@ export function rewriter(c) {
       const paras = t.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
       el.append(paras.map((x) => `\n          <p>${esc(x)}</p>`).join('') + '\n        ', { html: true });
     } });
-  // A section's own stand-in (index.html: a picture, or a video and its script) goes only when the database has one.
-  for (const key of Object.keys(c.backgrounds || {})) {
-    if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-background="${key}"] > [data-stand-in]`, { element(el) { el.remove(); } });
-  }
   // A block's own paragraphs are replaced only when the database has text for it; otherwise the page's stay.
   for (const key of Object.keys(c.texts)) {
     if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-paragraphs="${key}"] p`, { element(el) { el.remove(); } });

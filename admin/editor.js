@@ -166,7 +166,7 @@ function galleryView() {
 /* The page's words, a box for each section: its heading, then a box for each paragraph. */
 const extraParas = {};               // section -> empty paragraph boxes added but not yet typed in
 function contentView() {
-  const out = [h('h1', {}, 'Content'), h('p', { class: 'hint' }, HINT), ...[moveInBox()].filter(Boolean)];
+  const out = [h('h1', {}, 'Content'), h('p', { class: 'hint' }, HINT)];
   for (const sec of PAGE) {
     const card = h('div', { class: 'card' }, h('h2', { class: 'card-title' }, sec.name));
     const field = (id, name) => {
@@ -265,10 +265,6 @@ function linksBox() {
    data see instead (its last frame, or a slow fade from the first frame to the last) are the section's choices. */
 const bgBusy = {};                    // section -> what it's doing, while a photo or video is being stored
 const bgNotes = {};                   // section -> the checks' findings for the video version last added
-const STAND_INS = {                   // what the site shows from git until a section's background is in the database
-  hero: { type: 'video', still: '/med/jpg/painted-forest-v8-end.jpg', files: ['/med/painted-forest-v8-3840.mp4', '/med/painted-forest-v8-2560.mp4', '/med/painted-forest-v8-1536.mp4'] },
-  contact: { type: 'photo', still: '/med/contact-1536.webp', file: '/med/jpg/paint-palette.jpg', focus: [0.85, 1], shade: 0.12 },
-};
 const MB = (b) => `${(b / 1048576).toFixed(1)} megabytes`;
 const lastStill = (d) => {
   const v = d.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || d.versions[0];
@@ -320,9 +316,6 @@ function backgroundBox(key) {
     } else {
       box.append(h('p', { class: 'hint' }, `Photo, ${d.w} × ${d.h} pixels.`));
     }
-  } else if (STAND_INS[key] && !e) {
-    box.append(h('img', { class: 'bg-standin', src: STAND_INS[key].still, alt: '' }),
-      h('p', { class: 'hint' }, `The site's built-in ${STAND_INS[key].type}${STAND_INS[key].type === 'video' ? ' (its last frame)' : ''}, from its files: move it into storage (above) to manage it here.`));
   } else {
     box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background.' : 'None: the section shows the page\'s grey.'));
   }
@@ -469,63 +462,6 @@ async function videoFacts(file, say) {
   } finally {
     URL.revokeObjectURL(v.src);
   }
-}
-
-/* One-off: the site's built-in backgrounds (the opening video and the contact photo, still files in git) moved
-   into storage and the database as drafts, as if uploaded here, so they can be managed like any other; publish
-   them under Review. Once done on both sites, the files leave git and this goes. */
-function moveInBox() {
-  if (!media) return null;
-  const left = Object.keys(STAND_INS).filter((k) => !byId(`bg-${k}`));
-  if (!left.length) return null;
-  const note = h('p', { class: 'hint' }, '');
-  const go = h('button', { class: 'main', onclick: async () => {
-    go.disabled = true;
-    try {
-      for (const k of left) {
-        const si = STAND_INS[k], id = `bg-${k}`;
-        const say = (t) => { note.textContent = `${k === 'hero' ? 'Opening video' : 'Contact photo'}: ${t}`; };
-        const fetched = async (url) => {
-          say(`fetching ${url.split('/').pop()}…`);
-          const r = await fetchFor(url, {}, 300000);
-          if (!r.ok) throw new Error(`Couldn't fetch ${url} (${r.status})`);
-          const b = await r.blob();
-          return new File([b], url.split('/').pop(), { type: b.type || (url.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg') });
-        };
-        if (si.type === 'photo') {
-          const file = await fetched(si.file);
-          const src = await photoOf(file, say);
-          const { key: original } = await keepOriginal(file, id, null, say);
-          const { file: stem } = await call('GET', `free?name=${id}`);
-          const widths = await storeSizes(stem, src, say);
-          const top = widths[widths.length - 1];
-          await call('POST', 'save', { items: [{ id, kind: 'background', data: { type: 'photo', file: stem, focus: si.focus, shade: si.shade,
-            w: top, h: Math.round(src.height * top / src.width), widths, original } }] });
-        } else {
-          const { file: stem } = await call('GET', `free?name=${id}`);
-          const versions = [];
-          for (const url of si.files) {
-            const file = await fetched(url);
-            const facts = await videoFacts(file, say);
-            const { file: name } = await call('GET', `free?name=${stem}-${facts.w}x${facts.h}`);
-            say(`uploading ${MB(file.size)}…`);
-            await put(`videos/${name}.mp4`, file, 'video/mp4', 15 * 60000);
-            const stills = await storeSizes(`${name}-first`, facts.first, say, 'first frame');
-            await storeSizes(`${name}-last`, facts.last, say, 'last frame');
-            versions.push({ name, w: facts.w, h: facts.h, bytes: file.size, seconds: facts.seconds, stills });
-          }
-          await call('POST', 'save', { items: [{ id, kind: 'background', data: { type: 'video', file: stem, focus: [0.5, 0.5], shade: 0,
-            versions, play: 'once', calm: 'last' } }] });
-        }
-      }
-      toast('Moved into storage as drafts: publish them under Review');
-    } catch (err) { toast(err.message, true); }
-    render();
-  } }, 'Move them into storage');
-  return h('div', { class: 'card' }, h('p', {}, 'The site\'s built-in backgrounds (',
-    left.map((k) => (k === 'hero' ? 'the opening video' : 'the contact photo')).join(' and '),
-    ') are still files in its code. Move them into storage once, so they can be managed here like any other.'),
-  h('div', { class: 'actions' }, go), note);
 }
 
 /* The painting's medium, size in centimetres and year, as separate fields (the server makes the details line

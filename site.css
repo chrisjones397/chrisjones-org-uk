@@ -227,9 +227,6 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   align-items: center;
   justify-content: center;
 }
-.contact-pic {               /* the stand-in from git (index.html), until the editor has a picture for it */
-  object-position: 85% 100%;   /* the palette and brush are low and to the right: keep them in view */
-}
 
 /* A section's background, a photo or a video (data-background; chosen in the editor, put in by site.js),
    filling the section and trimmed at the sides or top and bottom to fit, keeping its focus (its own style) in

@@ -1,5 +1,4 @@
-/* Background videos (a section's video, put in by site.js bgTag; the stand-in from git in index.html until the
-   database has one). Loaded in the page's <head>, so it's ready when each video arrives: a one-line script right
+/* Background videos (a section's video, put in by site.js bgTag). Loaded in the page's <head>, so it's ready when each video arrives: a one-line script right
    after each <video> calls bgVideo(video) at once, before the browser starts fetching it in earnest.
 
    - The browser takes the first <source> whose media query matches (portrait versions for screens held upright,
@@ -33,7 +32,7 @@
     if (calm()) {
       v.removeAttribute('autoplay');
       v.preload = 'none';
-      const last = s ? still(v, s.dataset.last, s.dataset.lastSet) : still(v, v.dataset.end);
+      const last = s && still(v, s.dataset.last, s.dataset.lastSet);
       if (s && v.dataset.calm === 'fade') {
         const first = still(v, s.dataset.first, s.dataset.firstSet);
         last.classList.add('bg-fade');
@@ -41,7 +40,7 @@
         first.after(last);
         const show = () => requestAnimationFrame(() => last.classList.add('in'));
         Promise.all([first.decode(), last.decode()]).then(() => setTimeout(show, 600), show);
-      } else {
+      } else if (last) {
         v.replaceWith(last);
       }
       return;

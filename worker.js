@@ -20,7 +20,7 @@
    floating gallery's own page) goes to the home page's gallery section.
    Images kept in R2 (binding MEDIA): /media/images/<file>, published paintings' only, except to the editor. */
 
-import { load, rewriter, homeRewriter, listRewriter, esc } from './site.js';
+import { load, rewriter, homeRewriter, listRewriter, homePreview, esc } from './site.js';
 import { signedIn, api } from './editor.js';
 import notFoundPage from './templates/404.html';   // .html files are imported as text (Wrangler's default rules)
 
@@ -133,6 +133,14 @@ async function home(env, url, mode, editor, name) {
   if (name && !p) return notFound(env, url, mode);
   const page = await env.ASSETS.fetch(new URL('/', url));
   const rw = finish(homeRewriter(c), c, url, editor);
+  // The picture in link previews: the painting shown, or else the opening's background (site.js homePreview).
+  const pic = p ? { src: `/${p.preview.src}`, w: p.preview.w, h: p.preview.h } : homePreview(c);
+  if (pic) {
+    rw.on('head', { element(el) {
+      el.append(`<meta property="og:image" content="${esc(url.origin + pic.src)}">`
+        + `<meta property="og:image:width" content="${pic.w}"><meta property="og:image:height" content="${pic.h}">`, { html: true });
+    } });
+  }
   if (p) {
     const here = `${url.origin}/paintings/${p.name}/`;
     const set = (value) => ({ element(el) { el.setAttribute('content', value); } });
@@ -144,10 +152,7 @@ async function home(env, url, mode, editor, name) {
       .on('meta[name="description"]', set(`${p.title}, by Christopher Jones.`))
       .on('meta[property="og:title"]', set(p.title))
       .on('meta[property="og:description"]', set(p.details ? `${p.details}, by Christopher Jones` : 'By Christopher Jones'))
-      .on('meta[property="og:url"]', set(here))
-      .on('meta[property="og:image"]', set(`${url.origin}/${p.preview.src}`))
-      .on('meta[property="og:image:width"]', set(String(p.preview.w)))
-      .on('meta[property="og:image:height"]', set(String(p.preview.h)));
+      .on('meta[property="og:url"]', set(here));
   }
   return respond(rw.transform(page), editor);
 }

@@ -15,9 +15,7 @@
   <meta property="og:title" content="Christopher Jones - Fine Art">
   <meta property="og:description" content="Paintings in oil, watercolour, and pastel">
   <meta property="og:url" content="https://chrisjones.org.uk/">
-  <meta property="og:image" content="https://chrisjones.org.uk/med/jpg/painted-forest-v8-end-1200.jpg">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="900">
+  <!-- og:image (the picture in link previews): worker.js adds it, the opening's background or the painting shown -->
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -68,20 +66,8 @@
   
   <main id="main-content">
 
-    <!-- Opening: its background (data-background) is chosen in the editor (entry bg-hero); the video from git
-         stands in until there is one in the database, and is then left out (site.js) -->
+    <!-- Opening: its background (data-background) is chosen in the editor (entry bg-hero), put in by site.js -->
     <section class="hero" data-background="hero">
-      <video class="section-bg" data-stand-in poster="med/jpg/forest-1536.jpg" data-end="med/jpg/painted-forest-v8-end.jpg"
-             autoplay muted playsinline preload="auto" data-play="once" data-calm="last"
-             disablepictureinpicture disableremoteplayback x-webkit-airplay="deny"
-             role="img" aria-label="Woodland with bracken, being painted over in oils">
-        <!-- the browser takes the first that matches: the size the screen can actually show (window width x pixel density) -->
-        <source src="med/painted-forest-v8-3840.mp4" type="video/mp4"
-                media="(min-width: 2561px), (min-width: 1281px) and (min-resolution: 2dppx), (min-width: 854px) and (min-resolution: 3dppx)">
-        <source src="med/painted-forest-v8-2560.mp4" type="video/mp4"
-                media="(min-width: 1537px), (min-width: 769px) and (min-resolution: 2dppx), (min-width: 513px) and (min-resolution: 3dppx)">
-        <source src="med/painted-forest-v8-1536.mp4" type="video/mp4">
-      </video><script data-stand-in>bgVideo(document.currentScript.previousElementSibling)</script>
       <div class="hero-words" data-paragraphs="hero">
         <h1 class="hero-title" data-text="hero-title">Fine art in oil, watercolour, and pastel</h1>
       </div>
@@ -146,10 +132,9 @@
     </section>
 
     <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
-    <!-- data-background: the section can have a photo or video behind it, chosen in the editor (entry bg-contact);
-         this one, from git, stands in until there is one in the database, and is then left out (site.js) -->
-    <section id="contact" class="contact parallax" data-background="contact" style="--shade: 0.12">
-      <img class="section-bg contact-pic" data-stand-in src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w, med/contact-2560.webp 2560w, med/contact-3840.webp 3840w" sizes="100vw" width="3840" height="2560" alt="" loading="lazy">
+    <!-- data-background: the section can have a photo or video behind it, chosen in the editor (entry bg-contact),
+         put in by site.js -->
+    <section id="contact" class="contact parallax" data-background="contact">
       <div class="contact-words">
         <h2 class="contact-title" data-text="contact-title">Get in touch</h2>
         <div class="words-paras" data-paragraphs="contact"></div>
