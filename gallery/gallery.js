@@ -185,7 +185,7 @@ function start() {
     const w = p.widths.find((x) => x >= wanted) || p.widths[p.widths.length - 1];
     if (w <= (m.userData.loaded || 0)) return;
     m.userData.loaded = w;
-    const src = `${BASE}${p.base}${p.file || p.name}-${w}.${p.ext}`;   // base and ext: see site.js
+    const src = `${BASE}${p.at[0]}${w}${p.at[1]}`;   // the address before and after the width: paths.js
     loader.load(src, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();

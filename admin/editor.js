@@ -9,7 +9,8 @@
    from strings of HTML, so nothing typed in can become part of the page. */
 
 import { SITES, tidy, ok, icon } from '/links.js';
-import { holder, holders, upright } from '/frames.js';
+import { upright } from '/frames.js';
+import { paintingAt, photoAt, framesFor, versionAt } from '/paths.js';
 import { SOURCE_MAX, scaled, resized, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
 
 const $ = (s) => document.querySelector(s);
@@ -106,7 +107,7 @@ const sections = () => entries.filter((e) => e.kind === 'section' && e.draft != 
   .map((e) => ({ id: e.id, ...draftOf(e) })).sort((a, b) => a.order - b.order);
 const paintingsIn = (sid) => entries.filter((e) => e.kind === 'painting' && current(e).section === sid)
   .sort((a, b) => current(a).order - current(b).order);
-const thumb = (d) => `/${d.base}${d.file || d.name}-${d.widths[0]}.${d.ext}`;
+const thumb = (d) => `/${paintingAt(d, d.widths[0])}`;
 const label = (e) => {
   const d = current(e) || {};
   if (e.kind === 'painting') return d.title;
@@ -122,7 +123,7 @@ const label = (e) => {
 function view() { return (location.hash.slice(1) || 'gallery'); }
 window.addEventListener('hashchange', () => {
   if (view() === 'history') historyData = null;
-  if (view() === 'library') libraryData = null;
+  if (view() === 'library') { libraryData = null; moveState = null; }
   render();
 });
 
@@ -267,18 +268,19 @@ function linksBox() {
 /* A section's background: a photo or a video, shown as it is now (the photo, or the video's last frame), with
    its focus (the point kept in view when the screen's shape crops it: tap the picture to move it), how a phone held
    upright and a wide screen would crop it, and the shade (how much it's darkened, so the words over it read).
-   A photo: its original goes to R2's originals/ as a painting's does (keepOriginal) and its sizes are made here,
-   from the photo as it is (it's a photograph, not a painting: no white balance or corners).
-   A video: one or more versions (e.g. a large one for big screens, a small one for phones, one upright for phones
-   held upright), each uploaded as made, after the checks in videoFacts(); its first and last frames are taken here
-   and stored as pictures. How it plays (once, or on a loop) and what visitors who ask for reduced motion or less
+   Either is a Library item (photoItem, videoItem below; also chosen from the Library with "From the Library…"):
+   A photo: kept as uploaded, with one set of sizes made from it as it is (a photograph, not a painting: no white
+   balance or corners).
+   A video: one or more versions (sizes for wide screens, one made for phones held upright), each uploaded as
+   made, after the checks in videoFacts(); first and last frames are taken here, once per shape, and stored as
+   pictures. How it plays (once, or on a loop) and what visitors who ask for reduced motion or less
    data see instead (its last frame, or a slow fade from the first frame to the last) are the section's choices. */
 const bgBusy = {};                    // section -> what it's doing, while a photo or video is being stored
 const bgNotes = {};                   // section -> the checks' findings for the video version last added
 const MB = (b) => `${(b / 1048576).toFixed(1)} megabytes`;
 const lastStill = (d) => {
-  const v = holder(d.versions, d.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || d.versions[0]);
-  return `/media/images/${v.name}-last-${v.stills.find((w) => w >= 1024) || v.stills[v.stills.length - 1]}.jpg`;
+  const f = framesFor(d, d.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || d.versions[0]);
+  return f.last(f.widths.find((w) => w >= 1024) || f.widths[f.widths.length - 1]);
 };
 
 function backgroundBox(key) {
@@ -295,8 +297,7 @@ function backgroundBox(key) {
     onchange: () => pickVideo.files.length && run(() => addVideo([...pickVideo.files], d && d.type === 'video' ? d : null)) });
 
   if (d) {
-    const src = d.type === 'video' ? lastStill(d)
-      : `/media/images/${d.file}-${d.widths.find((w) => w >= 1024) || d.widths[d.widths.length - 1]}.jpg`;
+    const src = d.type === 'video' ? lastStill(d) : photoAt(d, d.widths.find((w) => w >= 1024) || d.widths[d.widths.length - 1]);
     const pos = `${(d.focus[0] * 100).toFixed(1)}% ${(d.focus[1] * 100).toFixed(1)}%`;
     const frames = ['phone', 'wide'].map((k) => h('div', { class: `bg-frame ${k}`, title: k === 'phone' ? 'On a phone held upright' : 'On a wide screen',
       style: `background-image: url("${src}"); background-position: ${pos}; filter: brightness(${1 - d.shade})` }));
@@ -330,7 +331,10 @@ function backgroundBox(key) {
   } else {
     box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background.' : 'None: the section shows the page\'s grey.'));
   }
+  if (bgPicking.has(key)) box.append(libraryPicker(d, (data) => { bgPicking.delete(key); store(data, 'Saved as a draft'); }));
   box.append(pickPhoto, pickVideo, status, h('div', { class: 'actions' },
+    h('button', { disabled: busy, title: 'Choose a photo or video already in the Library',
+      onclick: () => { bgPicking.has(key) ? bgPicking.delete(key) : bgPicking.add(key); render(); } }, bgPicking.has(key) ? 'Close the Library' : 'From the Library…'),
     h('button', { disabled: busy, onclick: () => pickPhoto.click() }, d && d.type === 'photo' ? 'Replace with a photo…' : 'Choose a photo…'),
     h('button', { disabled: busy, title: 'One video, or several versions of it at once (sizes for wide screens, one made for phones held upright)',
       onclick: () => { addingFresh = true; pickVideo.click(); } }, d ? 'Replace with a video…' : 'Choose a video…'),
@@ -344,72 +348,128 @@ function backgroundBox(key) {
     try { await job(); } catch (err) { toast(err.message, true); }
     delete bgBusy[key]; render();
   }
-  async function addPhoto(file, extra = {}) {
-    const src = await photoOf(file, say);
-    const { key: original } = await keepOriginal(file, id, null, say);
-    const { file: stem } = await call('GET', `free?name=${id}`);
-    const widths = await storeSizes(stem, src, say);
-    const top = widths[widths.length - 1];
+  const label = `${(PAGE.find((p) => p.bg === key) || { name: key }).name} background`;
+  async function addPhoto(file) {
+    const pic = await photoItem(file, label, 'site', say);
     delete bgBusy[key];
-    await store({ type: 'photo', file: stem, focus: extra.focus || [0.5, 0.5], shade: extra.shade ?? (d ? d.shade : 0.12),
-      w: top, h: Math.round(src.height * top / src.width), widths, original }, 'Photo saved as a draft: tap it to choose the part to keep in view');
+    await store({ type: 'photo', ...pic, focus: [0.5, 0.5], shade: d ? d.shade : 0.12 }, 'Photo saved as a draft: tap it to choose the part to keep in view');
   }
-  /* One or more versions of a video: each checked, then uploaded as it is. into: the section's video to add them
-     to (Add a version…), or null for a new video (Choose / Replace with a video…). Frames are made once per shape
-     (frames.js), from its largest version, so a smaller version added later needs none. */
+  /* One or more versions of a video. into: the section's video to add them to (Add a version…), or null for a new
+     video (Choose / Replace with a video…), a new Library item. */
   async function addVideo(files, into) {
     if (addingFresh) into = null;
-    const added = [], notes = [], grabbed = new Map();
-    const best = {};    // shape -> the largest so far, whose frames are kept (a 4K frame is about 45 megabytes in memory)
-    for (const v of into ? into.versions : []) if (!best[upright(v)] || v.w > best[upright(v)].w) best[upright(v)] = v;
-    for (const [i, file] of files.entries()) {
-      const tell = files.length > 1 ? (t) => say(`Video ${i + 1} of ${files.length}: ${t}`) : say;
-      const facts = await videoFacts(file, tell);
-      const shape = upright(facts), was = best[shape];
-      if (!was || facts.w > was.w) { if (was && 'first' in was) { was.first = was.last = null; } best[shape] = facts; }
-      else { facts.first = facts.last = null; }
-      added.push({ file, facts });
-      notes.push(...facts.notes.map((n) => (files.length > 1 ? `${facts.w} × ${facts.h}: ${n}` : n)));
-    }
-    const stem = into ? into.file : (await call('GET', `free?name=${id}`)).file;
-    const versions = [...(into ? into.versions : [])];
-    for (const [i, { file, facts }] of added.entries()) {
-      const { file: name } = await call('GET', `free?name=${stem}-${facts.w}x${facts.h}`);
-      say(`Uploading ${files.length > 1 ? `video ${i + 1} of ${files.length}` : 'the video'} (${MB(file.size)})…`);
-      await put(`videos/${name}.mp4`, file, 'video/mp4', 15 * 60000);
-      const v = { name, w: facts.w, h: facts.h, bytes: file.size, seconds: facts.seconds };
-      grabbed.set(v, facts);
-      versions.push(v);
-    }
-    const done = await withFrames(versions, (v) => grabbed.get(v));
-    bgNotes[key] = notes;
+    if (into && !into.media) throw new Error('Move the files into the new layout first (Library)');
+    const id = into ? into.media : (await call('POST', 'library/new', { kind: 'video', grp: 'site', name: `${label} video` })).id;
+    const got = await videoItem(id, files, into || { versions: [], frames: {} }, say);
+    bgNotes[key] = got.notes;
     delete bgBusy[key];
-    const base = into || { type: 'video', file: stem, focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0, play: 'once', calm: 'last' };
-    await store({ ...base, type: 'video', versions: done }, files.length > 1 ? `${files.length} versions saved as a draft` : 'Video saved as a draft');
+    const base = into || { focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0, play: 'once', calm: 'last' };
+    await store({ ...base, type: 'video', media: id, versions: got.versions, frames: got.frames },
+      files.length > 1 ? `${files.length} versions saved as a draft` : 'Video saved as a draft');
   }
-  /* Take a version out; if its shape's frames went with it, the next largest of that shape gets them. */
+  /* Take a version out of the background (the file stays in the Library); if its shape's frames came from it,
+     they're made again from the next largest of that shape. */
   async function removeVersion(v) {
-    const versions = await withFrames(d.versions.filter((x) => x !== v));
+    const versions = d.versions.filter((x) => x !== v);
+    const frames = d.media ? await withFrames(d.media, versions, d.frames, () => null, say) : d.frames;
     delete bgBusy[key];
-    await store({ ...d, versions }, 'Version removed in the draft');
-  }
-  /* The versions with frames for each shape held by its largest version alone (frames.js holders): made from what
-     was just taken from a new file (grabbed), or else read from the stored video. */
-  async function withFrames(versions, grabbed = () => null) {
-    const out = versions.map((v) => ({ ...v }));
-    for (const { top, rest } of holders(out)) {
-      if (!top.stills) {
-        const got = grabbed(versions[out.indexOf(top)]);
-        const src = got && got.first ? got : await framesOf(`/media/videos/${top.name}.mp4`, say);
-        top.stills = await storeSizes(`${top.name}-first`, src.first, say, 'first frame', FRAME_WIDTHS, FRAME_QUALITY);
-        await storeSizes(`${top.name}-last`, src.last, say, 'last frame', FRAME_WIDTHS, FRAME_QUALITY);
-      }
-      for (const v of rest) delete v.stills;
-    }
-    return out;
+    await store({ ...d, versions, frames }, 'Version removed in the draft');
   }
 }
 let addingFresh = false;
+const bgPicking = new Set();          // sections whose Library picker is open
+
+/* The Library's site pictures that can be a background: photos with a set of sizes, and videos with frames for
+   every shape they have. Tapping one makes it the background (in the draft), keeping the focus and shade. */
+function libraryPicker(d, use) {
+  if (!libraryData) { loadLibrary(); return h('p', { class: 'hint' }, 'Loading the Library…'); }
+  const fit = libraryData.items.filter((it) => it.grp === 'site' && it.catalogued).map((it) => [it, backgroundFrom(it, d)]).filter(([, b]) => b);
+  if (!fit.length) return h('p', { class: 'hint' }, 'The Library has no site pictures yet: add some there, or choose a photo or video here.');
+  return h('div', { class: 'lib-picker' }, ...fit.map(([it, b]) => h('button', { class: 'lib-pick', title: it.name, onclick: () => use(b) },
+    it.thumb ? h('img', { src: `/media/${it.thumb}`, alt: '' }) : glyph(GLYPHS.photo, 28),
+    it.kind === 'video' ? h('span', { class: 'lib-video' }, glyph(GLYPHS.play, 12)) : null,
+    h('span', { class: 'lib-pick-name' }, it.name))));
+}
+function backgroundFrom(it, d) {
+  const keep = { focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0.12 };
+  const have = new Set(it.parts.map((p) => p.part)), data = it.data || {};
+  if (it.kind === 'photo') {
+    const r = Object.entries(data.renditions || {}).filter(([k, x]) => have.has(k) && x.ext === 'jpg').sort((a, b) => Number(b[0].slice(1)) - Number(a[0].slice(1)))[0];
+    return r && { type: 'photo', media: it.id, rendition: r[0], ...keep, w: r[1].w, h: r[1].h, widths: r[1].widths };
+  }
+  const versions = (data.versions || []).filter((v) => have.has(v.file));
+  const frames = {};
+  for (const [shape, up] of [['wide', false], ['tall', true]]) {
+    if (!versions.some((v) => upright(v) === up)) continue;
+    const f = (data.frames || {})[shape];
+    if (!f || !have.has(f.dir)) return null;
+    frames[shape] = f;
+  }
+  if (!versions.length) return null;
+  return { type: 'video', media: it.id, ...keep, versions, frames,
+    play: d && d.type === 'video' ? d.play : 'once', calm: d && d.type === 'video' ? d.calm : 'last' };
+}
+
+/* A photo as a new Library item (or the item it already is, if the same photo is stored): kept as uploaded, with a
+   set of sizes made from it (BG_WIDTHS). Returns what a background uses of it. */
+async function photoItem(file, name, grp, say) {
+  const src = await photoOf(file, say);
+  const { id } = await keepOriginal(file, name, null, say, grp);
+  const { part } = await call('GET', `library/next?id=${id}&part=r`);
+  const widths = await storeSizes(`media/${id}/${part}/`, src, say);
+  const top = widths[widths.length - 1], hh = Math.round(src.height * top / src.width);
+  await call('POST', 'library/data', { id, data: { renditions: { [part]: { widths, w: top, h: hh, ext: 'jpg' } } } });
+  return { media: id, rendition: part, w: top, h: hh, widths };
+}
+
+/* Video files into a Library item (id): each checked (videoFacts), uploaded as made (<w>x<h>.mp4), and frames
+   kept for each shape from its largest version (withFrames). have: what the background had ({ versions, frames }).
+   Returns { versions, frames, notes }; the item's record gets the new versions and frames too. */
+async function videoItem(id, files, have, say) {
+  const added = [], notes = [], grabbed = new Map();
+  const best = {};    // shape -> the largest so far, whose frames are kept (a 4K frame is about 45 megabytes in memory)
+  for (const v of have.versions) if (!best[upright(v)] || v.w > best[upright(v)].w) best[upright(v)] = v;
+  for (const [i, file] of files.entries()) {
+    const tell = files.length > 1 ? (t) => say(`Video ${i + 1} of ${files.length}: ${t}`) : say;
+    const facts = await videoFacts(file, tell);
+    const shape = upright(facts), was = best[shape];
+    if (!was || facts.w > was.w) { if (was && 'first' in was) { was.first = was.last = null; } best[shape] = facts; }
+    else { facts.first = facts.last = null; }
+    added.push({ file, facts });
+    notes.push(...facts.notes.map((n) => (files.length > 1 ? `${facts.w} × ${facts.h}: ${n}` : n)));
+  }
+  const versions = [...have.versions], fresh = [];
+  for (const [i, { file, facts }] of added.entries()) {
+    const { part } = await call('GET', `library/next?id=${id}&part=${facts.w}x${facts.h}`);
+    say(`Uploading ${files.length > 1 ? `video ${i + 1} of ${files.length}` : 'the video'} (${MB(file.size)})…`);
+    await put(`media/${id}/${part}.mp4`, file, 'video/mp4', 15 * 60000);
+    const v = { file: part, w: facts.w, h: facts.h, bytes: file.size, seconds: Math.round(facts.seconds * 100) / 100 };
+    grabbed.set(v, facts);
+    versions.push(v); fresh.push(v);
+  }
+  const frames = await withFrames(id, versions, have.frames || {}, (v) => grabbed.get(v), say);
+  await call('POST', 'library/data', { id, data: { versions: fresh, frames } });
+  return { versions, frames, notes };
+}
+
+/* Frames for each shape the versions have ({ wide, tall }: dir, widths, from), taken from its largest version
+   (paths.js): kept if they already came from it, otherwise made from what was just read from a new file
+   (grabbed), or read back from the stored video, under the next free folder (wide-2...). */
+async function withFrames(id, versions, frames, grabbed, say) {
+  const out = {};
+  for (const [shape, up] of [['wide', false], ['tall', true]]) {
+    const top = versions.filter((v) => upright(v) === up).sort((a, b) => b.w - a.w)[0];
+    if (!top) continue;
+    if (frames[shape] && frames[shape].from === top.file) { out[shape] = frames[shape]; continue; }
+    const got = grabbed(top);
+    const src = got && got.first ? got : await framesOf(`/media/${id}/${top.file}.mp4`, say);
+    const { part: dir } = await call('GET', `library/next?id=${id}&part=${shape}`);
+    const widths = await storeSizes(`media/${id}/${dir}/first-`, src.first, say, 'first frame', FRAME_WIDTHS, FRAME_QUALITY);
+    await storeSizes(`media/${id}/${dir}/last-`, src.last, say, 'last frame', FRAME_WIDTHS, FRAME_QUALITY);
+    out[shape] = { dir, widths, from: top.file };
+  }
+  return out;
+}
 
 /* Each version, described: its size, weight and which screens get it (the same rule as site.js bgTag). */
 function versionRows(d) {
@@ -433,14 +493,14 @@ async function photoOf(blob, say) {
   return src;
 }
 
-/* Make a background's JPEG sizes (BG_WIDTHS, never larger than the picture) and store them as
-   images/<stem>-<width>.jpg; returns the widths. */
-async function storeSizes(stem, src, say, what = 'sizes', list = BG_WIDTHS, quality) {
+/* Make JPEG sizes of a picture (BG_WIDTHS, or list; never larger than the picture) and store them as
+   <prefix><width>.jpg (e.g. media/<code>/r1/1536.jpg); returns the widths. */
+async function storeSizes(prefix, src, say, what = 'sizes', list = BG_WIDTHS, quality) {
   const widths = [...new Set(list.filter((w) => w < src.width).concat(Math.min(src.width, list[list.length - 1])))];
   let n = 0;
   for (const w of widths) {
     say(`Making and uploading the ${what}: ${++n} of ${widths.length}`);
-    try { await put(`images/${stem}-${w}.jpg`, await resized(src, w, quality), 'image/jpeg'); }
+    try { await put(`${prefix}${w}.jpg`, await resized(src, w, quality), 'image/jpeg'); }
     catch (e) { if (!/already exists/.test(e.message)) throw e; }   // a version's frames made before: the same picture
   }
   return widths;
@@ -649,17 +709,18 @@ function paintingRow(e, items, i, secs) {
           if (!re.dr.ready) return toast('The picture is still being made', true);
           f.go.disabled = true;
           try {
-            const { file: stem } = await call('GET', `free?name=${encodeURIComponent(d.name)}`);
-            let orig = re.dr.original;                   // a replaced photo becomes the original (if not already stored)
-            if (re.dr.replacement) orig = (await keepOriginal(re.dr.replacement, d.name, null, (t) => re.dr.say(t))).key;
-            pic = { ...(await storeImages(stem, re.dr.result(), (t) => re.dr.say(t))),
+            let orig = re.dr.original;                   // a replaced photo becomes a Library item (if not already stored)
+            if (re.dr.replacement) orig = (await keepOriginal(re.dr.replacement, f.title.value || d.title, null, (t) => re.dr.say(t))).key;
+            if (!/^media\//.test(orig)) throw new Error('Move the files into the new layout first (Library)');
+            pic = { ...(await storeImages(orig.slice(6), re.dr.result(), (t) => re.dr.say(t))),
               white_paper: re.dr.white === 'paper', process: re.dr.record(orig) };
           } catch (err) { f.go.disabled = false; re.dr.say(''); return toast(err.message, true); }
         }
         const data = { ...rest, title: f.title.value, ...det, wide: f.wide.checked,
           section: f.section.value, order: moved ? paintingsIn(f.section.value).length : d.order, ...pic };
+        if (pic.media) { delete data.base; delete data.file; }   // from the old names to a Library item
         open.delete(e.id); reopened.delete(e.id);
-        save([{ id: e.id, kind: 'painting', data }], pic.file ? (re && re.dr.replacement ? 'Saved, with the new photo' : 'Saved, with the new picture') : undefined);
+        save([{ id: e.id, kind: 'painting', data }], pic.media ? (re && re.dr.replacement ? 'Saved, with the new photo' : 'Saved, with the new picture') : undefined);
       } }, 'Save draft'),
       changed(e) ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
       h('button', { class: 'danger', onclick: () => { if (confirm(`Delete "${d.title}"? It stays on the site until you publish.`)) { open.delete(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Deleted in the draft'); } } }, 'Delete')));
@@ -674,7 +735,7 @@ function paintingRow(e, items, i, secs) {
 const reopened = new Map();         // painting id -> { dr }, while its Edit form is open
 const pictureOf = (d) => {          // the painting's current picture, at a size fit for comparing
   const w = d.widths.find((x) => x >= 1024) || d.widths[d.widths.length - 1];
-  return `/${d.base}${d.file || d.name}-${w}.${d.ext}`;
+  return `/${paintingAt(d, w)}`;
 };
 function pictureFields(e, d, f) {
   if (!media) return [];
@@ -686,7 +747,7 @@ function pictureFields(e, d, f) {
       saved: d.process || { white },
       start: d.process ? { process: d.process } : { white, guess: false },
       fetch: async () => {
-        const key = d.process ? d.process.original : `originals/${d.file || d.name}`;
+        const key = d.process ? d.process.original : d.media ? `media/${d.media}` : `originals/${d.file || d.name}`;
         const r = await fetchFor(`/admin/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
         return { original: r.headers.get('x-original') || key, blob: await r.blob() };
@@ -1081,19 +1142,21 @@ function darkroom(opts = {}) {
   };
 }
 
-/* Make every size of a painting's picture from the result and store them in R2 as images/<stem>-<width>.jpg and
-   -preview.jpg; returns the painting's image fields. Never overwrites: stem is a free name (GET free). */
-async function storeImages(stem, { out, W, H }, say) {
-  const base = 'media/images/';
+/* Make every size of a painting's picture from the result and store them as the next set of sizes of its photo's
+   Library item (id): media/<code>/r<n>/<width>.jpg and preview.jpg; returns the painting's image fields. A new
+   set each time, so the earlier pictures stay for History. */
+async function storeImages(id, { out, W, H }, say) {
+  const { part } = await call('GET', `library/next?id=${id}&part=r`);
   const widths = [...new Set(WIDTHS.filter((w) => w < W).concat(Math.min(W, WIDTHS[WIDTHS.length - 1])))];
-  const jobs = widths.map((w) => [`${stem}-${w}.jpg`, w]).concat([[`${stem}-preview.jpg`, Math.min(PREVIEW, W)]]);
+  const jobs = widths.map((w) => [`${w}.jpg`, w]).concat([['preview.jpg', Math.min(PREVIEW, W)]]);
   let done = 0;
   for (const [fname, w] of jobs) {
     say(`Making and uploading image sizes: ${++done} of ${jobs.length}`);
-    await put(`images/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
+    await put(`media/${id}/${part}/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
   }
-  return { w: W, h: H, widths, base, ext: 'jpg', file: stem,
-    preview: { src: `${base}${stem}-preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) } };
+  await call('POST', 'library/data', { id, data: { renditions: { [part]: { widths, w: W, h: H, ext: 'jpg' } } } });
+  return { w: W, h: H, widths, media: id, rendition: part, ext: 'jpg',
+    preview: { src: `media/${id}/${part}/preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) } };
 }
 
 let adding = null;   // the add form's darkroom, kept while the page re-renders
@@ -1156,9 +1219,8 @@ function addForm(secs) {
     f.go.disabled = true;
     try {
       const name = nameFor(title);
-      const { file: stem } = await call('GET', `free?name=${encodeURIComponent(name)}`);
-      const { key: original, shared } = await keepOriginal(file, name, dr.known && dr.known.file === file ? dr.known : null, (t) => { f.progress.textContent = t; });
-      const pic = await storeImages(stem, dr.result(), (t) => { f.progress.textContent = t; });
+      const { key: original, id: item, shared } = await keepOriginal(file, title, dr.known && dr.known.file === file ? dr.known : null, (t) => { f.progress.textContent = t; });
+      const pic = await storeImages(item, dr.result(), (t) => { f.progress.textContent = t; });
       const data = { name, title, ...det, section: f.section.value, order: paintingsIn(f.section.value).length, wide: f.wide.checked,
         white_paper: dr.white === 'paper', ...pic, process: dr.record(original) };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
@@ -1179,10 +1241,10 @@ async function put(key, blob, type, ms = 120000) {
   return r.json();
 }
 
-/* Store a photo as an original, named by its content (originals/<hash>-<name>.<ext>, see stored() in editor.js):
-   if the same photo is already stored, for this painting or another, it isn't uploaded again and that one is
-   used. known: storedFor's answer, if already asked. Returns the original's key (for the painting's process
-   record) and whether it was already stored. */
+/* Keep a photo as a Library item (its original.<ext>), unless the same photo is already one (found by its content,
+   the first 12 hex digits of its SHA-256), for this painting or another: then that item is used. known: storedFor's
+   answer, if already asked. name: the item's name in the Library. Returns { key: media/<code> (a painting's process
+   record names its original so), id: the code, shared: whether it was already stored }. */
 async function storedFor(file) {
   const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))]
     .map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -1190,14 +1252,15 @@ async function storedFor(file) {
   const { key } = await call('GET', `stored?hash=${hash}`);
   return { file, hash, key };
 }
-async function keepOriginal(file, name, known, say) {
+async function keepOriginal(file, name, known, say, grp = 'painting') {
   if (!known) { say('Checking whether this photo is already stored…'); known = await storedFor(file); }
   const { hash, key: have } = known;
-  if (have) return { key: have, shared: true };
+  if (have) return { key: have, id: have.slice(6), shared: true };
   const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase().replace(/^jpeg$/, 'jpg');
+  const { id } = await call('POST', 'library/new', { kind: 'photo', grp, name, hash });
   say('Keeping the original…');
-  const r = await put(`originals/${hash}-${name.slice(0, 96)}.${ext}`, file, file.type || 'image/jpeg');
-  return { key: r.key, shared: !!r.existed };
+  await put(`media/${id}/original.${ext}`, file, file.type || 'image/jpeg');
+  return { key: `media/${id}`, id, shared: false };
 }
 
 // ---- review and publish ------------------------------------------------------------------------------------
@@ -1285,10 +1348,14 @@ function historyView() {
 
 // ---- the library -------------------------------------------------------------------------------------------
 
-/* Every file in storage (library.js on the server), as Site pictures and Paintings: each thing uploaded with what
-   uses it. The name is the library's own (the stored files keep theirs for good), saved as soon as it's changed,
-   with a tick to say so. Delete for good only when no draft or published page uses it. */
-let libraryData = null;
+/* Every item in storage (library.js on the server), as Site pictures and Paintings. Each row: its picture, its name
+   (the Library's own: saved as soon as it's changed, with a tick), its code (its folder in R2, media/<code>/: tap to
+   copy), what uses it, then a line for each part (the original, each set of sizes, each video version, each set of
+   frames) with its weight, and a bin for a part nothing uses. The bin on the right deletes the whole item, only
+   when no draft or published page uses it. Photos and videos for the site can be added here; paintings come in
+   through the Gallery (their pictures are prepared in the darkroom). While files are still in the old layout,
+   a card at the top moves them (migrate.js). */
+let libraryData = null, moveState = null, libBusy = '';
 const glyph = (d, size = 18) => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 20 20'); svg.setAttribute('width', size); svg.setAttribute('height', size);
@@ -1304,37 +1371,60 @@ const GLYPHS = {
   tick: 'M4 10.5l4 4L16 6',
   play: 'M7 5v10l8-5z',
   photo: 'M3 4.5h14v11H3zM3 13l4-4 3.5 3.5L13 10l4 4M13 7.5h.01',
+  sizes: 'M2.5 9.5h7v7h-7zM11.5 5.5h6v6h-6zM11.5 14h3v2.5h-3z',                        // a few sizes of one picture
+  frames: 'M3 4.5h14v11H3zM7 4.5v11M13 4.5v11',                                     // a strip of frames
+  add: 'M10 4v12M4 10h12',
   live: 'M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',                                // published
   draft: 'M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3',                                        // a pencil: in a draft
   past: 'M3.5 10a6.5 6.5 0 1 0 2-4.7M3.5 3.5v3h3M10 6.5V10l2.5 1.5',                    // a clock turning back: History
 };
 const STATES = { published: ['live', 'On the site'], draft: ['draft', 'In a draft'], history: ['past', 'Only in History'] };
+const RANK = { published: 0, draft: 1, history: 2 };
+
+function loadLibrary() {
+  return call('GET', 'library').then(async (d) => {
+    libraryData = d;
+    moveState = d.old.files || d.moving ? await call('GET', 'move') : null;
+    render();
+  }).catch((e) => toast(e.message, true));
+}
 
 function libraryView() {
-  if (!libraryData) {
-    call('GET', 'library').then((d) => { libraryData = d; render(); }).catch((e) => toast(e.message, true));
-    return [h('h1', {}, 'Library'), h('p', { class: 'muted' }, 'Loading…')];
-  }
+  if (!libraryData) { loadLibrary(); return [h('h1', {}, 'Library'), h('p', { class: 'muted' }, 'Loading…')]; }
   const out = [h('h1', {}, 'Library')];
-  const groups = [['site', 'Site pictures'], ['painting', 'Paintings']];
-  for (const [grp, title] of groups) {
+  if (moveState && (libraryData.old.files || moveState.planned)) out.push(moveCard());
+  const pick = h('input', { type: 'file', accept: 'image/*,video/mp4,.mp4,.m4v', multiple: true, hidden: true,
+    onchange: () => pick.files.length && addToLibrary([...pick.files]) });
+  for (const [grp, title] of [['site', 'Site pictures'], ['painting', 'Paintings']]) {
     const items = libraryData.items.filter((it) => it.grp === grp).sort((a, b) => b.added.localeCompare(a.added));
-    const total = items.reduce((s, it) => s + it.bytes, 0);
-    out.push(h('h2', {}, title, h('span', { class: 'muted', style: 'font-size:0.85rem' }, `  ${items.length} · ${MB(total)}`)));
+    const total = items.reduce((n, it) => n + it.bytes, 0);
+    out.push(h('h2', { class: 'row' }, title, h('span', { class: 'muted', style: 'font-size:0.85rem' }, `${items.length} · ${MB(total)}`),
+      grp === 'site' ? h('button', { class: 'lib-add', disabled: !!libBusy, title: 'Add photos, or the versions of one video, to the Library', 'aria-label': 'Add to the Library',
+        onclick: () => pick.click() }, glyph(GLYPHS.add)) : null));
+    if (grp === 'site') out.push(pick, libBusy ? h('p', { class: 'hint' }, libBusy) : null);
     if (items.length) out.push(h('div', { class: 'card' }, ...items.map(libraryRow)));
   }
-  return out;
+  return out.filter(Boolean);
+}
+
+/* Photos (each an item) or video files (chosen together: one video's versions, one item) into the Library. */
+async function addToLibrary(files) {
+  const say = (t) => { libBusy = t; render(); };
+  const videos = files.filter((f) => /\.(mp4|m4v)$/i.test(f.name) || f.type === 'video/mp4'), photos = files.filter((f) => !videos.includes(f));
+  const nameOf = (f) => f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+  try {
+    for (const [i, f] of photos.entries()) await photoItem(f, nameOf(f), 'site', (t) => say(photos.length > 1 ? `Photo ${i + 1} of ${photos.length}: ${t}` : t));
+    if (videos.length) {
+      const { id } = await call('POST', 'library/new', { kind: 'video', grp: 'site', name: nameOf(videos[0]) });
+      await videoItem(id, videos, { versions: [], frames: {} }, say);
+    }
+    toast('Added to the Library');
+  } catch (e) { toast(e.message, true); }
+  libBusy = ''; libraryData = null; render();
 }
 
 function libraryRow(it) {
-  // what uses it: one mark per thing using it, its strongest state (on the site, in a draft, or only in History)
-  const by = new Map();
-  for (const u of it.uses) {
-    const rank = { published: 0, draft: 1, history: 2 }[u.state];
-    const key = u.entry;
-    if (!by.has(key) || rank < by.get(key).rank) by.set(key, { label: u.label, state: u.state, rank });
-  }
-  const uses = [...by.values()].sort((a, b) => a.rank - b.rank);
+  const uses = strongest(it.uses);
   const live = uses.filter((u) => u.state !== 'history');
   const pastOnly = !live.length && uses.length > 0;
   const pic = it.thumb
@@ -1349,41 +1439,69 @@ function libraryRow(it) {
       try { await call('POST', 'library/name', { id: it.id, name: v }); it.name = v; saved.hidden = false; }
       catch (e) { toast(e.message, true); ev.target.value = it.name; }
     } });
+  const copied = h('span', { class: 'lib-saved', title: 'Copied', hidden: true }, glyph(GLYPHS.tick, 14));
+  const codeChip = h('button', { class: 'lib-code', title: `Its folder in storage: media/${it.id}/ (tap to copy the code)`,
+    onclick: () => { navigator.clipboard?.writeText(it.id).then(() => { copied.hidden = false; setTimeout(() => { copied.hidden = true; }, 1500); }); } }, it.id);
   const bin = h('button', { class: 'lib-bin danger', disabled: live.length > 0,
-    title: live.length ? `In use: ${live.map((u) => u.label).join(', ')}` : 'Delete for good',
+    title: live.length ? `In use: ${[...new Set(live.map((u) => u.label))].join(', ')}` : 'Delete for good',
     'aria-label': 'Delete for good', onclick: () => deleteForGood(it, pastOnly) }, glyph(GLYPHS.bin));
-  return h('div', { class: 'painting lib-item' },
-    h('span', { class: 'lib-pic' }, pic, it.kind === 'video' ? h('span', { class: 'lib-video', title: 'Video' }, glyph(GLYPHS.play, 14)) : null),
-    h('div', { class: 'what' },
-      h('div', { class: 'row lib-top' }, name, saved),
-      h('span', { class: 'd' },
-        // the thing using it is named only when it isn't what the item is called (a painting's photo is named after it)
-        uses.length ? uses.map((u) => h('span', { class: `lib-use ${u.state}`, title: u.label === it.name ? STATES[u.state][1] : `${u.label}: ${STATES[u.state][1].toLowerCase()}` },
-          glyph(GLYPHS[STATES[u.state][0]], 13), u.label === it.name ? null : u.label))
-          : h('span', { class: 'badge gone', title: 'Nothing uses it' }, 'Unused'),
-        it.versions ? versionShapes(it.versions) : null,
-        h('span', { class: 'lib-size', title: `${it.files.length} file${it.files.length === 1 ? '' : 's'}` }, MB(it.bytes)))),
-    bin);
+  return h('div', { class: 'lib-item' },
+    h('div', { class: 'painting lib-head' },
+      h('span', { class: 'lib-pic' }, pic, it.kind === 'video' ? h('span', { class: 'lib-video', title: 'Video' }, glyph(GLYPHS.play, 14)) : null),
+      h('div', { class: 'what' },
+        h('div', { class: 'row lib-top' }, name, saved),
+        h('span', { class: 'd' }, codeChip, copied, uses.length ? useMarks(uses, it.name)
+          : h('span', { class: 'badge gone', title: 'Nothing uses it' }, 'Unused'))),
+      bin),
+    h('div', { class: 'lib-parts' }, ...it.parts.map((p) => partLine(it, p))));
 }
 
-/* A video's versions as small outlines of their shapes, sized to each other (wide ones level, phone ones upright);
-   the numbers are in each one's tooltip. */
-function versionShapes(versions) {
-  const top = Math.max(...versions.map((v) => Math.max(v.w, v.h) || 1));
-  return h('span', { class: 'lib-vers' }, ...versions.map((v) => {
-    const long = 8 + 18 * (Math.max(v.w, v.h) || top) / top, ratio = v.w && v.h ? Math.min(v.w, v.h) / Math.max(v.w, v.h) : 0.75;
-    const [w, hh] = v.h > v.w ? [long * ratio, long] : [long, long * ratio];
-    return h('span', { class: 'lib-ver', style: `width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px`,
-      title: `${v.w} × ${v.h}${v.h > v.w ? ', for phones held upright' : ''}, ${MB(v.bytes)}` });
-  }));
+/* One mark per thing using it, at its strongest (on the site, in a draft, or only in History). */
+function strongest(list) {
+  const by = new Map();
+  for (const u of list) if (!by.has(u.entry) || RANK[u.state] < RANK[by.get(u.entry).state]) by.set(u.entry, u);
+  return [...by.values()].sort((a, b) => RANK[a.state] - RANK[b.state]);
+}
+const useMarks = (uses, name) => uses.map((u) => h('span', { class: `lib-use ${u.state}`, title: u.label === name ? STATES[u.state][1] : `${u.label}: ${STATES[u.state][1].toLowerCase()}` },
+  glyph(GLYPHS[STATES[u.state][0]], 13), u.label === name ? null : u.label));
+
+/* A part of an item, on a line of its own: what it is, as a symbol and its size, its weight, its users' marks,
+   and a bin when nothing (not even History) uses it. */
+function partLine(it, p) {
+  let icon, what;
+  if (p.part === 'original') { icon = glyph(GLYPHS.photo, 16); what = `Original${p.w ? `, ${p.w} × ${p.h}` : ''}${p.ext ? ` (${p.ext.toUpperCase()})` : ''}`; }
+  else if (/^r\d+$/.test(p.part)) { icon = glyph(GLYPHS.sizes, 16); what = `${p.sizes || p.files} sizes${p.w ? `, up to ${p.w} × ${p.h}` : ''}`; }
+  else if (/^\d+x\d+/.test(p.part)) { icon = shapeOf(p, it.parts); what = `${p.w} × ${p.h}${p.seconds ? `, ${p.seconds} seconds` : ''}`; }
+  else if (/^(wide|tall)-/.test(p.part)) { icon = glyph(GLYPHS.frames, 16); what = `First and last frames, ${p.part.startsWith('tall') ? 'upright' : 'wide'}`; }
+  else { icon = glyph(GLYPHS.photo, 16); what = `${p.files} other file${p.files === 1 ? '' : 's'}`; }
+  const uses = strongest(p.uses);
+  return h('div', { class: 'lib-part', title: `${p.part}${p.files > 1 ? `/ (${p.files} files)` : ''}` },
+    h('span', { class: 'lib-part-icon' }, icon), h('span', { class: 'lib-part-what' }, what),
+    h('span', { class: 'lib-part-uses' }, ...useMarks(uses, it.name).map((m) => { m.lastChild && m.lastChild.nodeType === 3 && m.lastChild.remove(); return m; })),
+    h('span', { class: 'lib-size' }, MB(p.bytes)),
+    p.part !== 'original' && !p.uses.length && it.parts.length > 1
+      ? h('button', { class: 'lib-bin small danger', title: 'Delete this part for good', 'aria-label': 'Delete this part for good',
+        onclick: () => deletePart(it, p) }, glyph(GLYPHS.bin, 14))
+      : h('span', { class: 'lib-bin-space' }));
+}
+/* A video version as a small outline of its shape, sized against the item's largest. */
+function shapeOf(p, parts) {
+  const top = Math.max(...parts.filter((x) => x.w).map((x) => Math.max(x.w, x.h)), 1);
+  const long = 6 + 12 * Math.max(p.w, p.h) / top, ratio = Math.min(p.w, p.h) / Math.max(p.w, p.h);
+  const [w, hh] = p.h > p.w ? [long * ratio, long] : [long, long * ratio];
+  return h('span', { class: 'lib-ver', title: p.h > p.w ? 'For phones held upright' : 'For wide screens', style: `width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px` });
+}
+
+function deletePart(it, p) {
+  if (!confirm(`Delete this part of "${it.name}" for good (${MB(p.bytes)})? This can't be undone.`)) return;
+  act(async () => { const out = await call('POST', 'library/delete', { id: it.id, part: p.part }); libraryData = null; return out; }, 'Deleted for good');
 }
 
 function deleteForGood(it, pastOnly) {
-  const n = it.files.length;
   const versions = new Set(it.uses.map((u) => u.revision)).size;
   const sure = pastOnly
-    ? `Delete "${it.name}" for good?\n\nIts ${n} file${n === 1 ? '' : 's'} (${MB(it.bytes)}) go from storage, and the ${versions} version${versions === 1 ? '' : 's'} in History that use it go from History. This can't be undone.`
-    : `Delete "${it.name}" for good?\n\nIts ${n} file${n === 1 ? '' : 's'} (${MB(it.bytes)}) go from storage. This can't be undone.`;
+    ? `Delete "${it.name}" for good?\n\nIts ${it.files} file${it.files === 1 ? '' : 's'} (${MB(it.bytes)}) go from storage, and the ${versions} version${versions === 1 ? '' : 's'} in History that use it go from History. This can't be undone.`
+    : `Delete "${it.name}" for good?\n\nIts ${it.files} file${it.files === 1 ? '' : 's'} (${MB(it.bytes)}) go from storage. This can't be undone.`;
   if (!confirm(sure)) return;
   act(async () => {
     const out = await call('POST', 'library/delete', { id: it.id, history: pastOnly });
@@ -1391,6 +1509,49 @@ function deleteForGood(it, pastOnly) {
     historyData = null;
     return out;
   }, (out) => `Deleted for good${out.purged === 'this data centre only' ? ' (cached copies elsewhere may linger)' : ''}`);
+}
+
+/* The one-off move into the new layout (migrate.js): plan, copy a few files a call until done, rewrite the
+   entries and History; then, once the site has been checked, remove the old folders. */
+function moveCard() {
+  const m = moveState, old = libraryData.old;
+  const card = h('div', { class: 'card lib-move' });
+  if (!m.finished) {
+    card.append(h('p', {}, `${old.files} files (${MB(old.bytes)}) are still in the old layout. Moving copies everything the site and History use into the Library's folders, with the opening video's frames trimmed to one set per shape, then points the content at the copies. The old files stay until you remove them.`),
+      m.planned ? h('p', { class: 'hint' }, `Copied ${m.done} of ${m.total}${m.missing ? ` (${m.missing} missing)` : ''}.`) : null,
+      h('div', { class: 'actions' }, h('button', { class: 'main', disabled: !!libBusy, onclick: runMove }, m.planned ? 'Carry on moving' : 'Move into the new layout')));
+  } else {
+    card.append(h('p', {}, `Moved. Check the site (and the preview) still looks right; then the old files, ${old.files} (${MB(old.bytes)}), can go. That includes any leftovers nothing used.`),
+      h('div', { class: 'actions' }, h('button', { class: 'danger', disabled: !!libBusy || !old.files, onclick: clearOld }, 'Remove the old files')));
+  }
+  if (libBusy) card.append(h('p', { class: 'hint' }, libBusy));
+  return card;
+}
+async function runMove() {
+  const say = (t) => { libBusy = t; render(); };
+  try {
+    say('Working out what to move…');
+    moveState = await call('POST', 'move/plan', {});
+    while (moveState.done < moveState.total) {
+      say(`Copying: ${moveState.done} of ${moveState.total} files`);
+      moveState = await call('POST', 'move/copy', { n: 8 });
+    }
+    say('Pointing the content at the copies…');
+    moveState = await call('POST', 'move/finish', {});
+    const all = await call('GET', 'state'); entries = all.entries;
+    toast(`Moved${moveState.missing ? `, but ${moveState.missing} files were missing` : ''}`);
+  } catch (e) { toast(e.message, true); }
+  libBusy = ''; libraryData = null; render();
+}
+async function clearOld() {
+  if (!confirm('Remove every file in the old layout for good? Check the site first. This can\'t be undone.')) return;
+  const say = (t) => { libBusy = t; render(); };
+  try {
+    let gone = 0;
+    for (let r = await call('POST', 'move/clear', {}); r.deleted; r = await call('POST', 'move/clear', {})) { gone += r.deleted; say(`Removed ${gone} files…`); }
+    toast('The old files are gone');
+  } catch (e) { toast(e.message, true); }
+  libBusy = ''; libraryData = null; render();
 }
 
 // ---- start -------------------------------------------------------------------------------------------------

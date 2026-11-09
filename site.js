@@ -11,15 +11,12 @@
      - the contact section's links (data-links), from the same entry.
    mode 'published' is what visitors see; mode 'draft' is the editor's preview (admin.chrisjones.org.uk).
 
-   A painting's images are <base><file>-<width>.<ext> (and <base><file>-preview.jpg), from the site's top
-   folder, where <file> is the painting's name, or name-v2, -v3... when a name's files already exist in R2:
-     base "media/images/", ext "jpg" (uploaded through the editor) or "webp" (paintings moved out of git,
-     Nov 2026): in R2, served by worker.js.
-   R2 holds images/ (what the site shows) and originals/ (each painting's photo as uploaded, never served). */
+   Where paintings' and backgrounds' files are: paths.js (one folder in R2 per Library item, served by
+   worker.js at /media/<code>/...). */
 
 import header from './templates/header.html';   // .html files are imported as text (Wrangler's default rules)
 import { ticked, icon } from './links.js';
-import { holder } from './frames.js';
+import { paintingAt, paintingPattern, photoAt, versionAt, framesFor } from './paths.js';
 
 const PARTIALS = { header };
 const INVITE_COUNT = 5;
@@ -64,7 +61,7 @@ export async function load(env, mode) {
 }
 
 export const stem = (p) => p.file || p.name;
-const file = (p, w, prefix = '') => `${prefix}${p.base}${stem(p)}-${w}.${p.ext}`;
+const file = (p, w, prefix = '') => `${prefix}${paintingAt(p, w)}`;
 
 function imgTag(p, prefix, sizes, indent) {
   const srcset = p.widths.map((w) => `${file(p, w, prefix)} ${w}w`).join(`,\n${indent}        `);
@@ -82,14 +79,13 @@ function imgTag(p, prefix, sizes, indent) {
    data-last; frames.js), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
    the frames of the version chosen, starts it, and gives visitors who ask for reduced motion or less data the
    still (calm: last frame, or a fade from first to last) instead. */
-const at = (name, w) => `/media/images/${name}-${w}.jpg`;
-const srcsetOf = (name, widths) => widths.map((w) => `${at(name, w)} ${w}w`).join(', ');
+const srcsetOf = (urlAt, widths) => widths.map((w) => `${urlAt(w)} ${w}w`).join(', ');
 const near = (widths, want) => widths.find((w) => w >= want) || widths[widths.length - 1];
 function bgTag(b) {
   const pos = `object-position: ${(b.focus[0] * 100).toFixed(1)}% ${(b.focus[1] * 100).toFixed(1)}%`;
   if (b.type !== 'video') {
     const widths = b.widths;
-    return `<img class="section-bg" src="${at(b.file, near(widths, 1536))}" srcset="${srcsetOf(b.file, widths)}" sizes="100vw"`
+    return `<img class="section-bg" src="${photoAt(b, near(widths, 1536))}" srcset="${srcsetOf((w) => photoAt(b, w), widths)}" sizes="100vw"`
       + ` width="${b.w}" height="${b.h}" alt="" loading="lazy" decoding="async" style="${pos}">`;
   }
   const portrait = b.versions.filter((v) => v.h > v.w).sort((x, y) => y.w - x.w);
@@ -101,16 +97,15 @@ function bgTag(b) {
     if (upright) return wide ? wide.map((q) => `(orientation: portrait) and ${q}`).join(', ') : '(orientation: portrait)';
     return wide ? wide.join(', ') : null;
   };
-  const frames = (v) => {     // its shape's frames (frames.js), at about the version's own width
-    const f = holder(b.versions, v);
-    return ` data-first="${at(`${f.name}-first`, near(f.stills, Math.min(v.w, 1920)))}"`
-      + ` data-last="${at(`${f.name}-last`, near(f.stills, Math.min(v.w, 1920)))}"`
-      + ` data-first-set="${srcsetOf(`${f.name}-first`, f.stills)}" data-last-set="${srcsetOf(`${f.name}-last`, f.stills)}"`;
+  const frames = (v) => {     // its shape's frames (paths.js), at about the version's own width
+    const f = framesFor(b, v), w = near(f.widths, Math.min(v.w, 1920));
+    return ` data-first="${f.first(w)}" data-last="${f.last(w)}"`
+      + ` data-first-set="${srcsetOf(f.first, f.widths)}" data-last-set="${srcsetOf(f.last, f.widths)}"`;
   };
   const sources = [...portrait.map((v, i) => [v, media(portrait, i, true)]), ...landscape.map((v, i) => [v, media(landscape, i, false)])]
-    .map(([v, m]) => `\n        <source src="/media/videos/${v.name}.mp4" type="video/mp4"${m ? ` media="${m}"` : ''}${frames(v)}>`).join('');
-  const lead = holder(b.versions, landscape[0] || portrait[0]);
-  return `<video class="section-bg" poster="${at(`${lead.name}-first`, near(lead.stills, 1536))}" muted playsinline preload="metadata"`
+    .map(([v, m]) => `\n        <source src="${versionAt(b, v)}" type="video/mp4"${m ? ` media="${m}"` : ''}${frames(v)}>`).join('');
+  const lead = framesFor(b, landscape[0] || portrait[0]);
+  return `<video class="section-bg" poster="${lead.first(near(lead.widths, 1536))}" muted playsinline preload="metadata"`
     + ` disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" aria-hidden="true"`
     + ` data-play="${b.play}" data-calm="${b.calm}" style="${pos}">${sources}\n      </video>`
     + '<script>window.bgVideo && bgVideo(document.currentScript.previousElementSibling)</script>';
@@ -139,10 +134,10 @@ function headerLinks(links) {
 export function homePreview(c) {
   const b = c.backgrounds && c.backgrounds.hero;
   if (!b) return null;
-  if (b.type !== 'video') { const w = near(b.widths, 1200); return { src: at(b.file, w), w, h: Math.round(b.h * w / b.w) }; }
-  const v = holder(b.versions, b.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || b.versions[0]);
-  const w = near(v.stills, 1200);
-  return { src: at(`${v.name}-last`, w), w, h: Math.round(v.h * w / v.w) };
+  if (b.type !== 'video') { const w = near(b.widths, 1200); return { src: photoAt(b, w), w, h: Math.round(b.h * w / b.w) }; }
+  const v = b.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || b.versions[0];
+  const f = framesFor(b, v), w = near(f.widths, 1200);
+  return { src: f.last(w), w, h: Math.round(v.h * w / v.w) };
 }
 
 export function galleryData(c) {
@@ -150,7 +145,7 @@ export function galleryData(c) {
     const m = SIZE_RE.exec(p.details || '');
     return { name: p.name, title: p.title, details: p.details, wide: p.wide, w: p.w, h: p.h, widths: p.widths,
       cm: p.cm || (m ? [parseFloat(m[1]), parseFloat(m[2])] : null),     // the size as entered, or read from older details lines
-      base: p.base, file: stem(p), ext: p.ext };
+      at: paintingPattern(p) };
   });
   // inside <script>, so no "<" may appear as itself
   return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items }).replace(/</g, '\\u003c');

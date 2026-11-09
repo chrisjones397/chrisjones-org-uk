@@ -35,17 +35,23 @@ CREATE TABLE IF NOT EXISTS revisions (
 );
 CREATE INDEX IF NOT EXISTS revisions_entry ON revisions(entry_id, id);
 
--- The library (library.js): one row for each thing uploaded to R2 (a photo with every set of sizes made from it,
--- or a video version with its frames). id is the storage key of its main file, fixed for good; name is what the
--- editor shows, changed freely. Kept up to date with R2 by library.js whenever the Library is looked at.
+-- The Library (library.js): one row for each item, a photo or a video (a set of versions), whose files are all in
+-- one folder in R2, media/<id>/ (paths.js has the layout). id: its code, 8 hex digits, made when it's created and
+-- never changed; name: what the editor shows, changed freely.
 --   kind: photo | video     grp: site (backgrounds and other site pictures) | painting
---   files: JSON list of its storage keys     bytes: their total size     added: when first uploaded
-CREATE TABLE IF NOT EXISTS media (
-  id     TEXT PRIMARY KEY,
-  kind   TEXT NOT NULL,
-  grp    TEXT NOT NULL,
-  name   TEXT NOT NULL,
-  files  TEXT NOT NULL,
-  bytes  INTEGER NOT NULL,
-  added  TEXT NOT NULL
+--   hash: a photo's content (the first 12 hex digits of its SHA-256), so the same photo isn't stored twice
+--   data: JSON, what it records about its parts: original { w, h }, renditions { r1: { widths, w, h, ext } },
+--         versions [{ file, w, h, bytes, seconds }], frames { wide: { dir, widths, from }, tall: {...} }
+CREATE TABLE IF NOT EXISTS library (
+  id        TEXT PRIMARY KEY,
+  kind      TEXT NOT NULL,
+  grp       TEXT NOT NULL,
+  name      TEXT NOT NULL,
+  hash      TEXT,
+  data      TEXT NOT NULL DEFAULT '{}',
+  added     TEXT NOT NULL,
+  added_by  TEXT
 );
+CREATE INDEX IF NOT EXISTS library_hash ON library(hash);
+-- (Until both sites have moved into this layout, migrate.js also keeps tables moves and migration, and reads
+-- the first Library's names from a table media; all three are dropped when the old files are removed.)

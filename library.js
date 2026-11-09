@@ -1,230 +1,250 @@
-/* The library (step 1d): the editor's catalogue of every file kept in R2, for the editor's Library tab.
+/* The library (step 1d): every file the site keeps in R2, as items, for the editor's Library tab.
 
-   One item for each thing uploaded, with every file that came from it:
-     a photo     originals/<...>.<ext> as uploaded, plus each set of sizes made from it (images/<file>-<width>.jpg,
-                 or .webp for paintings moved from git, and -preview.jpg); a painting reprocessed has several sets
-     a video     every version of one background video (a set: its sizes for wide screens and any for phones
-                 held upright), videos/<file>-<w>x<h>.mp4, plus their first and last frames
-                 (images/<version>-first-<width>.jpg and -last-); its id is videos/<file>, the set's own name.
-                 A stored version that nothing has ever listed is an item of its own.
-   Anything that fits neither (sizes whose original is missing) is an item of its own.
+   One item for each thing uploaded: a photo, or a video (one or several versions, a set). Each has a code, 8 hex
+   digits made when it's created, and one folder in R2, media/<code>/, holding everything that belongs to it
+   (paths.js has the layout). Its name is the Library's own (the `library` table, db/schema.sql), shown and
+   changed freely: the folder never changes, so History and Cloudflare's cached copies never break, and the code
+   in the Library is what to look for in R2.
 
-   The catalogue is the `media` table (db/schema.sql). Its id is the storage key of the item's main file
-   (originals/apple-1.webp; videos/bg-hero for a video's set; images/<file> for sizes with no original): fixed for
-   good. R2 can't rename (only copy and delete), and renaming would break History and every cached copy, so the
-   name shown is only the catalogue's `name`, changed freely. The table is brought up to date with R2 every time
-   the library is looked at, so nothing else has to remember to add to it.
+   An item's parts: its original (a photo as uploaded), each set of sizes made from it (r1, r2...), each video
+   version (<w>x<h>.mp4), each set of video frames (wide-1, tall-1...). What uses an item: entries' drafts and
+   published versions, and History (revisions' data: what "Bring back" restores), by its code (media) and the
+   parts they name. "Delete for good": the whole item only while no draft or published version uses it (if
+   History does, it must be asked for, and those versions leave History); a part only while nothing at all does.
 
-   What uses an item: entries' drafts and published versions, and History (revisions' data: what "Bring back"
-   restores). "Delete for good" is allowed only when no draft or published version uses it; if History does,
-   it must be asked for explicitly, and those versions leave History with it. */
+   Files from before this layout (images/, originals/, videos/) are counted here until they're moved
+   (migrate.js) and then removed. */
+
+import { CODE } from './paths.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 class Bad extends Error { constructor(m, s = 400) { super(m); this.status = s; } }
 export { Bad };
 
 const SECTIONS = { hero: 'Opening', contact: 'Contact', footer: 'Footer' };
+const OLD = ['images/', 'originals/', 'videos/'];
 
-/* Every key in the bucket, with its size and upload time. */
-async function allObjects(env) {
+/* Every key under a prefix, with its size and upload time. */
+export async function listAll(env, prefix) {
   const out = [];
   let cursor;
   do {
-    const page = await env.MEDIA.list({ limit: 1000, cursor });
+    const page = await env.MEDIA.list({ prefix, limit: 1000, cursor });
     for (const o of page.objects) out.push({ key: o.key, size: o.size, uploaded: o.uploaded });
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
   return out;
 }
 
-/* What one stored version of an entry points at: sizes (images/<stem>-...), originals (key, or originals/<stem>
-   with no extension for paintings moved from git, which have no record of theirs) and video versions; links say
-   which original each set of sizes was made from. */
-function refsOf(kind, id, text) {
-  const r = { stems: [], originals: [], videos: [], links: [], label: '', site: false, sets: [], dims: [] };
-  if (!text) return r;
+/* Which part of its item a file is: 'original', 'r1', '1536x1152' (a video version), 'wide-1', or 'other'. */
+export function partOf(rest) {
+  if (/^original\.[a-z0-9]{1,5}$/.test(rest)) return 'original';
+  const dir = /^((?:r|wide-|tall-)\d{1,3})\//.exec(rest);
+  if (dir) return dir[1];
+  const vid = /^(\d{2,5}x\d{2,5}(?:-\d{1,2})?)\.mp4$/.exec(rest);
+  return vid ? vid[1] : 'other';
+}
+
+/* What one stored version of an entry uses: its item's code and the parts it names, and how to describe it. */
+function usesOf(kind, id, text) {
+  if (!text) return null;
   let d;
-  try { d = JSON.parse(text); } catch { return r; }
-  if (kind === 'painting') {
-    const stem = d.file || d.name;
-    const orig = d.process?.original || `originals/${d.name}`;
-    r.stems.push(stem); r.originals.push(orig); r.links.push([stem, orig]);
-    r.label = d.title || stem;
-  } else if (kind === 'background') {
-    const where = SECTIONS[id.slice(3)] || id.slice(3);
-    r.site = true;
-    if (d.type === 'video') {
-      for (const v of d.versions || []) {
-        r.videos.push(v.name);
-        r.sets.push([v.name, `videos/${d.file}`]);
-        r.dims.push([v.name, v.w, v.h]);
-        r.links.push([`${v.name}-first`, `videos/${v.name}`], [`${v.name}-last`, `videos/${v.name}`]);
-      }
-      r.label = `${where} background video`;
-    } else {
-      r.stems.push(d.file);
-      if (d.original) { r.originals.push(d.original); r.links.push([d.file, d.original]); }
-      r.label = `${where} background`;
-    }
+  try { d = JSON.parse(text); } catch { return null; }
+  if (!d.media) return null;
+  if (kind === 'painting') return { code: d.media, parts: [d.rendition, 'original'], label: d.title || d.name, site: false };
+  if (kind !== 'background') return null;
+  const where = SECTIONS[id.slice(3)] || id.slice(3);
+  if (d.type === 'video') {
+    return { code: d.media, label: `${where} background video`, site: true,
+      parts: [...(d.versions || []).map((v) => v.file), ...Object.values(d.frames || {}).map((f) => f.dir)] };
   }
-  return r;
+  return { code: d.media, parts: [d.rendition, 'original'], label: `${where} background`, site: true };
 }
 
-const noExt = (key) => key.replace(/\.[a-z0-9]{1,5}$/, '');
-
-/* The whole library worked out afresh: items (with their files and what uses them), and the rows to write so the
-   media table matches. */
+/* The whole library worked out afresh from R2, the catalogue and what uses each item. */
 async function survey(env) {
-  const [objects, entries, revisions, known] = await Promise.all([
-    allObjects(env),
+  const [objects, rows, entries, revisions] = await Promise.all([
+    listAll(env, 'media/'),
+    env.DB.prepare('SELECT * FROM library').all(),
     env.DB.prepare('SELECT id, kind, draft, published FROM entries WHERE kind IN (\'painting\', \'background\')').all(),
-    env.DB.prepare('SELECT id, release_id, entry_id, kind, data FROM revisions WHERE kind IN (\'painting\', \'background\') AND data IS NOT NULL').all(),
-    env.DB.prepare('SELECT * FROM media').all(),
+    env.DB.prepare('SELECT id, entry_id, kind, data FROM revisions WHERE kind IN (\'painting\', \'background\') AND data IS NOT NULL').all(),
   ]);
-
-  // Everything that refers to stored files: [refs, how it's used]
-  const uses = [];
-  for (const e of entries.results) {
-    if (e.draft) uses.push([refsOf(e.kind, e.id, e.draft), { entry: e.id, state: 'draft' }]);
-    if (e.published) uses.push([refsOf(e.kind, e.id, e.published), { entry: e.id, state: 'published' }]);
-  }
-  for (const v of revisions.results) uses.push([refsOf(v.kind, v.entry_id, v.data), { entry: v.entry_id, state: 'history', revision: v.id }]);
-  const link = new Map();                       // stem of a set of sizes -> its original (or video)
-  const setOf = new Map(), dims = new Map();    // video version -> its set (videos/<file>), and its size
-  for (const [r] of uses) {
-    for (const [s, o] of r.links) if (!link.has(s)) link.set(s, o);
-    for (const [v, set] of r.sets) if (!setOf.has(v)) setOf.set(v, set);
-    for (const [v, w, h] of r.dims) if (!dims.has(v)) dims.set(v, [w, h]);
-  }
-  // a stored video version's item: its set, or itself if nothing ever listed it
-  const videoItem = (name) => setOf.get(name) || `videos/${name}.mp4`;
-
-  // The originals and videos actually stored, by key without extension
-  const originals = new Map(), videos = new Set();
-  for (const o of objects) {
-    if (o.key.startsWith('originals/')) originals.set(noExt(o.key), o.key);
-    else if (/^videos\/[a-z0-9-]+\.mp4$/.test(o.key)) videos.add(noExt(o.key));
-  }
-
   const items = new Map();
-  const item = (id) => {
-    if (!items.has(id)) items.set(id, { id, files: [], bytes: 0, added: '', stems: new Set(), uses: [], labels: [], site: false });
-    return items.get(id);
+  const item = (code) => {
+    if (!items.has(code)) items.set(code, { id: code, parts: new Map(), bytes: 0, files: 0, uses: [] });
+    return items.get(code);
   };
-  const add = (it, o) => {
-    it.files.push(o.key); it.bytes += o.size;
-    const t = o.uploaded instanceof Date ? o.uploaded.toISOString() : String(o.uploaded || '');
-    if (!it.added || t < it.added) it.added = t.replace(/\.\d+Z$/, 'Z');
-  };
-  // which item a set of sizes (or a video's frames) belongs to
-  const owner = (stem) => {
-    const to = link.get(stem);
-    if (to && to.startsWith('videos/') && videos.has(to)) return videoItem(to.slice(7));
-    if (to && originals.has(noExt(to))) return originals.get(noExt(to));
-    if (originals.has(`originals/${stem}`)) return originals.get(`originals/${stem}`);
-    const frames = /^(.*)-(?:first|last)$/.exec(stem);
-    if (frames && videos.has(`videos/${frames[1]}`)) return videoItem(frames[1]);
-    return `images/${frames ? frames[1] : stem}`;
-  };
+  for (const r of rows.results) item(r.id).row = r;
   for (const o of objects) {
-    const img = /^images\/([a-z0-9-]+)-(?:\d{2,4}|preview)\.(?:jpg|webp)$/.exec(o.key);
-    if (img) { const it = item(owner(img[1])); add(it, o); it.stems.add(img[1]); continue; }
-    const vid = /^videos\/([a-z0-9-]+)\.mp4$/.exec(o.key);
-    if (vid) {                                       // a version: its set's item
-      const it = item(videoItem(vid[1])); add(it, o);
-      const [w, h] = dims.get(vid[1]) || (/-(\d+)x(\d+)(?:-v\d+)?$/.exec(vid[1]) || []).slice(1).map(Number);
-      (it.versions ||= []).push({ name: vid[1], w: w || 0, h: h || 0, bytes: o.size });
-      continue;
-    }
-    add(item(o.key), o);   // an original, or anything else: an item of its own (or its main file)
+    const m = /^media\/([0-9a-f]{8})\/(.+)$/.exec(o.key);
+    if (!m) continue;
+    const it = item(m[1]), part = partOf(m[2]);
+    if (!it.parts.has(part)) it.parts.set(part, { part, bytes: 0, files: 0, uses: [] });
+    const p = it.parts.get(part);
+    p.bytes += o.size; p.files++; it.bytes += o.size; it.files++;
+    if (part === 'original') p.ext = m[2].split('.').pop();
   }
+  const use = (u, how) => {
+    if (!u || !items.has(u.code)) return;
+    const it = items.get(u.code);
+    it.uses.push({ ...how, label: u.label });
+    if (u.site) it.site = true;
+    for (const name of u.parts) { const p = it.parts.get(name); if (p) p.uses.push({ ...how, label: u.label }); }
+  };
+  for (const e of entries.results) {
+    use(usesOf(e.kind, e.id, e.draft), { entry: e.id, state: 'draft' });
+    use(usesOf(e.kind, e.id, e.published), { entry: e.id, state: 'published' });
+  }
+  for (const v of revisions.results) use(usesOf(v.kind, v.entry_id, v.data), { entry: v.entry_id, state: 'history', revision: v.id });
 
-  // Who uses what
-  for (const [r, how] of uses) {
-    const hit = new Set();
-    for (const s of r.stems) { const id = owner(s); if (items.has(id)) hit.add(id); }
-    for (const o of r.originals) { const k = originals.get(noExt(o)); if (k) hit.add(k); }
-    for (const v of r.videos) if (videos.has(`videos/${v}`)) hit.add(videoItem(v));
-    for (const id of hit) {
-      const it = items.get(id);
-      it.uses.push({ ...how, label: r.label });
-      if (r.label && !it.labels.includes(r.label)) it.labels.push(r.label);
-      if (r.site) it.site = true;
-    }
-  }
-
-  // Bring the media table up to date
-  const rows = new Map(known.results.map((m) => [m.id, m]));
-  const stmts = [];
-  const out = [];
-  for (const it of items.values()) {
-    it.files.sort();
-    const kind = it.id.startsWith('videos/') ? 'video' : 'photo';
-    const grp = it.site || /^(?:originals|images|videos)\/(?:[0-9a-f]{12}-)?bg-/.test(it.id) ? 'site' : 'painting';
-    const files = JSON.stringify(it.files);
-    let row = rows.get(it.id);
-    if (!row) {
-      row = { id: it.id, kind, grp, name: nameFor(it), files, bytes: it.bytes, added: it.added || now() };
-      stmts.push(env.DB.prepare('INSERT INTO media (id, kind, grp, name, files, bytes, added) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .bind(row.id, row.kind, row.grp, row.name, row.files, row.bytes, row.added));
-    } else if (row.files !== files || row.bytes !== it.bytes) {
-      row.files = files; row.bytes = it.bytes;
-      stmts.push(env.DB.prepare('UPDATE media SET files = ?, bytes = ? WHERE id = ?').bind(files, it.bytes, it.id));
-    }
-    rows.delete(it.id);
-    out.push({ id: it.id, kind: row.kind, grp: row.grp, name: row.name, added: row.added, bytes: it.bytes,
-      files: it.files, thumb: thumbOf(it, kind), uses: it.uses,
-      ...(it.versions ? { versions: it.versions.sort((a, b) => (a.h > a.w) - (b.h > b.w) || b.w - a.w) } : {}) });
-  }
-  for (const gone of rows.keys()) stmts.push(env.DB.prepare('DELETE FROM media WHERE id = ?').bind(gone));
-  if (stmts.length) await env.DB.batch(stmts);
-  return out;
+  return [...items.values()].map((it) => {
+    const r = it.row || {};
+    const data = JSON.parse(r.data || '{}');
+    const parts = [...it.parts.values()].map((p) => {
+      const out = { part: p.part, bytes: p.bytes, files: p.files, uses: p.uses };
+      const ver = (data.versions || []).find((v) => v.file === p.part);
+      if (ver) Object.assign(out, { w: ver.w, h: ver.h, seconds: ver.seconds });
+      else if (/^\d+x\d+/.test(p.part)) { const [w, h] = p.part.split(/x|-/).map(Number); Object.assign(out, { w, h }); }
+      const ren = (data.renditions || {})[p.part];
+      if (ren) Object.assign(out, { w: ren.w, h: ren.h, sizes: ren.widths.length });
+      if (data.original && p.part === 'original') Object.assign(out, { w: data.original.w, h: data.original.h });
+      if (p.ext) out.ext = p.ext;
+      return out;
+    });
+    const order = (p) => (p.part === 'original' ? 0 : /^r/.test(p.part) ? 1 : /^\d/.test(p.part) ? 2 : /^(wide|tall)/.test(p.part) ? 3 : 4);
+    parts.sort((a, b) => order(a) - order(b) || ((b.w || 0) - (a.w || 0)) || a.part.localeCompare(b.part, 'en', { numeric: true }));
+    const kind = r.kind || (parts.some((p) => /^\d+x\d+/.test(p.part)) ? 'video' : 'photo');
+    return { id: it.id, kind, grp: r.grp || (it.site ? 'site' : 'painting'), name: r.name || `Item ${it.id}`,
+      catalogued: !!it.row, added: r.added || '', bytes: it.bytes, files: it.files, parts, uses: it.uses, thumb: thumbOf(it.id, parts, data), data };
+  });
 }
 
-/* The name an item is first given: what uses it (a painting's title, "Opening background"), or else its file
-   name made readable. Changed in the Library afterwards as wished. */
-function nameFor(it) {
-  // a lone video version (removed from its set, or never listed): its section and size, from its name
-  const lone = /^videos\/bg-([a-z]+)(?:-v\d+)?-(\d+)x(\d+)(?:-v\d+)?\.mp4$/.exec(it.id);
-  if (it.labels.length) return it.labels[0].slice(0, 120);
-  if (lone) return `${SECTIONS[lone[1]] || lone[1]} background video, ${lone[2]} × ${lone[3]}`;
-  const base = it.id.replace(/^[a-z]+\//, '').replace(/\.[a-z0-9]+$/, '').replace(/^[0-9a-f]{12}-/, '');
-  const words = base.replace(/-/g, ' ').trim();
-  return (words.charAt(0).toUpperCase() + words.slice(1)).slice(0, 120) || it.id;
+/* A small picture for the list: the newest set of sizes' smallest, or a video's last frame. */
+function thumbOf(code, parts, data) {
+  const ren = parts.filter((p) => /^r\d+$/.test(p.part)).sort((a, b) => Number(b.part.slice(1)) - Number(a.part.slice(1)))[0];
+  if (ren && data.renditions && data.renditions[ren.part]) {
+    const r = data.renditions[ren.part];
+    return `${code}/${ren.part}/${r.widths[0]}.${r.ext || 'jpg'}`;
+  }
+  const f = data.frames && (data.frames.wide || data.frames.tall);
+  if (f) return `${code}/${f.dir}/last-${f.widths[0]}.jpg`;
+  return null;
 }
 
-/* A small picture for the list: the smallest size of the newest set (name-v3 after name-v2 after name), or a
-   video's smallest last frame. */
-function thumbOf(it, kind) {
-  const sized = it.files.map((k) => /^images\/([a-z0-9-]+)-(\d{2,4})\.(jpg|webp)$/.exec(k)).filter(Boolean);
-  const want = kind === 'video' ? sized.filter((m) => m[1].endsWith('-last')) : sized.filter((m) => !/-(?:first|last)$/.test(m[1]));
-  if (!want.length) return null;
-  const v = (s) => Number((/-v(\d+)$/.exec(s) || [0, 1])[1]);
-  want.sort((a, b) => (v(b[1]) - v(a[1])) || (Number(a[2]) - Number(b[2])));
-  return want[0][0];
+async function oldFiles(env) {
+  let files = 0, bytes = 0;
+  for (const p of OLD) for (const o of await listAll(env, p)) { files++; bytes += o.size; }
+  return { files, bytes };
 }
 
-// ---- the API: GET /admin/api/library, POST /admin/api/library/name and /admin/api/library/delete ---------------
+// ---- the API ----------------------------------------------------------------------------------------------
 
+/* GET /admin/api/library */
 export async function library(env) {
-  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
-  return { items: await survey(env) };
+  if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on', 503);
+  const [items, old, moving] = await Promise.all([survey(env), oldFiles(env),
+    env.DB.prepare('SELECT count(*) n, sum(done) d FROM moves').first().catch(() => null)]);
+  return { items, old, moving: moving && moving.n ? { total: moving.n, done: moving.d || 0 } : null };
 }
 
+/* POST /admin/api/library/new { kind, grp, name, hash?, data? }: a new, empty item; answers its code. */
+export async function newItem(env, who, b) {
+  if (!['photo', 'video'].includes(b.kind)) throw new Bad('An item is a photo or a video');
+  if (!['site', 'painting'].includes(b.grp)) throw new Bad('Bad group');
+  const name = String(b.name || '').trim().slice(0, 120) || (b.kind === 'video' ? 'Video' : 'Photo');
+  const hash = b.hash == null ? null : String(b.hash);
+  if (hash && !/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
+  for (let tries = 0; tries < 5; tries++) {
+    const id = [...crypto.getRandomValues(new Uint8Array(4))].map((x) => x.toString(16).padStart(2, '0')).join('');
+    const r = await env.DB.prepare('INSERT OR IGNORE INTO library (id, kind, grp, name, hash, data, added, added_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, b.kind, b.grp, name, hash, dataOf(b.data || {}), now(), who).run();
+    if (r.meta.changes) return { id };
+  }
+  throw new Bad('Couldn\'t make a code for it: try again', 500);
+}
+
+/* What an item records about its parts, so it can be picked and shown without reading the files:
+   original { w, h }, renditions { r1: { widths, w, h, ext } }, versions [{ file, w, h, bytes, seconds }],
+   frames { wide: { dir, widths, from }, tall: {...} }. Checked for shape only; kept small. */
+function dataOf(d) {
+  if (typeof d !== 'object' || Array.isArray(d)) throw new Bad('Bad item record');
+  const text = JSON.stringify(d);
+  if (text.length > 20000) throw new Bad('Item record too large');
+  return text;
+}
+
+/* POST /admin/api/library/data { id, data }: merged into the item's record (a part named again replaces its own). */
+export async function setData(env, id, data) {
+  const row = await env.DB.prepare('SELECT data FROM library WHERE id = ?').bind(id).first();
+  if (!row) throw new Bad('No such item', 404);
+  const d = JSON.parse(row.data || '{}');
+  const n = JSON.parse(dataOf(data));
+  if (n.original) d.original = n.original;
+  if (n.renditions) d.renditions = { ...(d.renditions || {}), ...n.renditions };
+  if (n.versions) {
+    const keep = (d.versions || []).filter((v) => !n.versions.some((x) => x.file === v.file));
+    d.versions = [...keep, ...n.versions];
+  }
+  if (n.frames) d.frames = { ...(d.frames || {}), ...n.frames };
+  await env.DB.prepare('UPDATE library SET data = ? WHERE id = ?').bind(dataOf(d), id).run();
+  return { id, data: d };
+}
+
+/* GET /admin/api/library/next?id=<code>&part=r|wide|tall|<w>x<h>: the next free part name in the item's folder
+   (r3, wide-2, 1536x1152 or 1536x1152-2), so nothing is ever overwritten. */
+export async function nextPart(env, id, part) {
+  if (!CODE.test(id)) throw new Bad('Bad code');
+  if (!(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(id).first())) throw new Bad('No such item', 404);
+  const taken = new Set((await listAll(env, `media/${id}/`)).map((o) => partOf(o.key.slice(15))));
+  if (part === 'r') { for (let n = 1; ; n++) if (!taken.has(`r${n}`)) return { part: `r${n}` }; }
+  if (part === 'wide' || part === 'tall') { for (let n = 1; ; n++) if (!taken.has(`${part}-${n}`)) return { part: `${part}-${n}` }; }
+  if (/^\d{2,5}x\d{2,5}$/.test(part)) {
+    if (!taken.has(part)) return { part };
+    for (let n = 2; n < 100; n++) if (!taken.has(`${part}-${n}`)) return { part: `${part}-${n}` };
+  }
+  throw new Bad('Bad part');
+}
+
+/* GET /admin/api/stored?hash=: a photo already stored with that content (the first 12 hex digits of its SHA-256,
+   worked out in the browser), as media/<code>, or null; so the same photo is never uploaded twice. */
+export async function storedPhoto(env, hash) {
+  if (!/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
+  const row = await env.DB.prepare('SELECT id FROM library WHERE hash = ? AND kind = \'photo\' ORDER BY added LIMIT 1').bind(hash).first();
+  if (!row) return null;
+  const has = (await env.MEDIA.list({ prefix: `media/${row.id}/original.`, limit: 1 })).objects.length;
+  return has ? `media/${row.id}` : null;
+}
+
+/* PUT /admin/api/upload?key=media/<code>/<file>: is this a file an item may have? (the item must exist) */
+export async function uploadAllowed(env, key) {
+  const m = /^media\/([0-9a-f]{8})\/(original\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff)|r\d{1,3}\/(?:\d{2,4}|preview)\.jpg|\d{2,5}x\d{2,5}(?:-\d{1,2})?\.mp4|(?:wide|tall)-\d{1,3}\/(?:first|last)-\d{2,4}\.jpg)$/.exec(key);
+  if (!m) return false;
+  return !!(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(m[1]).first());
+}
+
+/* POST /admin/api/library/name { id, name } */
 export async function rename(env, id, name) {
   if (typeof name !== 'string' || !name.trim() || name.length > 120) throw new Bad('A name must be 1 to 120 characters');
-  const r = await env.DB.prepare('UPDATE media SET name = ? WHERE id = ?').bind(name.trim(), id).run();
-  if (!r.meta.changes) throw new Bad('No such file in the library', 404);
+  const r = await env.DB.prepare('UPDATE library SET name = ? WHERE id = ?').bind(name.trim(), id).run();
+  if (!r.meta.changes) throw new Bad('No such item', 404);
   return { id, name: name.trim() };
 }
 
-/* Delete an item for good: every one of its files from R2, its catalogue row, and Cloudflare's cached copies.
-   Refused while a draft or the published site uses it. If only History does, history must be true: those
-   versions are taken out of History (and any publication left with nothing in it). */
-export async function remove(env, url, id, history) {
-  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
+/* POST /admin/api/library/delete { id, part?, history? }: an item for good (see the top), or one of its parts. */
+export async function remove(env, url, id, part, history) {
+  if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on', 503);
+  if (!CODE.test(id)) throw new Bad('Bad code');
   const it = (await survey(env)).find((x) => x.id === id);
-  if (!it) throw new Bad('No such file in the library', 404);
+  if (!it) throw new Bad('No such item', 404);
+  const files = (await listAll(env, `media/${id}/`)).map((o) => o.key);
+  if (part) {
+    const p = it.parts.find((x) => x.part === part);
+    if (!p || part === 'original') throw new Bad('That part can\'t be deleted on its own');
+    if (p.uses.length) throw new Bad(`Still used by ${[...new Set(p.uses.map((u) => u.label))].join(', ')}`, 409);
+    const keys = files.filter((k) => partOf(k.slice(15)) === part);
+    await env.MEDIA.delete(keys);
+    return { deleted: `${id}/${part}`, files: keys.length, purged: await purge(env, url, keys) };
+  }
   const live = it.uses.filter((u) => u.state !== 'history');
   if (live.length) throw new Bad(`Still used by ${[...new Set(live.map((u) => u.label))].join(', ')}: remove it there first`, 409);
   const past = [...new Set(it.uses.map((u) => u.revision))];
@@ -234,21 +254,21 @@ export async function remove(env, url, id, history) {
     stmts.push(env.DB.prepare(`DELETE FROM revisions WHERE id IN (${past.map(() => '?').join(',')})`).bind(...past));
     stmts.push(env.DB.prepare('DELETE FROM releases WHERE id NOT IN (SELECT release_id FROM revisions)'));
   }
-  stmts.push(env.DB.prepare('DELETE FROM media WHERE id = ?').bind(id));
-  for (let i = 0; i < it.files.length; i += 1000) await env.MEDIA.delete(it.files.slice(i, i + 1000));
+  stmts.push(env.DB.prepare('DELETE FROM library WHERE id = ?').bind(id));
+  for (let i = 0; i < files.length; i += 1000) await env.MEDIA.delete(files.slice(i, i + 1000));
   await env.DB.batch(stmts);
-  const purged = await purge(env, url, it.files);
-  return { deleted: id, files: it.files.length, history: past.length, purged };
+  return { deleted: id, files: files.length, history: past.length, purged: await purge(env, url, files) };
 }
 
-/* Cloudflare keeps visitors' copies of published files for up to a year (worker.js media()), in every data
-   centre. This Worker's own cache.delete reaches only the data centre it runs in, so the proper purge is
-   Cloudflare's API (purge by URL), which needs a token: secret PURGE_TOKEN (permission Zone > Cache Purge) and
-   var ZONE_ID. Without them, only the local copies go, and the answer says so. */
-async function purge(env, url, files) {
+/* Cloudflare keeps visitors' copies of published files for up to a year (worker.js), in every data centre. This
+   Worker's cache.delete reaches only the one it runs in, so the proper purge is Cloudflare's API (purge by URL),
+   with secret PURGE_TOKEN (Zone > Cache Purge) and var ZONE_ID. Keys are R2 keys (media/<code>/... is served at
+   /media/<code>/..., images/... at /media/images/...). */
+export async function purge(env, url, keys) {
   const hosts = url.hostname.startsWith('admin-dev') ? ['dev.chrisjones.org.uk']
     : url.hostname.startsWith('admin') ? ['chrisjones.org.uk', 'www.chrisjones.org.uk'] : [url.host];
-  const urls = hosts.flatMap((h) => files.filter((k) => !k.startsWith('originals/')).map((k) => `https://${h}/media/${k}`));
+  const paths = keys.filter((k) => !/(^originals\/|\/original\.)/.test(k)).map((k) => `/media/${k.replace(/^media\//, '')}`);
+  const urls = hosts.flatMap((h) => paths.map((p) => `https://${h}${p}`));
   await Promise.all(urls.map((u) => caches.default.delete(u).catch(() => false)));
   if (!urls.length) return 'nothing to purge';
   if (!env.PURGE_TOKEN || !env.ZONE_ID) return 'this data centre only';

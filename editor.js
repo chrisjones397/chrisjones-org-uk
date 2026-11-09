@@ -14,8 +14,10 @@
 
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
-import { library, rename, remove } from './library.js';
+import { library, rename, remove, newItem, setData, nextPart, storedPhoto, uploadAllowed } from './library.js';
+import * as move from './migrate.js';
 import { upright } from './frames.js';
+import { CODE } from './paths.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -65,8 +67,10 @@ export async function api(request, env, url, who) {
       if (path === 'history') return json(await history(env));
       if (path === 'free') return json(await free(env, url.searchParams.get('name') || ''));
       if (path === 'original') return await original(env, url.searchParams.get('key') || '');
-      if (path === 'stored') return json({ key: await stored(env, url.searchParams.get('hash') || '') });
+      if (path === 'stored') return json({ key: await storedPhoto(env, url.searchParams.get('hash') || '') });
       if (path === 'library') return json(await library(env));
+      if (path === 'library/next') return json(await nextPart(env, url.searchParams.get('id') || '', url.searchParams.get('part') || ''));
+      if (path === 'move') return json(await move.status(env));
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -80,7 +84,13 @@ export async function api(request, env, url, who) {
     if (path === 'publish') return json(await publish(env, who, body.ids, body.note));
     if (path === 'restore') return json(await restore(env, who, body.revision));
     if (path === 'library/name') return json(await rename(env, String(body.id || ''), body.name));
-    if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.history === true));
+    if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.part ? String(body.part) : null, body.history === true));
+    if (path === 'library/new') return json(await newItem(env, who, body));
+    if (path === 'library/data') return json(await setData(env, String(body.id || ''), body.data));
+    if (path === 'move/plan') return json(await move.plan(env, who));
+    if (path === 'move/copy') return json(await move.copy(env, Number(body.n) || 8));
+    if (path === 'move/finish') return json(await move.finish(env, normalise));
+    if (path === 'move/clear') return json(await move.clear(env));
     throw new Bad('Not found', 404);
   } catch (e) {
     return json({ error: e.message || String(e) }, e.status || 500);
@@ -131,7 +141,7 @@ const BACKGROUNDS = ['hero', 'contact', 'footer'];
    the images can be made again from the original. */
 function processOf(p) {
   if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
-  if (typeof p.original !== 'string' || !/^originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}$/.test(p.original)) throw new Bad('Bad original');
+  if (typeof p.original !== 'string' || !/^(?:originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}|media\/[0-9a-f]{8})$/.test(p.original)) throw new Bad('Bad original');
   if (!['none', 'paper', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
   const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
   const points = (a, lo, hi, what) => {
@@ -153,7 +163,7 @@ function processOf(p) {
   return out;
 }
 
-function normalise(id, kind, d) {
+export function normalise(id, kind, d) {
   if (!d || typeof d !== 'object') throw new Bad('Missing content');
   if (kind === 'section') {
     const title = str(d.title, 120, 'A section title');
@@ -164,13 +174,20 @@ function normalise(id, kind, d) {
     const title = str(d.title, 200, 'A title');
     if (!title) throw new Bad('A painting needs a title');
     if (!/^[a-z0-9-]{1,100}$/.test(d.name || '')) throw new Bad('Bad painting name');
-    if (d.base !== 'media/images/') throw new Bad('Bad image location');
     if (!['webp', 'jpg'].includes(d.ext)) throw new Bad('Bad image type');
+    // its images: a Library item's set of sizes (media, rendition: paths.js), or, from before the move, files in images/
+    const lib = d.media != null;
     const file = d.file || d.name;
-    if (!/^[a-z0-9-]{1,110}$/.test(file) || !(file === d.name || file.startsWith(`${d.name}-v`))) throw new Bad('Bad file name');
+    if (lib) {
+      if (!CODE.test(d.media) || !/^r\d{1,3}$/.test(d.rendition || '')) throw new Bad('Bad Library item');
+    } else {
+      if (d.base !== 'media/images/') throw new Bad('Bad image location');
+      if (!/^[a-z0-9-]{1,110}$/.test(file) || !(file === d.name || file.startsWith(`${d.name}-v`))) throw new Bad('Bad file name');
+    }
     if (!Array.isArray(d.widths) || !d.widths.length || d.widths.length > 12) throw new Bad('Bad image sizes');
     const pv = d.preview || {};
-    if (typeof pv.src !== 'string' || !pv.src.startsWith(d.base) || !/^[a-z0-9/.-]+$/.test(pv.src)) throw new Bad('Bad preview image');
+    const pvAt = lib ? `media/${d.media}/${d.rendition}/preview.jpg` : null;
+    if (typeof pv.src !== 'string' || (lib ? pv.src !== pvAt : (!pv.src.startsWith(d.base) || !/^[a-z0-9/.-]+$/.test(pv.src)))) throw new Bad('Bad preview image');
     if (!/^s-[a-z0-9-]{1,80}$/.test(d.section || '')) throw new Bad('Bad section');
     // Medium, size in centimetres (height, width) and year, kept separately; the details line visitors see is
     // made from them ("Oil on canvas, 60 x 90 cm, 2020"). Older entries with only a details line keep it.
@@ -193,8 +210,9 @@ function normalise(id, kind, d) {
         ...(cm && shown !== !estimated ? { size_shown: shown } : {}) } : {}), details, section: d.section,
       order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
-      base: d.base, ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
-      ...(file !== d.name ? { file } : {}),     // only when it differs, so imported entries keep their exact text
+      ...(lib ? { media: d.media, rendition: d.rendition } : { base: d.base }),
+      ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
+      ...(!lib && file !== d.name ? { file } : {}),     // only when it differs, so imported entries keep their exact text
       ...(d.process != null ? { process: processOf(d.process) } : {}),
     };
   }
@@ -220,6 +238,7 @@ function normalise(id, kind, d) {
    data see instead (the last frame, or a slow fade from the first to the last). */
 function backgroundOf(id, d) {
   if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background');
+  if (d.media != null) return backgroundItem(d);
   if (!/^[a-z0-9-]{1,100}$/.test(d.file || '') || !(d.file === id || d.file.startsWith(`${id}-v`))) throw new Bad('Bad file name');
   const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
   if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
@@ -254,6 +273,49 @@ function backgroundOf(id, d) {
   if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
   if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
   return { type: 'video', ...common, versions, play: d.play, calm: d.calm };
+}
+
+/* A background from a Library item (paths.js): what it uses of the item, so visitors see a change only once it's
+   published. A photo: one set of sizes (rendition, widths, w, h). A video: its versions (file <w>x<h>, w, h,
+   bytes, seconds) and frames for each shape it has ({ wide, tall }: dir wide-1..., widths, from: the version
+   they were taken from). Both: focus, shade; a video: play, calm. */
+function backgroundItem(d) {
+  if (!CODE.test(d.media)) throw new Bad('Bad Library item');
+  const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
+  if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
+  num(d.shade, 'Shade');
+  if (d.shade < 0 || d.shade > 0.6) throw new Bad('The shade must be between 0 and 60%');
+  const widths = (a) => {
+    if (!Array.isArray(a) || !a.length || a.length > 12) throw new Bad('Bad image sizes');
+    return a.map((w) => int(w, 'A size'));
+  };
+  const common = { media: d.media, focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100 };
+  if (d.type === 'photo') {
+    if (!/^r\d{1,3}$/.test(d.rendition || '')) throw new Bad('Bad set of sizes');
+    return { type: 'photo', ...common, rendition: d.rendition, w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: widths(d.widths) };
+  }
+  if (d.type !== 'video') throw new Bad('A background is a photo or a video');
+  if (!Array.isArray(d.versions) || !d.versions.length || d.versions.length > 6) throw new Bad('A video needs one to six versions');
+  const files = new Set();
+  const versions = d.versions.map((v) => {
+    if (!/^\d{2,5}x\d{2,5}(?:-\d{1,2})?$/.test(v.file || '') || files.has(v.file)) throw new Bad('Bad version');
+    files.add(v.file);
+    num(v.seconds, 'Length');
+    if (!(v.seconds > 0 && v.seconds < 600)) throw new Bad('A video must be under ten minutes');
+    if (!Number.isInteger(v.bytes) || v.bytes <= 0 || v.bytes > 2e8) throw new Bad('Bad file size');
+    return { file: v.file, w: int(v.w, 'Width'), h: int(v.h, 'Height'), bytes: v.bytes, seconds: Math.round(v.seconds * 100) / 100 };
+  });
+  const frames = {};
+  for (const [shape, up] of [['wide', false], ['tall', true]]) {
+    const f = (d.frames || {})[shape];
+    if (!versions.some((v) => upright(v) === up)) continue;
+    if (!f) throw new Bad(`The video's ${up ? 'upright' : 'level'} versions have no first and last frames`);
+    if (!new RegExp(`^${shape}-\\d{1,3}$`).test(f.dir || '')) throw new Bad('Bad frames');
+    frames[shape] = { dir: f.dir, widths: widths(f.widths), ...(f.from ? { from: String(f.from).slice(0, 20) } : {}) };
+  }
+  if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
+  if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
+  return { type: 'video', ...common, versions, frames, play: d.play, calm: d.calm };
 }
 
 /* The contact links (links.js): { <site>: { name, on } } in links.js's order; a ticked one needs a username that
@@ -415,7 +477,14 @@ async function free(env, name) {
    sent back as x-original. */
 async function original(env, key) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
-  const m = /^originals\/([a-z0-9-]{1,110})(\.[a-z0-9]{1,5})?$/.exec(key);
+  const item = /^media\/([0-9a-f]{8})$/.exec(key);
+  const ref = key;                                   // what the darkroom records as the original
+  if (item) {                                        // a Library item's original.<ext>
+    const found = (await env.MEDIA.list({ prefix: `media/${item[1]}/original.`, limit: 1 })).objects[0];
+    if (!found) throw new Bad('The original photo isn\'t in storage', 404);
+    key = found.key;
+  }
+  const m = item ? [0, 0, 1] : /^originals\/([a-z0-9-]{1,110})(\.[a-z0-9]{1,5})?$/.exec(key);
   if (!m) throw new Bad('Bad file name');
   if (!m[2]) {
     const found = (await env.MEDIA.list({ prefix: `originals/${m[1]}.`, limit: 5 })).objects
@@ -426,7 +495,7 @@ async function original(env, key) {
   const obj = await env.MEDIA.get(key);
   if (!obj) throw new Bad('The original photo isn\'t in storage', 404);
   return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType || 'application/octet-stream',
-    'x-original': key, 'cache-control': 'private, no-store' } });
+    'x-original': item ? ref : key, 'cache-control': 'private, no-store' } });
 }
 
 /* Originals are named by their content: originals/<hash>-<name>.<ext>, hash the first 12 hex digits of the
@@ -448,6 +517,7 @@ async function stored(env, hash) {
 async function upload(request, env, url) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on yet', 503);
   const key = url.searchParams.get('key') || '';
+  if (key.startsWith('media/')) return uploadItem(request, env, key);
   if (key.startsWith('videos/')) return uploadVideo(request, env, key);
   const m = /^(?:images\/[a-z0-9-]{1,110}-(?:\d{2,4}|preview)\.jpg|originals\/([0-9a-f]{12})-[a-z0-9-]{1,96}\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff))$/.exec(key);
   if (!m) throw new Bad('Bad file name');
@@ -464,6 +534,22 @@ async function upload(request, env, url) {
   const b = new Uint8Array(body.slice(0, 4));
   if (!original && !(b[0] === 0xff && b[1] === 0xd8)) throw new Bad('That file is not a JPEG');
   await env.MEDIA.put(key, body, { httpMetadata: { contentType: original ? type : 'image/jpeg' } });
+  return { key };
+}
+
+/* PUT /admin/api/upload?key=media/<code>/<file>: a file of a Library item (library.js uploadAllowed has the
+   names it may have), stored as sent, streamed through. Never overwrites. */
+async function uploadItem(request, env, key) {
+  if (!(await uploadAllowed(env, key))) throw new Bad('Bad file name');
+  const video = key.endsWith('.mp4');
+  const type = request.headers.get('content-type') || '';
+  if (video ? type !== 'video/mp4' : !/^image\/[a-z0-9.+-]+$/.test(type)) throw new Bad(video ? 'Only MP4 videos can be uploaded' : 'Only images can be uploaded');
+  const size = Number(request.headers.get('content-length') || 0);
+  if (!size || size > 95 * 1024 * 1024) throw new Bad('Files must be under 95 megabytes');
+  if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
+  const { readable, writable } = new FixedLengthStream(size);
+  const piping = request.body.pipeTo(writable);
+  await Promise.all([env.MEDIA.put(key, readable, { httpMetadata: { contentType: video ? 'video/mp4' : type } }), piping]);
   return { key };
 }
 

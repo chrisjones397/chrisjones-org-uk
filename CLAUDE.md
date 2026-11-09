@@ -124,8 +124,9 @@ Claude, before pushing: `git pull --rebase` too.
   has text for it. The opening title and its paragraphs drift together (.hero-words). A painting's address is the home page with that painting brought forward (its
   title, og:image from `preview`, canonical link, `<base href="/">`). Painting images are
   `<base><file>-<width>.<ext>` (file = name, or name-v2... if R2 already had that name; stored only when it
-  differs): base always media/images/ (editor.js refuses any other), ext jpg (uploaded) or webp (moved out of git). R2
-  layout, two folders only: images/ (served by worker.js at /media/images/..., to visitors only if a published
+  differs): base always media/images/ (editor.js refuses any other), ext jpg (uploaded) or webp (moved out of git).
+  [Superseded by the Library's layout, 1d slice 3 below: media/<code>/...; what follows is the old layout, kept
+  until both sites have moved.] R2 layout, two folders only: images/ (served by worker.js at /media/images/..., to visitors only if a published
   painting uses that file, checked in D1 then cached for a year; to the signed-in editor always) and
   originals/ (as uploaded, never served). Originals are named by content: originals/<hash>-<name>.<ext>, hash
   the first 12 hex digits of the file's SHA-256, worked out in the browser (keepOriginal in admin/editor.js;
@@ -397,8 +398,45 @@ Claude, before pushing: `git pull --rebase` too.
      keep a set per version until replaced. Tested locally (wrangler dev, Playwright, VP9 test videos, as
      Playwright's Chromium has no H.264): three at once, frames only on 1280 x 960 and 360 x 640, removing the
      1280 retook them from the 640, the page's sources and poster use each shape's frames.
-   - Next slices, in order: clear dev's leftovers (Christopher's go-ahead); one saving rule and Hide;
-     backgrounds as lists of media ids (with the upright-screen settings below).
+   - Slice 3, the Library's layout (agreed 9 Nov 2026; supersedes slice 1's guessing and his earlier "two
+     folders, files named after the painting"): one folder per Library item, media/<code>/, code 8 hex digits
+     (Christopher chose a bare code: a name in it could mislead after a rename), made by POST library/new when
+     the item is created, never changed; the name is the Library's own (table `library`: id, kind, grp, name,
+     hash, data, added, added_by; created in both databases 9 Nov 2026). Layout in paths.js (shared, published,
+     like links.js; paintingAt, paintingPattern, photoAt, versionAt, framesFor): a photo's original.<ext>, its
+     sets of sizes r1/, r2/... (<width>.<ext>, preview.jpg for paintings); a video's <w>x<h>.mp4 versions and
+     frames wide-1/, tall-1/ (first-/last-<width>.jpg). GET library/next gives the next free part name, so
+     nothing is overwritten; POST library/data records parts (renditions, versions, frames) in the item's data,
+     used to pick it. Entries name the item (media) and the parts they use (painting: rendition, ext, widths,
+     preview.src media/<code>/rN/preview.jpg, process.original media/<code>; background photo: rendition,
+     widths, w, h; background video: versions [{file, w, h, bytes, seconds}], frames {wide, tall: {dir, widths,
+     from}}), so a change shows only once published (editor.js normalise / backgroundItem). worker.js
+     libraryFile(): /media/<code>/<file>, to visitors only if a published entry's media is that code, never
+     original.*. Uploads: PUT upload?key=media/<code>/... (library.js uploadAllowed: the item must exist; names
+     as above), streamed. Same photo twice: hash on the item (GET stored answers media/<code>).
+     Editor: keepOriginal() makes the photo item; storeImages() the painting's next rN; photoItem(),
+     videoItem(), withFrames() (frames per shape, remade under the next wide-N/tall-N when the shape's largest
+     version changes) for backgrounds and the Library's + button; "From the Library…" in each background box
+     (libraryPicker, backgroundFrom: a photo's newest jpg set; a video's versions and frames, keeping focus and
+     shade). Library tab: rows by group, newest first, each with picture, name, code (tap copies), what uses
+     it, then a line per part (symbol, size, users' marks, megabytes, a bin when nothing at all uses it; not the
+     original); the row's bin deletes the folder (only while no draft or published version uses it; History
+     versions go with it when asked). Tested locally against a copy of dev's database and every one of its R2
+     names (stand-in files): the move (272 files into 38 items, 110 entries and History versions rewritten),
+     all 162 addresses on the home, list and gallery data load, originals refused, + photo and video set,
+     picking, adding a painting through the darkroom, part and item deletes, removing the old files.
+   - The move (migrate.js, temporary): a card at the top of the Library while old files exist: "Move into the
+     new layout" (POST move/plan: an item per original and per background video, from everything entries
+     and History use, names carried over from the first Library's table `media`; move/copy a batch a call;
+     move/finish rewrites entries and revisions, data and previous, through normalise), then "Remove the old
+     files" (move/clear, a batch a call; then drops tables moves, migration, media). Leftover files nothing
+     used aren't moved; they go with the old folders. Each site runs its own (dev and live hold different files):
+     dev from admin-dev once this is on dev; live from admin.chrisjones.org.uk after dev goes live (the live
+     site renders its old-style entries meanwhile: paths.js reads both). After both: remove migrate.js and its
+     routes, the old-name readers (paths.js's else-branches, frames.js holder, worker.js media()'s images/ and
+     videos/ branch, editor.js's free, stored, originals/ and videos/ uploads and old-format checks), and this note.
+   - Next slices, in order: one saving rule and Hide; backgrounds as lists of Library items (with the
+     upright-screen settings below); paintings usable as backgrounds by reference.
    - Framing on upright screens (Christopher thinking aloud, 9 Nov 2026, not decided): the forest works on wide
      screens because the bright fern sits against dark trees; an upright phone's full-height crop of the 4:3
      video shows only about 35% of its width, so the trees are lost (moving the focus helped landscape phones).
