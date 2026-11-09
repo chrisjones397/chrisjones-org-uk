@@ -80,21 +80,21 @@
   wake();
 })();
 
-/* Parallax: the opening picture, and the contact section's picture, move more slowly than the page as you
+/* Parallax: the sections' backgrounds (the opening's, the contact section's: .section-bg) move more slowly than the page as you
    scroll, as if they were further away. Nothing moves for visitors who have asked their device to reduce motion. */
 (function () {
   const PARALLAX = 0.4;     // 0: scrolls with the page; 1: stays still in the window
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const items = [...document.querySelectorAll('.hero, .parallax')]
-    .map((sec) => ({ sec, pic: sec.querySelector(':scope > video, :scope > img, :scope > picture') }))
-    .filter((i) => i.pic);
+    .map((sec) => ({ sec, pics: [...sec.querySelectorAll(':scope > .section-bg')] }))
+    .filter((i) => i.pics.length);
   let queued = false;
   function update() {
     queued = false;
-    for (const { sec, pic } of items) {
+    for (const { sec, pics } of items) {
       const r = sec.getBoundingClientRect();
       if (r.bottom < -50 || r.top > innerHeight + 50) continue;   // off screen: nothing to see
-      pic.style.transform = `translate3d(0, ${(-r.top * PARALLAX).toFixed(1)}px, 0)`;
+      for (const pic of pics) pic.style.transform = `translate3d(0, ${(-r.top * PARALLAX).toFixed(1)}px, 0)`;
     }
   }
   // The gallery invitation's paintings each drift at their own pace, as if hung at different depths.

@@ -76,8 +76,8 @@ Claude, before pushing: `git pull --rebase` too.
   ETag (a hash of the file), so browsers always revalidate and get a changed file at once (304 if unchanged;
   checked with wrangler dev). Fingerprinted names with year-long caching would save those revalidations but
   need a build step, which isn't worth it here. Pages from worker.js are no-cache (no-store for the editor).
-  The gallery section's markup and the contact picture's stand-in <img> (med/contact-<width>.webp, until
-  bg-contact is published on both sites, see 1c) are hand-written in index.html. Never reintroduce copies of shared markup or styles.
+  The gallery section's markup and the stand-in backgrounds (the opening video, the contact photo: until their
+  entries are published on both sites, see 1c) are hand-written in index.html. Never reintroduce copies of shared markup or styles.
 - **Home page order**: opening forest video (.hero) / gallery section (#paintings, .invite) / contact
   (#contact) / profile with the head animation (.face-section, three windows tall) / footer (copyright only).
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
@@ -248,44 +248,56 @@ Claude, before pushing: `git pull --rebase` too.
    itself) instead of looping. API and image requests, and any with X-Requested-With, get a 401; admin/editor.js
    fetchFor() sends X-Requested-With (so Access answers 401 for a run-out session rather than redirecting) and
    on a 401 shows the #signin bar, whose link signs in in a new tab, keeping what's typed.
-   Background pictures: done for Contact (Nov 2026). Entries bg-<section> (kind 'background': file, base, ext jpg,
-   w, h, widths up to 3840, focus [across, down] fractions, shade 0 to 0.6, original). A section that can have one
-   is marked data-background="<section>" in index.html and listed in BACKGROUNDS (editor.js) and PAGE's bg
-   (admin/editor.js); only contact so far (the opening, gallery and profile have their own moving pictures;
-   the footer is a narrow strip). site.js prepends <img class="section-bg"> (object-position = focus) and sets
-   --shade; .has-bg::after darkens it; parallax and glass.js pick it up as the section's picture. The editor's
-   Content tab: backgroundBox() shows the picture with its focus (tap to move), how a phone held upright and a
-   wide screen would crop it, the shade slider, Choose/Replace (original kept via keepOriginal, sizes made in the
-   browser from the photo as it is, file name from GET free, which now finds any images/<file>-<width> size, not
-   just a preview) and Remove. Published through Review like everything else; media() serves a published
-   background's images to visitors. Tested locally with wrangler dev (upload twice, draft preview, publish,
-   visitor's image 200).
-   Still to do: the contact photo from git (med/contact-*.webp, the <img data-stand-in> in index.html, master
-   med/jpg/paint-palette.jpg) stands in until bg-contact is published; once Christopher has uploaded it on both
-   admin-dev and admin, remove the stand-in and those files. Sections the client adds don't exist yet (Content
-   has fixed sections); when they do, each should get the background option.
-   Video next:
-   Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
-   content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
-   sizes made at upload like the paintings, published through Review like everything else. What stays in git
-   is only design (e.g. the head animation's model and textures). Contact photo first (like a painting, without
-   corners), then the video. Video, as Christopher set out (Nov 2026), design proposed, not yet agreed in detail:
-   - Versions: the client uploads one or several, each for a shape and size of screen; a portrait version for
-     phones held upright as well as landscape ones. The site lists them as <source>s with media queries
-     (orientation, then the width the screen can show, as index.html does now). The browser can't re-encode
-     video, so each version is uploaded as made; no paid service (Cloudflare Stream isn't free).
-   - Checks and guidance in the browser on choosing a file, before upload (warnings, not refusals, except
-     unplayable): plays everywhere (MP4, H.264; canPlayType plus actually loading it), length (now 20 seconds),
-     weight (megabytes, and megabits a second, against a guide per screen size; now 2.3 to 10.7 megabytes),
-     pixels against the screen it's for, shape matching its slot, a sound track (it plays muted anyway). Also
-     WCAG 2.2.2: moving content over 5 seconds that starts by itself needs a way to pause it.
-   - Stills: first and last frames grabbed in the browser at upload (canvas, JPEG sizes like paintings): the
-     first is the poster while it loads, the last is what stays when it ends (as now). Visitors asking for
-     reduced motion (prefers-reduced-motion, handled now with the end frame) or less data (Save-Data, reported
-     by Chromium browsers only) never get the video: the client chooses last frame, or a slow fade from first to
-     last.
-   - Serving: R2 with range requests (env.MEDIA.get(key, { range: request.headers }), 206), as video needs for
-     seeking and for Safari. Uploads up to 100 megabytes per request on the free plan.
+   Backgrounds (Christopher's brief, Nov 2026): the client swaps any section's background, photo or video, in
+   the editor; every section but the gallery (and the profile while its head is a live 3D drawing, see below).
+   Done (Nov 2026) for the opening (hero), contact and footer:
+   - Entries bg-<section>, kind 'background' (editor.js backgroundOf): type 'photo' (file, focus, shade, w, h,
+     widths up to 3840, original; the first ones had no type and are read as photos) or 'video' (file, focus,
+     shade, versions [{name, w, h, bytes, seconds, stills}], play once/loop, calm last/fade). A video version is
+     uploaded as made (the browser can't re-encode video) to R2 videos/<name>.mp4 (a third folder, beside images/
+     and originals/; uploadVideo streams it through, under 95 megabytes); its first and last frames are taken in
+     the browser and stored as images/<name>-first-<width>.jpg and -last-. Names from GET free, which now looks
+     at all of a name's sizes, frames and videos.
+   - The page: index.html marks sections data-background="<section>" (BACKGROUNDS in editor.js and PAGE's bg in
+     admin/editor.js list the same: hero, contact, footer). site.js bgTag prepends <img class="section-bg"> or
+     <video class="section-bg"> (sources: portrait versions first, media (orientation: portrait), then by the
+     pixels the screen shows across; each source carries its own frames as data-first/-last) plus a one-line
+     script calling bgVideo() from backgrounds.js (in <head>), which sets the chosen version's own poster, plays
+     it muted, once or looping, and gives visitors asking for reduced motion or Save-Data the last frame or a
+     4-second fade first to last. --shade is a brightness filter on the picture (same as a black veil, without
+     covering the words; glass.js reads --shade). Parallax and the header glass treat every .section-bg alike.
+     The footer runs full width when it has one.
+   - worker.js media(): visitors get images and videos only of published entries (paintings, background photos,
+     video versions by name via json_each); video() answers single byte ranges with 206 (parsed from the Range
+     header: R2's own range echo came back without offset/length locally), 416 when out of the file.
+   - The editor (Content tab): backgroundBox() per section: the current background (photo, or the video's last
+     frame; a built-in stand-in from git shown as such), focus (tap), phone/wide crop previews, shade, Plays,
+     For reduced motion, the versions (size, length, megabytes, megabits a second, which screens get it; remove),
+     Choose a photo / Replace with a video / Add a version / Remove / Undo. videoFacts() checks a video before
+     upload: refuses only non-MP4 or unplayable; notes the codec (from the moov box: H.264 fine, HEVC/AV1/VP9
+     warned), index after the picture data (no fast start), a sound track, over 30 seconds, megabits a second
+     over 1.25 x (1 + 3.5 per 4K screen of pixels), over 20 megabytes, under 1920 pixels.
+   - moveInBox(): one-off "Move them into storage" at the top of Content, while a section with a stand-in
+     (STAND_INS: hero's three videos, contact's master paint-palette.jpg with focus 0.85, 1 and shade 0.12) has no
+     entry: fetches them from /med/ and stores them as drafts, to publish under Review. dev's bg-contact was
+     already Christopher's own upload (1200 pixels wide), converted to the typed form by hand.
+   - Tested locally with wrangler dev and Playwright: upload, versions, move-in, publish, ranges (206, suffix,
+     416), unpublished 404, upright phone gets the upright version, desktop the landscape, plays once and stops,
+     reduced motion gets the still, footer full width. Not tested on a real phone or Safari.
+   Still to do in 1c:
+   - Once both sites have their backgrounds published: remove the stand-ins (index.html <video>/<img>
+     data-stand-in and their script, STAND_INS and moveInBox in admin/editor.js) and med/*.mp4, med/contact-*,
+     med/jpg/ from git.
+   - Contact links (agreed Nov 2026): a tick and a username for each of Email, Instagram, Bluesky, Facebook,
+     Threads, X, LinkedIn, TikTok, YouTube, Mastodon (user@instance), the link built from it; replaces the
+     hand-written links in index.html and the header's icons.
+   - Pause control (agreed Nov 2026: header icon): shown only while something on the page moves; pauses the
+     background videos and the parallax and drift; remembered across the site (WCAG 2.2.2).
+   - Profile: Christopher asked whether the head animation is just a video scrubbed by scrolling. It's a live
+     WebGL drawing (face.js), but could be rendered once to a video and scrubbed (play mode 'scroll'), making the
+     profile a section like any other; smooth scrubbing needs every frame stored whole (all keyframes), so larger
+     files. His call.
+   - Sections added by the client don't exist yet (Content has fixed sections); when they do, each gets this.
    Then detail images (2, below).
 2. Image processing: white balance, four-corner crop and reopening a painting to change them are done (Nov
    2026). Agreed with Christopher (Nov 2026), in this order:

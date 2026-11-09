@@ -111,11 +111,11 @@ const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'dri
 /* The page sections' paragraph entries (admin/editor.js PAGE), which may be created by the first paragraph typed. */
 const PARAGRAPHS = ['t-hero', 't-gallery', 't-contact', 't-profile', 't-footer'];
 
-/* The page sections that can have a picture behind them (entries bg-<section>; index.html marks each with
-   data-background="<section>"; BACKGROUNDS in admin/editor.js). The opening, the gallery and the profile have
-   moving pictures of their own (the video, the floating wall, the head animation), so aren't listed yet. A new
-   section that can take a picture needs only its name here and in admin/editor.js, and the attribute. */
-const BACKGROUNDS = ['contact'];
+/* The page sections that can have a photo or a video behind them (entries bg-<section>; index.html marks each
+   with data-background="<section>"; BACKGROUNDS in admin/editor.js lists the same). The gallery has its floating
+   wall and the profile its head animation (a live 3D drawing), so they aren't listed. A new section that can take
+   one needs only its name here and in admin/editor.js, and the attribute. */
+const BACKGROUNDS = ['hero', 'contact', 'footer'];
 
 /* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
    round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
@@ -192,23 +192,7 @@ function normalise(id, kind, d) {
       ...(d.process != null ? { process: processOf(d.process) } : {}),
     };
   }
-  if (kind === 'background') {
-    // file: bg-<section>, or bg-<section>-v2... (a free name, GET free); sizes images/<file>-<width>.jpg made in
-    // the browser; focus: the point kept in view when the screen's shape crops the picture (fractions across and
-    // down); shade: how much it's darkened so the words over it read (0 to 0.6); original: the photo as uploaded.
-    if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background picture');
-    if (d.base !== 'media/images/' || d.ext !== 'jpg') throw new Bad('Bad image location');
-    if (!/^[a-z0-9-]{1,110}$/.test(d.file || '') || !(d.file === id || d.file.startsWith(`${id}-v`))) throw new Bad('Bad file name');
-    if (!Array.isArray(d.widths) || !d.widths.length || d.widths.length > 12) throw new Bad('Bad image sizes');
-    if (typeof d.original !== 'string' || !/^originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}$/.test(d.original)) throw new Bad('Bad original');
-    const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
-    if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
-    num(d.shade, 'Shade');
-    if (d.shade < 0 || d.shade > 0.6) throw new Bad('The shade must be between 0 and 60%');
-    return { file: d.file, base: d.base, ext: d.ext, w: int(d.w, 'Width'), h: int(d.h, 'Height'),
-      widths: d.widths.map((w) => int(w, 'A size')), focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100,
-      original: d.original };
-  }
+  if (kind === 'background') return backgroundOf(id, d);
   if (kind === 'text') return { text: str(d.text, 5000, 'Text') };
   if (id === 'settings-gallery') return Object.fromEntries(GALLERY_SETTINGS.filter((k) => k in d).map((k) => [k, num(d[k], k)]));
   if (id === 'settings-invitation') {
@@ -216,6 +200,47 @@ function normalise(id, kind, d) {
     return { paintings: d.paintings.map((n) => str(n, 100, 'A painting name')) };
   }
   throw new Bad('Unknown kind of content');
+}
+
+/* A section's background: a photo or a video. Both have file (bg-<section>, or bg-<section>-v2..., a free name
+   from GET free, so earlier files stay for History), focus (the point kept in view when the screen's shape crops
+   it, fractions across and down) and shade (how much it's darkened so the words over it read, 0 to 0.6).
+   A photo: sizes images/<file>-<width>.jpg made in the browser, w and h, and original (the photo as uploaded).
+   A video: one or more versions, each a file uploaded as made (the browser can't re-encode video), stored as
+   videos/<name>.mp4, with its first and last frames as images/<name>-first-<width>.jpg and -last-; play 'once'
+   (it stops on its last frame) or 'loop'; calm 'last' or 'fade': what visitors who ask for reduced motion or less
+   data see instead (the last frame, or a slow fade from the first to the last). */
+function backgroundOf(id, d) {
+  if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background');
+  if (!/^[a-z0-9-]{1,100}$/.test(d.file || '') || !(d.file === id || d.file.startsWith(`${id}-v`))) throw new Bad('Bad file name');
+  const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
+  if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
+  num(d.shade, 'Shade');
+  if (d.shade < 0 || d.shade > 0.6) throw new Bad('The shade must be between 0 and 60%');
+  const widths = (a) => {
+    if (!Array.isArray(a) || !a.length || a.length > 12) throw new Bad('Bad image sizes');
+    return a.map((w) => int(w, 'A size'));
+  };
+  const common = { file: d.file, focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100 };
+  if ((d.type ?? 'photo') === 'photo') {      // (the first few, Nov 2026, had no type: all photos)
+    if (typeof d.original !== 'string' || !/^originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}$/.test(d.original)) throw new Bad('Bad original');
+    return { type: 'photo', ...common, w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: widths(d.widths), original: d.original };
+  }
+  if (d.type !== 'video') throw new Bad('A background is a photo or a video');
+  if (!Array.isArray(d.versions) || !d.versions.length || d.versions.length > 6) throw new Bad('A video needs one to six versions');
+  const names = new Set();
+  const bytesOf = (b) => { if (!Number.isInteger(b) || b <= 0 || b > 2e8) throw new Bad('Bad file size'); return b; };
+  const versions = d.versions.map((v) => {
+    if (!/^[a-z0-9-]{1,120}$/.test(v.name || '') || !v.name.startsWith(`${d.file}-`) || names.has(v.name)) throw new Bad('Bad version name');
+    names.add(v.name);
+    num(v.seconds, 'Length');
+    if (!(v.seconds > 0 && v.seconds < 600)) throw new Bad('A video must be under ten minutes');
+    return { name: v.name, w: int(v.w, 'Width'), h: int(v.h, 'Height'), bytes: bytesOf(v.bytes),
+      seconds: Math.round(v.seconds * 100) / 100, stills: widths(v.stills) };
+  });
+  if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
+  if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
+  return { type: 'video', ...common, versions, play: d.play, calm: d.calm };
 }
 
 /* items: [{ id, kind, data }], data null to delete. New paintings are "p-<name>"; new sections "s-<random>". */
@@ -335,7 +360,7 @@ async function restore(env, who, revision) {
   return { entries: await rows(env) };
 }
 
-/* The file name to use for a new painting's (or background picture's) images: its name, or name-v2, -v3... if R2 already has files by
+/* The file name to use for a new painting's (or background's, or video version's) files: its name, or name-v2, -v3... if R2 already has files by
    that name (a painting deleted earlier keeps its files, so History can bring it back). Originals are named by
    their content now (see stored), but those moved from git are still originals/<name>.<ext>, so both count. */
 async function free(env, name) {
@@ -344,10 +369,12 @@ async function free(env, name) {
   for (let v = 1; v < 100; v++) {
     const file = v === 1 ? name : `${name}-v${v}`;
     const found = await env.MEDIA.list({ prefix: `originals/${file}.`, limit: 1 });
-    // its sizes are images/<file>-<width>.<ext> (and -preview.jpg for paintings); digits sort before letters, so
-    // they come first even if another name starts the same way ("apple" and "apple-tree")
-    const own = new RegExp(`^images/${file}-(?:\\d{2,4}|preview)\\.(?:jpg|webp)$`);
-    const sized = (await env.MEDIA.list({ prefix: `images/${file}-`, limit: 50 })).objects.some((o) => own.test(o.key));
+    // its sizes are images/<file>-<width>.<ext> (-preview.jpg for paintings; a video version's frames are
+    // <name>-first-<width>.jpg and -last-); digits and "first"/"last" sort before other names that start the same
+    // way ("apple" and "apple-tree"), and a video is videos/<name>.mp4
+    const own = new RegExp(`^images/${file}-(?:(?:first|last)-)?(?:\\d{2,4}|preview)\\.(?:jpg|webp)$`);
+    const sized = (await env.MEDIA.list({ prefix: `images/${file}-`, limit: 100 })).objects.some((o) => own.test(o.key))
+      || !!(await env.MEDIA.head(`videos/${file}.mp4`));
     if (!found.objects.length && !sized) return { file };
   }
   throw new Bad('Too many versions of that name');
@@ -392,6 +419,7 @@ async function stored(env, hash) {
 async function upload(request, env, url) {
   if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on yet', 503);
   const key = url.searchParams.get('key') || '';
+  if (key.startsWith('videos/')) return uploadVideo(request, env, key);
   const m = /^(?:images\/[a-z0-9-]{1,110}-(?:\d{2,4}|preview)\.jpg|originals\/([0-9a-f]{12})-[a-z0-9-]{1,96}\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff))$/.exec(key);
   if (!m) throw new Bad('Bad file name');
   const original = key.startsWith('originals/');
@@ -407,6 +435,21 @@ async function upload(request, env, url) {
   const b = new Uint8Array(body.slice(0, 4));
   if (!original && !(b[0] === 0xff && b[1] === 0xd8)) throw new Bad('That file is not a JPEG');
   await env.MEDIA.put(key, body, { httpMetadata: { contentType: original ? type : 'image/jpeg' } });
+  return { key };
+}
+
+/* PUT /admin/api/upload?key=videos/<name>.mp4: a background video's version, stored as sent (checked in the
+   browser first: admin/editor.js videoFacts). Passed straight through to R2 as it arrives, not held in memory:
+   a Worker has 128 megabytes, and a request may be up to 100 on the free plan. Never overwrites. */
+async function uploadVideo(request, env, key) {
+  if (!/^videos\/[a-z0-9-]{1,120}\.mp4$/.test(key)) throw new Bad('Bad file name');
+  if ((request.headers.get('content-type') || '') !== 'video/mp4') throw new Bad('Only MP4 videos can be uploaded');
+  const size = Number(request.headers.get('content-length') || 0);
+  if (!size || size > 95 * 1024 * 1024) throw new Bad('A video must be under 95 megabytes');
+  if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
+  const { readable, writable } = new FixedLengthStream(size);
+  const piping = request.body.pipeTo(writable);
+  await Promise.all([env.MEDIA.put(key, readable, { httpMetadata: { contentType: 'video/mp4' } }), piping]);
   return { key };
 }
 

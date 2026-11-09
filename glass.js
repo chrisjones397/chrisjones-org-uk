@@ -146,29 +146,6 @@
     upload(s, s.small, vw, vh, sw);
   }
 
-  // The opening video (or picture): its poster first, then each new frame while it plays under the header
-  const hero = document.querySelector('.hero video, .hero img');
-  if (hero && hero.tagName === 'VIDEO') {
-    const s = source(hero, hero.closest('.hero'));
-    if (hero.poster) picture(s, hero.poster);
-    const grab = () => { if (hero.readyState >= 2) frame(s, hero, hero.videoWidth, hero.videoHeight); };
-    const rvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
-    function onFrame() {
-      if (headerHit(s)) grab();
-      if (rvfc) hero.requestVideoFrameCallback(onFrame);
-      else if (!hero.paused && !hero.ended) requestAnimationFrame(onFrame);
-    }
-    if (rvfc) hero.requestVideoFrameCallback(onFrame);
-    else hero.addEventListener('play', () => requestAnimationFrame(onFrame));
-    hero.addEventListener('loadeddata', grab);
-    hero.addEventListener('seeked', grab);
-    hero.addEventListener('ended', grab);           // the finished painting stays under the glass
-  } else if (hero) {
-    const s = source(hero, hero.closest('.hero'));
-    const go = () => picture(s, hero.currentSrc || hero.src);
-    if (hero.complete && hero.naturalWidth) go(); else hero.addEventListener('load', go, { once: true });
-  }
-
   // The floating gallery: the frames gallery.js draws under the header (only once the gallery is showing).
   // Copying them made scrolling the gallery stutter on phones, so this is off unless the address asks for it:
   // ?glass=N, where N is how many frames to skip between copies (0: every frame; 1: every other frame; ...).
@@ -185,14 +162,35 @@
     });
   }
 
-  // The sections' background pictures (the Get in touch photo...), with each section's shade laid over them
-  for (const pic of document.querySelectorAll('[data-background] > .section-bg')) {
+  // The sections' backgrounds (the opening video, the Get in touch photo...), each with its section's shade
+  // (--shade, which darkens it on the page). A video: its poster first, then each new frame while it plays under
+  // the header. A video swapped for a still (backgrounds.js) is a picture like any other; with a fade, the last
+  // frame, which ends on top.
+  const backgrounds = [...document.querySelectorAll('[data-background]')]
+    .map((area) => [...area.querySelectorAll(':scope > .section-bg')].pop()).filter(Boolean);
+  for (const pic of backgrounds) {
     const area = pic.parentElement;
+    const shade = parseFloat(getComputedStyle(area).getPropertyValue('--shade')) || 0;
     const pos = getComputedStyle(pic).objectPosition.split(' ').map((v) => (v.endsWith('%') ? parseFloat(v) / 100 : 0.5));
-    const veil = getComputedStyle(area, '::after').backgroundColor.match(/[\d.]+/g);
-    const s = source(pic, area, pos, veil && veil.length > 3 ? +veil[3] : 0);
-    const go = () => picture(s, pic.currentSrc || pic.src);
-    if (pic.complete && pic.naturalWidth) go(); else pic.addEventListener('load', go, { once: true });
+    const s = source(pic, area, pos, shade);
+    if (pic.tagName === 'VIDEO') {
+      if (pic.poster) picture(s, pic.poster);
+      const grab = () => { if (pic.readyState >= 2) frame(s, pic, pic.videoWidth, pic.videoHeight); };
+      const rvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+      const onFrame = () => {
+        if (headerHit(s)) grab();
+        if (rvfc) pic.requestVideoFrameCallback(onFrame);
+        else if (!pic.paused && !pic.ended) requestAnimationFrame(onFrame);
+      };
+      if (rvfc) pic.requestVideoFrameCallback(onFrame);
+      else pic.addEventListener('play', () => requestAnimationFrame(onFrame));
+      pic.addEventListener('loadeddata', grab);
+      pic.addEventListener('seeked', grab);
+      pic.addEventListener('ended', grab);           // the last frame stays under the glass
+    } else {
+      const go = () => picture(s, pic.currentSrc || pic.src);
+      if (pic.complete && pic.naturalWidth) go(); else pic.addEventListener('load', go, { once: true });
+    }
   }
 
   // ---- Drawing the header ----

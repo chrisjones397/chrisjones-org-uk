@@ -68,15 +68,44 @@ function imgTag(p, prefix, sizes, indent) {
     + `${indent}     width="${p.w}" height="${p.h}" alt="${esc(p.title)}" loading="lazy">`;
 }
 
-/* A section's background picture (entry bg-<section>), put in as the section's first child, so the parallax
-   (motion.js, sections marked .parallax) and the header's glass (glass.js) find it like any section picture.
-   Its focus is where the screen's shape crops it round; --shade darkens it so the words over it read. */
+/* A section's background (entry bg-<section>), a photo or a video, put in as the section's first child, so the
+   parallax (motion.js) and the header's glass (glass.js) find it. Its focus is where the screen's shape crops it;
+   --shade darkens it so the words over it read.
+   A video's versions are <source>s, the browser taking the first that matches: portrait versions first, for
+   screens held upright, then by width, each needing a screen that shows more pixels across (window width x pixel
+   density) than the next smaller version has. Each source carries its own first and last frames (data-first,
+   data-last), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
+   the frames of the version chosen, starts it, and gives visitors who ask for reduced motion or less data the
+   still (calm: last frame, or a fade from first to last) instead. */
+const at = (name, w) => `/media/images/${name}-${w}.jpg`;
+const srcsetOf = (name, widths) => widths.map((w) => `${at(name, w)} ${w}w`).join(', ');
+const near = (widths, want) => widths.find((w) => w >= want) || widths[widths.length - 1];
 function bgTag(b) {
-  const at = (w) => `/${b.base}${b.file}-${w}.${b.ext}`;
-  const src = b.widths.find((w) => w >= 1536) || b.widths[b.widths.length - 1];
-  return `<img class="section-bg" src="${at(src)}" srcset="${b.widths.map((w) => `${at(w)} ${w}w`).join(', ')}" sizes="100vw"`
-    + ` width="${b.w}" height="${b.h}" alt="" loading="lazy" decoding="async"`
-    + ` style="object-position: ${(b.focus[0] * 100).toFixed(1)}% ${(b.focus[1] * 100).toFixed(1)}%">`;
+  const pos = `object-position: ${(b.focus[0] * 100).toFixed(1)}% ${(b.focus[1] * 100).toFixed(1)}%`;
+  if (b.type !== 'video') {
+    const widths = b.widths;
+    return `<img class="section-bg" src="${at(b.file, near(widths, 1536))}" srcset="${srcsetOf(b.file, widths)}" sizes="100vw"`
+      + ` width="${b.w}" height="${b.h}" alt="" loading="lazy" decoding="async" style="${pos}">`;
+  }
+  const portrait = b.versions.filter((v) => v.h > v.w).sort((x, y) => y.w - x.w);
+  const landscape = b.versions.filter((v) => v.h <= v.w).sort((x, y) => y.w - x.w);
+  const needs = (n) => [1, 2, 3].map((d) => `(min-width: ${Math.floor(n / d) + 1}px)${d > 1 ? ` and (min-resolution: ${d}dppx)` : ''}`);
+  const media = (group, i, upright) => {
+    const next = group[i + 1];
+    const wide = next ? needs(next.w) : null;
+    if (upright) return wide ? wide.map((q) => `(orientation: portrait) and ${q}`).join(', ') : '(orientation: portrait)';
+    return wide ? wide.join(', ') : null;
+  };
+  const frames = (v) => ` data-first="${at(`${v.name}-first`, near(v.stills, Math.min(v.w, 1920)))}"`
+    + ` data-last="${at(`${v.name}-last`, near(v.stills, Math.min(v.w, 1920)))}"`
+    + ` data-first-set="${srcsetOf(`${v.name}-first`, v.stills)}" data-last-set="${srcsetOf(`${v.name}-last`, v.stills)}"`;
+  const sources = [...portrait.map((v, i) => [v, media(portrait, i, true)]), ...landscape.map((v, i) => [v, media(landscape, i, false)])]
+    .map(([v, m]) => `\n        <source src="/media/videos/${v.name}.mp4" type="video/mp4"${m ? ` media="${m}"` : ''}${frames(v)}>`).join('');
+  const lead = landscape[0] || portrait[0];
+  return `<video class="section-bg" poster="${at(`${lead.name}-first`, near(lead.stills, 1536))}" muted playsinline preload="metadata"`
+    + ` disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" aria-hidden="true"`
+    + ` data-play="${b.play}" data-calm="${b.calm}" style="${pos}">${sources}\n      </video>`
+    + '<script>window.bgVideo && bgVideo(document.currentScript.previousElementSibling)</script>';
 }
 
 export function galleryData(c) {
@@ -136,9 +165,9 @@ export function rewriter(c) {
       const paras = t.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
       el.append(paras.map((x) => `\n          <p>${esc(x)}</p>`).join('') + '\n        ', { html: true });
     } });
-  // A section's own stand-in picture (index.html) goes only when the database has one for it.
+  // A section's own stand-in (index.html: a picture, or a video and its script) goes only when the database has one.
   for (const key of Object.keys(c.backgrounds || {})) {
-    if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-background="${key}"] > img.section-bg[data-stand-in]`, { element(el) { el.remove(); } });
+    if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-background="${key}"] > [data-stand-in]`, { element(el) { el.remove(); } });
   }
   // A block's own paragraphs are replaced only when the database has text for it; otherwise the page's stay.
   for (const key of Object.keys(c.texts)) {

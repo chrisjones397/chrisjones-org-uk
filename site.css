@@ -174,25 +174,9 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   position: relative;
   overflow: hidden;   /* the title drifts down with the scroll; it stays within the picture */
 }
-.hero img, .hero video {
-  display: block;
-  width: 100%;
+.hero {
   height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
   height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
-  object-fit: cover;  /* trimmed at the sides or top and bottom to fit */
-}
-/* The opening video is a backdrop, not something to operate. Firefox on iPhone shows the
-   player's controls over it uninvited (Safari doesn't), so taps pass straight through it
-   and WebKit's controls are hidden. */
-.hero video {
-  pointer-events: none;
-}
-.hero video::-webkit-media-controls,
-.hero video::-webkit-media-controls-panel,
-.hero video::-webkit-media-controls-overlay-play-button,
-.hero video::-webkit-media-controls-start-playback-button {
-  display: none !important;
-  -webkit-appearance: none;
 }
 /* The opening title and any paragraphs under it (edited as the Hero section) */
 .hero-words {
@@ -247,10 +231,11 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   object-position: 85% 100%;   /* the palette and brush are low and to the right: keep them in view */
 }
 
-/* A section's background picture (data-background; chosen in the editor, put in by site.js), filling the
-   section; in a .parallax section a little taller, so the parallax never shows an edge. Its own style gives the
-   point kept in view. --shade darkens it, so the words over it always read. */
-[data-background] { position: relative; }
+/* A section's background, a photo or a video (data-background; chosen in the editor, put in by site.js),
+   filling the section and trimmed at the sides or top and bottom to fit, keeping its focus (its own style) in
+   view; in a .parallax section a little taller, so the parallax never shows an edge. --shade darkens it, so the
+   words over it always read (a brightness filter: the same as a black veil, without covering the words). */
+[data-background] { position: relative; overflow: hidden; }
 .section-bg {
   position: absolute;
   left: 0;
@@ -259,18 +244,28 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   height: 100%;
   object-fit: cover;
   pointer-events: none;
+  filter: brightness(calc(1 - var(--shade, 0)));
 }
 .parallax > .section-bg {
   top: -10%;
   height: 120%;
 }
-.has-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, var(--shade, 0));
-  pointer-events: none;
+.section-bg.bg-fade { opacity: 0; transition: opacity 4s ease-in-out; }   /* reduced motion: first frame to last */
+.section-bg.bg-fade.in { opacity: 1; }
+video.section-bg::-webkit-media-controls,
+video.section-bg::-webkit-media-controls-panel,
+video.section-bg::-webkit-media-controls-overlay-play-button,
+video.section-bg::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
 }
+/* The footer, given a background, runs the full width, its words kept to the usual width */
+.site-footer.has-bg {
+  max-width: none;
+  padding-left: max(20px, calc((100% - 1160px) / 2));
+  padding-right: max(20px, calc((100% - 1160px) / 2));
+}
+.site-footer.has-bg > :not(.section-bg) { position: relative; }
 .contact-words {
   position: relative;
   z-index: 1;

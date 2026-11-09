@@ -28,18 +28,18 @@ const open = new Set();             // paintings whose edit form is open
 /* The page's sections, each with its heading, any other words, and its paragraphs (one text entry per section,
    paragraphs separated by a blank line; site.js puts them into the page's data-paragraphs="key" block). */
 const PAGE = [
-  { name: 'Hero', heading: 't-hero-title', paras: 't-hero' },
+  { name: 'Hero', heading: 't-hero-title', paras: 't-hero', bg: 'hero' },
   { name: 'Gallery', heading: 't-gallery-title', extra: [['t-gallery-button', 'Button']], paras: 't-gallery' },
   { name: 'Contact', heading: 't-contact-title', paras: 't-contact', bg: 'contact' },
   { name: 'Profile', heading: 't-profile-title', paras: 't-profile' },
-  { name: 'Footer', paras: 't-footer' },
+  { name: 'Footer', paras: 't-footer', bg: 'footer' },
 ];
 const TEXTS = PAGE.flatMap((p) => [
   ...(p.heading ? [[p.heading, `${p.name} heading`]] : []), ...(p.extra || []).map(([id, n]) => [id, `${p.name} ${n.toLowerCase()}`]),
   [p.paras, `${p.name} paragraphs`]]);
 const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
-/* Sections with bg can have a picture behind them (entries bg-<section>; BACKGROUNDS in editor.js, the server,
-   must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
+/* Sections with bg can have a photo or video behind them (entries bg-<section>; BACKGROUNDS in editor.js, the
+   server, must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
 const BG_WIDTHS = [768, 1024, 1536, 2560, 3840];
 
 // ---- talking to the server ---------------------------------------------------------------------------------
@@ -164,7 +164,7 @@ function galleryView() {
 /* The page's words, a box for each section: its heading, then a box for each paragraph. */
 const extraParas = {};               // section -> empty paragraph boxes added but not yet typed in
 function contentView() {
-  const out = [h('h1', {}, 'Content'), h('p', { class: 'hint' }, HINT)];
+  const out = [h('h1', {}, 'Content'), h('p', { class: 'hint' }, HINT), ...[moveInBox()].filter(Boolean)];
   for (const sec of PAGE) {
     const card = h('div', { class: 'card' }, h('h2', { class: 'card-title' }, sec.name));
     const field = (id, name) => {
@@ -207,80 +207,278 @@ function contentView() {
   return out;
 }
 
-/* A section's background picture: the picture with its focus (the point kept in view when the screen's shape
-   crops it: tap the picture to move it), how it would be cropped on a phone held upright and on a wide screen,
-   the shade (how much it's darkened, so the words over it read), and choosing, replacing or removing the
-   photo. A new photo's original goes to R2's originals/ as a painting's does (keepOriginal) and its sizes are
-   made here, from the photo as it is (no white balance or corners: it's a photograph, not a painting). */
-const bgBusy = {};                    // section -> what it's doing, while a photo is made into sizes
+/* A section's background: a photo or a video, shown as it is now (the photo, or the video's last frame), with
+   its focus (the point kept in view when the screen's shape crops it: tap the picture to move it), how a phone held
+   upright and a wide screen would crop it, and the shade (how much it's darkened, so the words over it read).
+   A photo: its original goes to R2's originals/ as a painting's does (keepOriginal) and its sizes are made here,
+   from the photo as it is (it's a photograph, not a painting: no white balance or corners).
+   A video: one or more versions (e.g. a large one for big screens, a small one for phones, one upright for phones
+   held upright), each uploaded as made, after the checks in videoFacts(); its first and last frames are taken here
+   and stored as pictures. How it plays (once, or on a loop) and what visitors who ask for reduced motion or less
+   data see instead (its last frame, or a slow fade from the first frame to the last) are the section's choices. */
+const bgBusy = {};                    // section -> what it's doing, while a photo or video is being stored
+const bgNotes = {};                   // section -> the checks' findings for the video version last added
+const STAND_INS = {                   // what the site shows from git until a section's background is in the database
+  hero: { type: 'video', still: '/med/jpg/painted-forest-v8-end.jpg', files: ['/med/painted-forest-v8-3840.mp4', '/med/painted-forest-v8-2560.mp4', '/med/painted-forest-v8-1536.mp4'] },
+  contact: { type: 'photo', still: '/med/contact-1536.webp', file: '/med/jpg/paint-palette.jpg', focus: [0.85, 1], shade: 0.12 },
+};
+const MB = (b) => `${(b / 1048576).toFixed(1)} megabytes`;
+const lastStill = (d) => {
+  const v = d.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || d.versions[0];
+  return `/media/images/${v.name}-last-${v.stills.find((w) => w >= 1024) || v.stills[v.stills.length - 1]}.jpg`;
+};
+
 function backgroundBox(key) {
   const id = `bg-${key}`, e = byId(id), d = e && current(e);
-  const box = h('div', { class: 'box bg-box' }, h('label', {}, 'Background picture ', e ? badge(e) : null));
-  if (!media) return box.append(h('p', { class: 'hint' }, 'Needs image storage (R2), which isn\'t switched on for this site.')), box;
-  const pick = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => pick.files[0] && choose(pick.files[0]) });
+  const box = h('div', { class: 'box bg-box' }, h('label', {}, 'Background ', e ? badge(e) : null));
+  if (!media) return box.append(h('p', { class: 'hint' }, 'Needs file storage (R2), which isn\'t switched on for this site.')), box;
+  const busy = !!bgBusy[key];
   const status = h('p', { class: 'hint' }, bgBusy[key] || '');
-  const at = (b, w) => `/${b.base}${b.file}-${w}.${b.ext}`;
+  const say = (t) => { bgBusy[key] = t; status.textContent = t; };
+  const store = (data, msg) => save([{ id, kind: 'background', data }], msg);
+  const pickPhoto = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => pickPhoto.files[0] && run(() => addPhoto(pickPhoto.files[0])) });
+  const pickVideo = h('input', { type: 'file', accept: 'video/mp4,.mp4,.m4v', hidden: true,
+    onchange: () => pickVideo.files[0] && run(() => addVideo(pickVideo.files[0], d && d.type === 'video' ? d : null)) });
+
   if (d) {
-    const src = at(d, d.widths.find((w) => w >= 1024) || d.widths[d.widths.length - 1]);
-    const pos = () => `${(d.focus[0] * 100).toFixed(1)}% ${(d.focus[1] * 100).toFixed(1)}%`;
-    const dot = h('span', { class: 'bg-focus', style: `left: ${d.focus[0] * 100}%; top: ${d.focus[1] * 100}%` });
+    const src = d.type === 'video' ? lastStill(d)
+      : `/media/images/${d.file}-${d.widths.find((w) => w >= 1024) || d.widths[d.widths.length - 1]}.jpg`;
+    const pos = `${(d.focus[0] * 100).toFixed(1)}% ${(d.focus[1] * 100).toFixed(1)}%`;
     const frames = ['phone', 'wide'].map((k) => h('div', { class: `bg-frame ${k}`, title: k === 'phone' ? 'On a phone held upright' : 'On a wide screen',
-      style: `background-image: url("${src}"); background-position: ${pos()}` }));
-    const shadeOf = () => h('div', { class: 'bg-shade', style: `background: rgba(0,0,0,${d.shade})` });
-    frames.forEach((f) => f.append(shadeOf()));
+      style: `background-image: url("${src}"); background-position: ${pos}; filter: brightness(${1 - d.shade})` }));
     box.append(
       h('div', { class: 'bg-pick', title: 'Tap the part to keep in view', onclick: (ev) => {
         const r = ev.currentTarget.getBoundingClientRect();
         const focus = [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000);
-        save([{ id, kind: 'background', data: { ...d, focus } }], 'Focus saved as a draft');
-      } }, h('img', { src, alt: '', width: d.w, height: d.h }), dot),
-      h('p', { class: 'hint' }, 'Tap the part of the picture to keep in view. How it would be cropped:'),
+        store({ ...d, focus }, 'Focus saved as a draft');
+      } }, h('img', { src, alt: '' }), h('span', { class: 'bg-focus', style: `left: ${d.focus[0] * 100}%; top: ${d.focus[1] * 100}%` })),
+      h('p', { class: 'hint' }, d.type === 'video' ? 'The video\'s last frame. ' : '', 'Tap the part to keep in view. How it would be cropped:'),
       h('div', { class: 'bg-frames' }, ...frames.map((f) => h('figure', {}, f, h('figcaption', {}, f.title)))),
       h('label', {}, `Shade: ${Math.round(d.shade * 100)}%`),
-      h('input', { type: 'range', min: 0, max: 60, step: 1, value: Math.round(d.shade * 100), class: 'grow',
-        oninput: (ev) => { frames.forEach((f) => { f.lastChild.style.background = `rgba(0,0,0,${ev.target.value / 100})`; });
+      h('input', { type: 'range', min: 0, max: 60, step: 1, value: Math.round(d.shade * 100),
+        oninput: (ev) => { frames.forEach((f) => { f.style.filter = `brightness(${1 - ev.target.value / 100})`; });
           ev.target.previousSibling.textContent = `Shade: ${ev.target.value}%`; },
-        onchange: (ev) => save([{ id, kind: 'background', data: { ...d, shade: ev.target.value / 100 } }], 'Shade saved as a draft') }),
-      h('p', { class: 'hint' }, `${d.w} × ${d.h} pixels.`));
+        onchange: (ev) => store({ ...d, shade: ev.target.value / 100 }, 'Shade saved as a draft') }));
+    if (d.type === 'video') {
+      const choice = (label, field, options) => h('label', {}, label, h('select', { onchange: (ev) => store({ ...d, [field]: ev.target.value }, 'Saved as a draft') },
+        ...options.map(([v, t]) => h('option', { value: v, selected: d[field] === v }, t))));
+      box.append(
+        choice('Plays', 'play', [['once', 'Once, stopping on its last frame'], ['loop', 'On a loop']]),
+        choice('For visitors who ask for reduced motion or less data', 'calm', [['last', 'Its last frame'], ['fade', 'A slow fade from its first frame to its last']]),
+        h('label', {}, 'Versions (the browser picks one for each screen)'),
+        ...versionRows(d).map(([v, text]) => h('div', { class: 'row bg-version' }, h('span', { class: 'grow' }, text),
+          d.versions.length > 1 ? h('button', { class: 'danger', disabled: busy, title: 'Remove this version',
+            onclick: () => confirm('Remove this version?') && store({ ...d, versions: d.versions.filter((x) => x !== v) }, 'Version removed in the draft') }, 'Remove') : null)));
+      if (bgNotes[key]) box.append(h('div', { class: 'bg-notes' }, ...bgNotes[key].map((n) => h('p', { class: 'hint' }, n))));
+    } else {
+      box.append(h('p', { class: 'hint' }, `Photo, ${d.w} × ${d.h} pixels.`));
+    }
+  } else if (STAND_INS[key] && !e) {
+    box.append(h('img', { class: 'bg-standin', src: STAND_INS[key].still, alt: '' }),
+      h('p', { class: 'hint' }, `The site's built-in ${STAND_INS[key].type}${STAND_INS[key].type === 'video' ? ' (its last frame)' : ''}, from its files: move it into storage (above) to manage it here.`));
   } else {
-    box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no picture of its own.'
-      : 'None chosen yet: the site shows its built-in picture until one is published.'));
+    box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background.' : 'None: the section shows the page\'s grey.'));
   }
-  box.append(pick, status, h('div', { class: 'actions' },
-    h('button', { disabled: !!bgBusy[key], onclick: () => pick.click() }, d ? 'Replace photo…' : 'Choose photo…'),
-    d ? h('button', { class: 'danger', disabled: !!bgBusy[key], onclick: () => {
-      if (confirm('Remove this section\'s background picture?')) save([{ id, kind: 'background', data: null }], 'Removed in the draft');
-    } }, 'Remove') : null,
-    e && changed(e) ? h('button', { onclick: () => discard([id]) }, 'Undo change') : null));
+  box.append(pickPhoto, pickVideo, status, h('div', { class: 'actions' },
+    h('button', { disabled: busy, onclick: () => pickPhoto.click() }, d && d.type === 'photo' ? 'Replace with a photo…' : 'Choose a photo…'),
+    h('button', { disabled: busy, onclick: () => { addingFresh = true; pickVideo.click(); } }, d ? 'Replace with a video…' : 'Choose a video…'),
+    d && d.type === 'video' ? h('button', { disabled: busy || d.versions.length >= 6, onclick: () => { addingFresh = false; pickVideo.click(); } }, 'Add a version…') : null,
+    d ? h('button', { class: 'danger', disabled: busy, onclick: () => confirm('Remove this section\'s background?') && store(null, 'Removed in the draft') }, 'Remove') : null,
+    e && changed(e) ? h('button', { disabled: busy, onclick: () => discard([id]) }, 'Undo change') : null));
   return box;
 
-  async function choose(file) {
-    const say = (t) => { bgBusy[key] = t; status.textContent = t; };
-    try {
-      say('Reading the photo…');
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      try { await img.decode(); } catch { throw new Error('This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.'); }
-      const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
-      const src = scaled(img, Math.round(W * k));
-      URL.revokeObjectURL(img.src);
-      const { key: original } = await keepOriginal(file, id, null, say);
-      const { file: stem } = await call('GET', `free?name=${id}`);
-      const widths = [...new Set(BG_WIDTHS.filter((w) => w < src.width).concat(Math.min(src.width, BG_WIDTHS[BG_WIDTHS.length - 1])))];
-      let n = 0;
-      for (const w of widths) {
-        say(`Making and uploading sizes: ${++n} of ${widths.length}`);
-        await put(`images/${stem}-${w}.jpg`, await resized(src, w), 'image/jpeg');
-      }
-      const top = widths[widths.length - 1];
-      delete bgBusy[key];
-      await save([{ id, kind: 'background', data: { file: stem, base: 'media/images/', ext: 'jpg', w: top,
-        h: Math.round(src.height * top / src.width), widths, focus: [0.5, 0.5], shade: d ? d.shade : 0.12, original } }],
-        'Background picture saved as a draft: tap it to choose the part to keep in view');
-    } catch (err) {
-      delete bgBusy[key]; toast(err.message, true); render();
-    }
+  async function run(job) {
+    try { await job(); } catch (err) { toast(err.message, true); }
+    delete bgBusy[key]; render();
   }
+  async function addPhoto(file, extra = {}) {
+    const src = await photoOf(file, say);
+    const { key: original } = await keepOriginal(file, id, null, say);
+    const { file: stem } = await call('GET', `free?name=${id}`);
+    const widths = await storeSizes(stem, src, say);
+    const top = widths[widths.length - 1];
+    delete bgBusy[key];
+    await store({ type: 'photo', file: stem, focus: extra.focus || [0.5, 0.5], shade: extra.shade ?? (d ? d.shade : 0.12),
+      w: top, h: Math.round(src.height * top / src.width), widths, original }, 'Photo saved as a draft: tap it to choose the part to keep in view');
+  }
+  /* A video version: checked, uploaded as it is, its first and last frames stored as pictures. into: the
+     section's video to add it to (Add a version…), or null for a new video (Choose / Replace with a video…). */
+  async function addVideo(file, into) {
+    if (addingFresh) into = null;
+    const facts = await videoFacts(file, say);
+    const stem = into ? into.file : (await call('GET', `free?name=${id}`)).file;
+    const { file: name } = await call('GET', `free?name=${stem}-${facts.w}x${facts.h}`);
+    say(`Uploading the video (${MB(file.size)})…`);
+    await put(`videos/${name}.mp4`, file, 'video/mp4', 15 * 60000);
+    const stills = await storeSizes(`${name}-first`, facts.first, say, 'first frame');
+    await storeSizes(`${name}-last`, facts.last, say, 'last frame');
+    const version = { name, w: facts.w, h: facts.h, bytes: file.size, seconds: facts.seconds, stills };
+    bgNotes[key] = facts.notes;
+    delete bgBusy[key];
+    const base = into || { type: 'video', file: stem, focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0, versions: [], play: 'once', calm: 'last' };
+    await store({ ...base, type: 'video', versions: [...(base.versions || []), version] }, 'Video saved as a draft');
+  }
+}
+let addingFresh = false;
+
+/* Each version, described: its size, weight and which screens get it (the same rule as site.js bgTag). */
+function versionRows(d) {
+  const desc = (g) => g.sort((x, y) => y.w - x.w);
+  const upright = desc(d.versions.filter((v) => v.h > v.w)), level = desc(d.versions.filter((v) => v.h <= v.w));
+  const rows = (g, who) => g.map((v, i) => [v, `${v.w} × ${v.h}, ${v.seconds} seconds, ${MB(v.bytes)} `
+    + `(${(v.bytes * 8 / v.seconds / 1e6).toFixed(1)} megabits a second): for ${who}`
+    + `${g[i + 1] ? ` showing more than ${g[i + 1].w} pixels across` : g.length > 1 ? ', the rest' : ''}`]);
+  return [...rows(upright, 'phones held upright'), ...rows(level, upright.length ? 'screens held level' : 'all screens')];
+}
+
+/* A photo (File or Blob) read into a working copy, at most SOURCE_MAX pixels along its longer side. */
+async function photoOf(blob, say) {
+  say('Reading the photo…');
+  const img = new Image();
+  img.src = URL.createObjectURL(blob);
+  try { await img.decode(); } catch { throw new Error('This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.'); }
+  const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
+  const src = scaled(img, Math.round(W * k));
+  URL.revokeObjectURL(img.src);
+  return src;
+}
+
+/* Make a background's JPEG sizes (BG_WIDTHS, never larger than the picture) and store them as
+   images/<stem>-<width>.jpg; returns the widths. */
+async function storeSizes(stem, src, say, what = 'sizes') {
+  const widths = [...new Set(BG_WIDTHS.filter((w) => w < src.width).concat(Math.min(src.width, BG_WIDTHS[BG_WIDTHS.length - 1])))];
+  let n = 0;
+  for (const w of widths) {
+    say(`Making and uploading the ${what}: ${++n} of ${widths.length}`);
+    await put(`images/${stem}-${w}.jpg`, await resized(src, w), 'image/jpeg');
+  }
+  return widths;
+}
+
+/* Check a video before it's uploaded, and take its first and last frames. Refuses only what won't do: not an MP4,
+   or a video this browser can't play. Everything else is guidance (notes), shown under the versions:
+   - the codec, from the file's own description (its moov box): H.264 (avc1) plays in every browser; HEVC (hvc1,
+     hev1) not in Firefox nor on many Windows and Android devices; AV1 not on older Apple devices;
+   - whether its index (moov) comes before the picture data (mdat), so it can start playing before it has all
+     arrived ("fast start", "optimise for web"; ffmpeg -movflags +faststart);
+   - a sound track, which is never heard (backgrounds play muted) and only adds weight;
+   - its length (over 5 seconds needs the pause control, which the site has; past 30, most visitors have moved on);
+   - its weight for its size: megabits a second against a guide (1 + 3.5 per 4K screen's worth of pixels; the
+     forest video's versions are 0.9 to 4.3), and over 20 megabytes in all. */
+async function videoFacts(file, say) {
+  say('Checking the video…');
+  if (!/\.(mp4|m4v)$/i.test(file.name) && file.type !== 'video/mp4') throw new Error('Choose an MP4 video (H.264 is the one every browser plays).');
+  if (file.size > 95 * 1048576) throw new Error(`That video is ${MB(file.size)}: it must be under 95 megabytes (and far less is better for visitors).`);
+  const notes = [];
+  const boxes = [];
+  for (let at = 0; at < file.size && boxes.length < 64;) {
+    const b = new DataView(await file.slice(at, at + 16).arrayBuffer());
+    if (b.byteLength < 8) break;
+    let size = b.getUint32(0);
+    const type = String.fromCharCode(b.getUint8(4), b.getUint8(5), b.getUint8(6), b.getUint8(7));
+    if (size === 1 && b.byteLength >= 16) size = Number(b.getBigUint64(8));
+    else if (size === 0) size = file.size - at;
+    if (size < 8) break;
+    boxes.push({ type, at, size });
+    at += size;
+  }
+  const moov = boxes.find((b) => b.type === 'moov'), mdat = boxes.find((b) => b.type === 'mdat');
+  if (!moov) throw new Error('That doesn\'t look like an MP4 video.');
+  const desc = new TextDecoder('latin1').decode(await file.slice(moov.at, moov.at + Math.min(moov.size, 32 * 1048576)).arrayBuffer());
+  const codec = ['avc1', 'avc3', 'hvc1', 'hev1', 'av01', 'vp09'].find((c) => desc.includes(c));
+  const CODECS = { hvc1: 'HEVC (H.265)', hev1: 'HEVC (H.265)', av01: 'AV1', vp09: 'VP9' };
+  if (codec && !codec.startsWith('avc')) notes.push(`It's ${CODECS[codec]}, which some browsers and devices can't play: export it as H.264 so everyone sees it.`);
+  if (mdat && mdat.at < moov.at) notes.push('Its index is at the end of the file, so it can\'t start until it has all arrived: export it with "optimise for web" (or "fast start").');
+  if (desc.includes('soun')) notes.push('It has a sound track, which is never heard (backgrounds play muted): leaving it out makes the file smaller.');
+
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.preload = 'auto';
+  v.src = URL.createObjectURL(file);
+  const event = (name, ms = 20000) => new Promise((ok, no) => {
+    const t = setTimeout(() => no(new Error('This browser can\'t play that video: export it as MP4 with H.264.')), ms);
+    v.addEventListener(name, () => { clearTimeout(t); ok(); }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(t); no(new Error('This browser can\'t play that video: export it as MP4 with H.264.')); }, { once: true });
+  });
+  try {
+    await event('loadeddata');
+    const w = v.videoWidth, hh = v.videoHeight, seconds = v.duration;
+    if (!w || !hh || !isFinite(seconds)) throw new Error('This browser can\'t read that video\'s size or length.');
+    const grab = async (t) => {
+      say('Taking its first and last frames…');
+      v.currentTime = t; await event('seeked');
+      const c = document.createElement('canvas'); c.width = w; c.height = hh;
+      c.getContext('2d').drawImage(v, 0, 0, w, hh);
+      return c;
+    };
+    const first = await grab(0);
+    const last = await grab(Math.max(0, seconds - 0.05));
+    const rate = file.size * 8 / seconds / 1e6, guide = 1 + 3.5 * (w * hh) / (3840 * 2160);
+    if (seconds > 30) notes.push(`It runs ${Math.round(seconds)} seconds: most visitors will have moved on well before the end.`);
+    if (rate > guide * 1.25) notes.push(`It's ${rate.toFixed(1)} megabits a second; about ${guide.toFixed(1)} would do for its size, so it's heavier than it needs to be.`);
+    if (file.size > 20 * 1048576) notes.push(`It's ${MB(file.size)}: heavy for a background, especially on a phone's data.`);
+    if (Math.max(w, hh) < 1920) notes.push(`At ${w} × ${hh} it will look soft on large screens: fine as a small version, alongside a larger one.`);
+    if (!notes.length) notes.push('Checked: it plays everywhere, starts quickly and is a sensible weight for its size.');
+    return { w, h: hh, seconds, first, last, notes };
+  } finally {
+    URL.revokeObjectURL(v.src);
+  }
+}
+
+/* One-off: the site's built-in backgrounds (the opening video and the contact photo, still files in git) moved
+   into storage and the database as drafts, as if uploaded here, so they can be managed like any other; publish
+   them under Review. Once done on both sites, the files leave git and this goes. */
+function moveInBox() {
+  if (!media) return null;
+  const left = Object.keys(STAND_INS).filter((k) => !byId(`bg-${k}`));
+  if (!left.length) return null;
+  const note = h('p', { class: 'hint' }, '');
+  const go = h('button', { class: 'main', onclick: async () => {
+    go.disabled = true;
+    try {
+      for (const k of left) {
+        const si = STAND_INS[k], id = `bg-${k}`;
+        const say = (t) => { note.textContent = `${k === 'hero' ? 'Opening video' : 'Contact photo'}: ${t}`; };
+        const fetched = async (url) => {
+          say(`fetching ${url.split('/').pop()}…`);
+          const r = await fetchFor(url, {}, 300000);
+          if (!r.ok) throw new Error(`Couldn't fetch ${url} (${r.status})`);
+          const b = await r.blob();
+          return new File([b], url.split('/').pop(), { type: b.type || (url.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg') });
+        };
+        if (si.type === 'photo') {
+          const file = await fetched(si.file);
+          const src = await photoOf(file, say);
+          const { key: original } = await keepOriginal(file, id, null, say);
+          const { file: stem } = await call('GET', `free?name=${id}`);
+          const widths = await storeSizes(stem, src, say);
+          const top = widths[widths.length - 1];
+          await call('POST', 'save', { items: [{ id, kind: 'background', data: { type: 'photo', file: stem, focus: si.focus, shade: si.shade,
+            w: top, h: Math.round(src.height * top / src.width), widths, original } }] });
+        } else {
+          const { file: stem } = await call('GET', `free?name=${id}`);
+          const versions = [];
+          for (const url of si.files) {
+            const file = await fetched(url);
+            const facts = await videoFacts(file, say);
+            const { file: name } = await call('GET', `free?name=${stem}-${facts.w}x${facts.h}`);
+            say(`uploading ${MB(file.size)}…`);
+            await put(`videos/${name}.mp4`, file, 'video/mp4', 15 * 60000);
+            const stills = await storeSizes(`${name}-first`, facts.first, say, 'first frame');
+            await storeSizes(`${name}-last`, facts.last, say, 'last frame');
+            versions.push({ name, w: facts.w, h: facts.h, bytes: file.size, seconds: facts.seconds, stills });
+          }
+          await call('POST', 'save', { items: [{ id, kind: 'background', data: { type: 'video', file: stem, focus: [0.5, 0.5], shade: 0,
+            versions, play: 'once', calm: 'last' } }] });
+        }
+      }
+      toast('Moved into storage as drafts: publish them under Review');
+    } catch (err) { toast(err.message, true); }
+    render();
+  } }, 'Move them into storage');
+  return h('div', { class: 'card' }, h('p', {}, 'The site\'s built-in backgrounds (',
+    left.map((k) => (k === 'hero' ? 'the opening video' : 'the contact photo')).join(' and '),
+    ') are still files in its code. Move them into storage once, so they can be managed here like any other.'),
+  h('div', { class: 'actions' }, go), note);
 }
 
 /* The painting's medium, size in centimetres and year, as separate fields (the server makes the details line
@@ -930,8 +1128,8 @@ function addForm(secs) {
   return form;
 }
 
-async function put(key, blob, type) {
-  const r = await fetchFor(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, 120000);
+async function put(key, blob, type, ms = 120000) {
+  const r = await fetchFor(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, ms);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
   return r.json();
 }
@@ -962,13 +1160,13 @@ async function keepOriginal(file, name, known, say) {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { file: 'Picture', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For reduced motion', file: 'Files', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
   const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'section' ? ((byId(v) && current(byId(v)).title) || v)
     : k === 'cm' ? `${v[0]} × ${v[1]} cm` : k === 'focus' ? `${Math.round(v[0] * 100)}% across, ${Math.round(v[1] * 100)}% down`
-    : k === 'shade' ? `${Math.round(v * 100)}%` : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
+    : k === 'shade' ? `${Math.round(v * 100)}%` : k === 'versions' ? v.map((x) => `${x.w} × ${x.h}`).join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
   // the details line is made from medium, size and year, so it isn't listed as a change of its own
   return Object.keys(b).filter((k) => !(k === 'details' && 'cm' in b) && JSON.stringify(a[k]) !== JSON.stringify(b[k])).map((k) =>
     h('div', {}, h('b', {}, `${FIELDS[k] || k}: `), h('del', {}, show(k, a[k])), ' → ', h('ins', {}, show(k, b[k]))));

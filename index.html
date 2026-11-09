@@ -60,6 +60,7 @@
     })();
   </script>
   <link rel="stylesheet" href="site.css">
+  <script src="backgrounds.js"></script>   <!-- starts background videos (or gives calm visitors a still): see the file -->
 </head>
 <body>
 
@@ -67,10 +68,11 @@
   
   <main id="main-content">
 
-    <!-- Opening image -->
-    <section class="hero">
-      <video poster="med/jpg/forest-1536.jpg"
-             autoplay muted playsinline preload="auto"
+    <!-- Opening: its background (data-background) is chosen in the editor (entry bg-hero); the video from git
+         stands in until there is one in the database, and is then left out (site.js) -->
+    <section class="hero" data-background="hero">
+      <video class="section-bg" data-stand-in poster="med/jpg/forest-1536.jpg" data-end="med/jpg/painted-forest-v8-end.jpg"
+             autoplay muted playsinline preload="auto" data-play="once" data-calm="last"
              disablepictureinpicture disableremoteplayback x-webkit-airplay="deny"
              role="img" aria-label="Woodland with bracken, being painted over in oils">
         <!-- the browser takes the first that matches: the size the screen can actually show (window width x pixel density) -->
@@ -79,26 +81,7 @@
         <source src="med/painted-forest-v8-2560.mp4" type="video/mp4"
                 media="(min-width: 1537px), (min-width: 769px) and (min-resolution: 2dppx), (min-width: 513px) and (min-resolution: 3dppx)">
         <source src="med/painted-forest-v8-1536.mp4" type="video/mp4">
-      </video>
-      <script>
-        /* Visitors who have asked their device to reduce motion see the finished painting straight away */
-        (function () {
-          var v = document.querySelector('.hero video');
-          if (v && matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            v.removeAttribute('autoplay'); v.pause(); v.preload = 'none';
-            v.poster = 'med/jpg/painted-forest-v8-end.jpg';
-            v.querySelectorAll('source').forEach(function (s) { s.remove(); }); v.load();
-          }
-          /* Firefox on iPhone switches the player's controls on by itself as the video starts;
-             switch them straight back off whenever that happens */
-          if (v) {
-            var noControls = function () { if (v.controls || v.hasAttribute('controls')) { v.controls = false; v.removeAttribute('controls'); } };
-            noControls();
-            new MutationObserver(noControls).observe(v, { attributes: true, attributeFilter: ['controls'] });
-            ['loadedmetadata', 'canplay', 'play', 'playing'].forEach(function (e) { v.addEventListener(e, noControls); });
-          }
-        })();
-      </script>
+      </video><script data-stand-in>bgVideo(document.currentScript.previousElementSibling)</script>
       <div class="hero-words" data-paragraphs="hero">
         <h1 class="hero-title" data-text="hero-title">Fine art in oil, watercolour, and pastel</h1>
       </div>
@@ -163,9 +146,9 @@
     </section>
 
     <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
-    <!-- data-background: the section can have a picture behind it, chosen in the editor (entry bg-contact); this
-         one, from git, stands in until there is one in the database, and is then left out (site.js) -->
-    <section id="contact" class="contact parallax has-bg" data-background="contact" style="--shade: 0.12">
+    <!-- data-background: the section can have a photo or video behind it, chosen in the editor (entry bg-contact);
+         this one, from git, stands in until there is one in the database, and is then left out (site.js) -->
+    <section id="contact" class="contact parallax" data-background="contact" style="--shade: 0.12">
       <img class="section-bg contact-pic" data-stand-in src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w, med/contact-2560.webp 2560w, med/contact-3840.webp 3840w" sizes="100vw" width="3840" height="2560" alt="" loading="lazy">
       <div class="contact-words">
         <h2 class="contact-title" data-text="contact-title">Get in touch</h2>
@@ -198,7 +181,7 @@
 
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-background="footer">
     <script>
       (function () {
         var addr = ['chrisjones.org.uk', '@', 'hello'].reverse().join('');   // put together here, so spam robots never find the address in the page
