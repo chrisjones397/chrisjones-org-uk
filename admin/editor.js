@@ -30,7 +30,7 @@ const open = new Set();             // paintings whose edit form is open
 const PAGE = [
   { name: 'Hero', heading: 't-hero-title', paras: 't-hero' },
   { name: 'Gallery', heading: 't-gallery-title', extra: [['t-gallery-button', 'Button']], paras: 't-gallery' },
-  { name: 'Contact', heading: 't-contact-title', paras: 't-contact' },
+  { name: 'Contact', heading: 't-contact-title', paras: 't-contact', bg: 'contact' },
   { name: 'Profile', heading: 't-profile-title', paras: 't-profile' },
   { name: 'Footer', paras: 't-footer' },
 ];
@@ -38,6 +38,9 @@ const TEXTS = PAGE.flatMap((p) => [
   ...(p.heading ? [[p.heading, `${p.name} heading`]] : []), ...(p.extra || []).map(([id, n]) => [id, `${p.name} ${n.toLowerCase()}`]),
   [p.paras, `${p.name} paragraphs`]]);
 const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
+/* Sections with bg can have a picture behind them (entries bg-<section>; BACKGROUNDS in editor.js, the server,
+   must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
+const BG_WIDTHS = [768, 1024, 1536, 2560, 3840];
 
 // ---- talking to the server ---------------------------------------------------------------------------------
 
@@ -102,6 +105,7 @@ const label = (e) => {
   if (e.kind === 'painting') return d.title;
   if (e.kind === 'section') return `Genre: ${d.title}`;
   if (e.kind === 'text') return (TEXTS.find((t) => t[0] === e.id) || [0, e.id])[1].replace(/ \(.*/, '');
+  if (e.kind === 'background') return `${(PAGE.find((p) => p.bg === e.id.slice(3)) || { name: e.id.slice(3) }).name} background picture`;
   return e.id === 'settings-gallery' ? 'Gallery settings' : 'Gallery invitation';
 };
 
@@ -171,6 +175,7 @@ function contentView() {
     };
     if (sec.heading) card.append(field(sec.heading, 'Heading'));
     for (const [id, name] of sec.extra || []) card.append(field(id, name));
+    if (sec.bg) card.append(backgroundBox(sec.bg));
     // Paragraphs: stored as one text, a blank line between paragraphs.
     const e = byId(sec.paras);
     const paras = (e ? (current(e) || {}).text || '' : '').split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
@@ -200,6 +205,82 @@ function contentView() {
     out.push(card);
   }
   return out;
+}
+
+/* A section's background picture: the picture with its focus (the point kept in view when the screen's shape
+   crops it: tap the picture to move it), how it would be cropped on a phone held upright and on a wide screen,
+   the shade (how much it's darkened, so the words over it read), and choosing, replacing or removing the
+   photo. A new photo's original goes to R2's originals/ as a painting's does (keepOriginal) and its sizes are
+   made here, from the photo as it is (no white balance or corners: it's a photograph, not a painting). */
+const bgBusy = {};                    // section -> what it's doing, while a photo is made into sizes
+function backgroundBox(key) {
+  const id = `bg-${key}`, e = byId(id), d = e && current(e);
+  const box = h('div', { class: 'box bg-box' }, h('label', {}, 'Background picture ', e ? badge(e) : null));
+  if (!media) return box.append(h('p', { class: 'hint' }, 'Needs image storage (R2), which isn\'t switched on for this site.')), box;
+  const pick = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => pick.files[0] && choose(pick.files[0]) });
+  const status = h('p', { class: 'hint' }, bgBusy[key] || '');
+  const at = (b, w) => `/${b.base}${b.file}-${w}.${b.ext}`;
+  if (d) {
+    const src = at(d, d.widths.find((w) => w >= 1024) || d.widths[d.widths.length - 1]);
+    const pos = () => `${(d.focus[0] * 100).toFixed(1)}% ${(d.focus[1] * 100).toFixed(1)}%`;
+    const dot = h('span', { class: 'bg-focus', style: `left: ${d.focus[0] * 100}%; top: ${d.focus[1] * 100}%` });
+    const frames = ['phone', 'wide'].map((k) => h('div', { class: `bg-frame ${k}`, title: k === 'phone' ? 'On a phone held upright' : 'On a wide screen',
+      style: `background-image: url("${src}"); background-position: ${pos()}` }));
+    const shadeOf = () => h('div', { class: 'bg-shade', style: `background: rgba(0,0,0,${d.shade})` });
+    frames.forEach((f) => f.append(shadeOf()));
+    box.append(
+      h('div', { class: 'bg-pick', title: 'Tap the part to keep in view', onclick: (ev) => {
+        const r = ev.currentTarget.getBoundingClientRect();
+        const focus = [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000);
+        save([{ id, kind: 'background', data: { ...d, focus } }], 'Focus saved as a draft');
+      } }, h('img', { src, alt: '', width: d.w, height: d.h }), dot),
+      h('p', { class: 'hint' }, 'Tap the part of the picture to keep in view. How it would be cropped:'),
+      h('div', { class: 'bg-frames' }, ...frames.map((f) => h('figure', {}, f, h('figcaption', {}, f.title)))),
+      h('label', {}, `Shade: ${Math.round(d.shade * 100)}%`),
+      h('input', { type: 'range', min: 0, max: 60, step: 1, value: Math.round(d.shade * 100), class: 'grow',
+        oninput: (ev) => { frames.forEach((f) => { f.lastChild.style.background = `rgba(0,0,0,${ev.target.value / 100})`; });
+          ev.target.previousSibling.textContent = `Shade: ${ev.target.value}%`; },
+        onchange: (ev) => save([{ id, kind: 'background', data: { ...d, shade: ev.target.value / 100 } }], 'Shade saved as a draft') }),
+      h('p', { class: 'hint' }, `${d.w} × ${d.h} pixels.`));
+  } else {
+    box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no picture of its own.'
+      : 'None chosen yet: the site shows its built-in picture until one is published.'));
+  }
+  box.append(pick, status, h('div', { class: 'actions' },
+    h('button', { disabled: !!bgBusy[key], onclick: () => pick.click() }, d ? 'Replace photo…' : 'Choose photo…'),
+    d ? h('button', { class: 'danger', disabled: !!bgBusy[key], onclick: () => {
+      if (confirm('Remove this section\'s background picture?')) save([{ id, kind: 'background', data: null }], 'Removed in the draft');
+    } }, 'Remove') : null,
+    e && changed(e) ? h('button', { onclick: () => discard([id]) }, 'Undo change') : null));
+  return box;
+
+  async function choose(file) {
+    const say = (t) => { bgBusy[key] = t; status.textContent = t; };
+    try {
+      say('Reading the photo…');
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      try { await img.decode(); } catch { throw new Error('This browser can\'t read that photo. On a Mac, Chrome can\'t open HEIC: use Safari, or export it as JPEG.'); }
+      const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
+      const src = scaled(img, Math.round(W * k));
+      URL.revokeObjectURL(img.src);
+      const { key: original } = await keepOriginal(file, id, null, say);
+      const { file: stem } = await call('GET', `free?name=${id}`);
+      const widths = [...new Set(BG_WIDTHS.filter((w) => w < src.width).concat(Math.min(src.width, BG_WIDTHS[BG_WIDTHS.length - 1])))];
+      let n = 0;
+      for (const w of widths) {
+        say(`Making and uploading sizes: ${++n} of ${widths.length}`);
+        await put(`images/${stem}-${w}.jpg`, await resized(src, w), 'image/jpeg');
+      }
+      const top = widths[widths.length - 1];
+      delete bgBusy[key];
+      await save([{ id, kind: 'background', data: { file: stem, base: 'media/images/', ext: 'jpg', w: top,
+        h: Math.round(src.height * top / src.width), widths, focus: [0.5, 0.5], shade: d ? d.shade : 0.12, original } }],
+        'Background picture saved as a draft: tap it to choose the part to keep in view');
+    } catch (err) {
+      delete bgBusy[key]; toast(err.message, true); render();
+    }
+  }
 }
 
 /* The painting's medium, size in centimetres and year, as separate fields (the server makes the details line
@@ -881,12 +962,13 @@ async function keepOriginal(file, name, known, say) {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
+const FIELDS = { file: 'Picture', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
   const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'section' ? ((byId(v) && current(byId(v)).title) || v)
-    : k === 'cm' ? `${v[0]} × ${v[1]} cm` : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
+    : k === 'cm' ? `${v[0]} × ${v[1]} cm` : k === 'focus' ? `${Math.round(v[0] * 100)}% across, ${Math.round(v[1] * 100)}% down`
+    : k === 'shade' ? `${Math.round(v * 100)}%` : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
   // the details line is made from medium, size and year, so it isn't listed as a change of its own
   return Object.keys(b).filter((k) => !(k === 'details' && 'cm' in b) && JSON.stringify(a[k]) !== JSON.stringify(b[k])).map((k) =>
     h('div', {}, h('b', {}, `${FIELDS[k] || k}: `), h('del', {}, show(k, a[k])), ' → ', h('ins', {}, show(k, b[k]))));

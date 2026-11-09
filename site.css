@@ -243,20 +243,33 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   align-items: center;
   justify-content: center;
 }
-.contact-pic {
-  position: absolute;
-  left: 0;
-  top: -10%;            /* a little taller than the section, so the parallax never shows an edge */
-  width: 100%;
-  height: 120%;
-  object-fit: cover;
+.contact-pic {               /* the stand-in from git (index.html), until the editor has a picture for it */
   object-position: 85% 100%;   /* the palette and brush are low and to the right: keep them in view */
 }
-.contact::after {       /* a light shade over the picture, so the words always read */
+
+/* A section's background picture (data-background; chosen in the editor, put in by site.js), filling the
+   section; in a .parallax section a little taller, so the parallax never shows an edge. Its own style gives the
+   point kept in view. --shade darkens it, so the words over it always read. */
+[data-background] { position: relative; }
+.section-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.parallax > .section-bg {
+  top: -10%;
+  height: 120%;
+}
+.has-bg::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, var(--shade, 0));
+  pointer-events: none;
 }
 .contact-words {
   position: relative;

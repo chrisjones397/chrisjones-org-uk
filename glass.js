@@ -185,15 +185,14 @@
     });
   }
 
-  // The Get in touch photo, with the light shade laid over it on the page
-  const contact = document.querySelector('.contact-pic');
-  if (contact) {
-    const cs = getComputedStyle(contact);
-    const pos = cs.objectPosition.split(' ').map((v) => (v.endsWith('%') ? parseFloat(v) / 100 : 0.5));
-    const veil = getComputedStyle(contact.closest('.contact'), '::after').backgroundColor.match(/[\d.]+/g);
-    const s = source(contact, contact.closest('.contact'), pos, veil && veil.length > 3 ? +veil[3] : 0);
-    const go = () => picture(s, contact.currentSrc || contact.src);
-    if (contact.complete && contact.naturalWidth) go(); else contact.addEventListener('load', go, { once: true });
+  // The sections' background pictures (the Get in touch photo...), with each section's shade laid over them
+  for (const pic of document.querySelectorAll('[data-background] > .section-bg')) {
+    const area = pic.parentElement;
+    const pos = getComputedStyle(pic).objectPosition.split(' ').map((v) => (v.endsWith('%') ? parseFloat(v) / 100 : 0.5));
+    const veil = getComputedStyle(area, '::after').backgroundColor.match(/[\d.]+/g);
+    const s = source(pic, area, pos, veil && veil.length > 3 ? +veil[3] : 0);
+    const go = () => picture(s, pic.currentSrc || pic.src);
+    if (pic.complete && pic.naturalWidth) go(); else pic.addEventListener('load', go, { once: true });
   }
 
   // ---- Drawing the header ----

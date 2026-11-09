@@ -163,8 +163,10 @@
     </section>
 
     <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
-    <section id="contact" class="contact parallax">
-      <img class="contact-pic" src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w, med/contact-2560.webp 2560w, med/contact-3840.webp 3840w" sizes="100vw" width="3840" height="2560" alt="" loading="lazy">
+    <!-- data-background: the section can have a picture behind it, chosen in the editor (entry bg-contact); this
+         one, from git, stands in until there is one in the database, and is then left out (site.js) -->
+    <section id="contact" class="contact parallax has-bg" data-background="contact" style="--shade: 0.12">
+      <img class="section-bg contact-pic" data-stand-in src="med/contact-1536.webp" srcset="med/contact-1024.webp 1024w, med/contact-1536.webp 1536w, med/contact-2560.webp 2560w, med/contact-3840.webp 3840w" sizes="100vw" width="3840" height="2560" alt="" loading="lazy">
       <div class="contact-words">
         <h2 class="contact-title" data-text="contact-title">Get in touch</h2>
         <div class="words-paras" data-paragraphs="contact"></div>

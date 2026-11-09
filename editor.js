@@ -111,6 +111,12 @@ const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'dri
 /* The page sections' paragraph entries (admin/editor.js PAGE), which may be created by the first paragraph typed. */
 const PARAGRAPHS = ['t-hero', 't-gallery', 't-contact', 't-profile', 't-footer'];
 
+/* The page sections that can have a picture behind them (entries bg-<section>; index.html marks each with
+   data-background="<section>"; BACKGROUNDS in admin/editor.js). The opening, the gallery and the profile have
+   moving pictures of their own (the video, the floating wall, the head animation), so aren't listed yet. A new
+   section that can take a picture needs only its name here and in admin/editor.js, and the attribute. */
+const BACKGROUNDS = ['contact'];
+
 /* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
    round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
    width and height; brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
@@ -186,6 +192,23 @@ function normalise(id, kind, d) {
       ...(d.process != null ? { process: processOf(d.process) } : {}),
     };
   }
+  if (kind === 'background') {
+    // file: bg-<section>, or bg-<section>-v2... (a free name, GET free); sizes images/<file>-<width>.jpg made in
+    // the browser; focus: the point kept in view when the screen's shape crops the picture (fractions across and
+    // down); shade: how much it's darkened so the words over it read (0 to 0.6); original: the photo as uploaded.
+    if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background picture');
+    if (d.base !== 'media/images/' || d.ext !== 'jpg') throw new Bad('Bad image location');
+    if (!/^[a-z0-9-]{1,110}$/.test(d.file || '') || !(d.file === id || d.file.startsWith(`${id}-v`))) throw new Bad('Bad file name');
+    if (!Array.isArray(d.widths) || !d.widths.length || d.widths.length > 12) throw new Bad('Bad image sizes');
+    if (typeof d.original !== 'string' || !/^originals\/[a-z0-9-]{1,110}\.[a-z0-9]{1,5}$/.test(d.original)) throw new Bad('Bad original');
+    const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
+    if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
+    num(d.shade, 'Shade');
+    if (d.shade < 0 || d.shade > 0.6) throw new Bad('The shade must be between 0 and 60%');
+    return { file: d.file, base: d.base, ext: d.ext, w: int(d.w, 'Width'), h: int(d.h, 'Height'),
+      widths: d.widths.map((w) => int(w, 'A size')), focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100,
+      original: d.original };
+  }
   if (kind === 'text') return { text: str(d.text, 5000, 'Text') };
   if (id === 'settings-gallery') return Object.fromEntries(GALLERY_SETTINGS.filter((k) => k in d).map((k) => [k, num(d[k], k)]));
   if (id === 'settings-invitation') {
@@ -208,8 +231,9 @@ async function save(env, who, items) {
     const old = byId[it.id];
     if (old && old.kind !== it.kind) throw new Bad('That entry is a different kind');
     if (!old && !((it.kind === 'painting' && it.id.startsWith('p-')) || (it.kind === 'section' && it.id.startsWith('s-'))
-        || (it.kind === 'text' && PARAGRAPHS.includes(it.id)))) {
-      throw new Bad('Only paintings, genres and the sections\' paragraphs can be added');
+        || (it.kind === 'text' && PARAGRAPHS.includes(it.id))
+        || (it.kind === 'background' && it.id.startsWith('bg-') && BACKGROUNDS.includes(it.id.slice(3))))) {
+      throw new Bad('Only paintings, genres, the sections\' paragraphs and background pictures can be added');
     }
     if (it.data === null) {
       if (!old) continue;
@@ -311,7 +335,7 @@ async function restore(env, who, revision) {
   return { entries: await rows(env) };
 }
 
-/* The file name to use for a new painting's images: its name, or name-v2, -v3... if R2 already has files by
+/* The file name to use for a new painting's (or background picture's) images: its name, or name-v2, -v3... if R2 already has files by
    that name (a painting deleted earlier keeps its files, so History can bring it back). Originals are named by
    their content now (see stored), but those moved from git are still originals/<name>.<ext>, so both count. */
 async function free(env, name) {
@@ -320,8 +344,11 @@ async function free(env, name) {
   for (let v = 1; v < 100; v++) {
     const file = v === 1 ? name : `${name}-v${v}`;
     const found = await env.MEDIA.list({ prefix: `originals/${file}.`, limit: 1 });
-    const sized = await env.MEDIA.list({ prefix: `images/${file}-preview.`, limit: 1 });
-    if (!found.objects.length && !sized.objects.length) return { file };
+    // its sizes are images/<file>-<width>.<ext> (and -preview.jpg for paintings); digits sort before letters, so
+    // they come first even if another name starts the same way ("apple" and "apple-tree")
+    const own = new RegExp(`^images/${file}-(?:\\d{2,4}|preview)\\.(?:jpg|webp)$`);
+    const sized = (await env.MEDIA.list({ prefix: `images/${file}-`, limit: 50 })).objects.some((o) => own.test(o.key));
+    if (!found.objects.length && !sized) return { file };
   }
   throw new Bad('Too many versions of that name');
 }

@@ -76,8 +76,8 @@ Claude, before pushing: `git pull --rebase` too.
   ETag (a hash of the file), so browsers always revalidate and get a changed file at once (304 if unchanged;
   checked with wrangler dev). Fingerprinted names with year-long caching would save those revalidations but
   need a build step, which isn't worth it here. Pages from worker.js are no-cache (no-store for the editor).
-  The gallery section's markup and the contact picture's <img> (sizes med/contact-<width>.webp, plain files
-  until step 1c) are hand-written in index.html. Never reintroduce copies of shared markup or styles.
+  The gallery section's markup and the contact picture's stand-in <img> (med/contact-<width>.webp, until
+  bg-contact is published on both sites, see 1c) are hand-written in index.html. Never reintroduce copies of shared markup or styles.
 - **Home page order**: opening forest video (.hero) / gallery section (#paintings, .invite) / contact
   (#contact) / profile with the head animation (.face-section, three windows tall) / footer (copyright only).
 - **motion.js**: title drift and profile text spring; parallax; and directional snapping (after a scroll rests,
@@ -247,7 +247,24 @@ Claude, before pushing: `git pull --rebase` too.
    a "Couldn't sign you in" page with a full sign-out link (/cdn-cgi/access/logout, which doesn't come back by
    itself) instead of looping. API and image requests, and any with X-Requested-With, get a 401; admin/editor.js
    fetchFor() sends X-Requested-With (so Access answers 401 for a run-out session rather than redirecting) and
-   on a 401 shows the #signin bar, whose link signs in in a new tab, keeping what's typed. Then:
+   on a 401 shows the #signin bar, whose link signs in in a new tab, keeping what's typed.
+   Background pictures: done for Contact (Nov 2026). Entries bg-<section> (kind 'background': file, base, ext jpg,
+   w, h, widths up to 3840, focus [across, down] fractions, shade 0 to 0.6, original). A section that can have one
+   is marked data-background="<section>" in index.html and listed in BACKGROUNDS (editor.js) and PAGE's bg
+   (admin/editor.js); only contact so far (the opening, gallery and profile have their own moving pictures;
+   the footer is a narrow strip). site.js prepends <img class="section-bg"> (object-position = focus) and sets
+   --shade; .has-bg::after darkens it; parallax and glass.js pick it up as the section's picture. The editor's
+   Content tab: backgroundBox() shows the picture with its focus (tap to move), how a phone held upright and a
+   wide screen would crop it, the shade slider, Choose/Replace (original kept via keepOriginal, sizes made in the
+   browser from the photo as it is, file name from GET free, which now finds any images/<file>-<width> size, not
+   just a preview) and Remove. Published through Review like everything else; media() serves a published
+   background's images to visitors. Tested locally with wrangler dev (upload twice, draft preview, publish,
+   visitor's image 200).
+   Still to do: the contact photo from git (med/contact-*.webp, the <img data-stand-in> in index.html, master
+   med/jpg/paint-palette.jpg) stands in until bg-contact is published; once Christopher has uploaded it on both
+   admin-dev and admin, remove the stand-in and those files. Sections the client adds don't exist yet (Content
+   has fixed sections); when they do, each should get the background option.
+   Video next:
    Background images editable by the client (agreed Nov 2026): the contact photo and the forest video become
    content, uploaded and swapped in the editor (as the client, not the developer), stored in R2 with their
    sizes made at upload like the paintings, published through Review like everything else. What stays in git

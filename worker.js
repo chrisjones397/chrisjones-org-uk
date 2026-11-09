@@ -173,7 +173,7 @@ function bar(c) {
 }
 
 /* An image from R2: /media/images/<file>-<width>.<ext> or -preview.jpg. Visitors get it only if it belongs to a
-   published painting; on the editor's address (signed in) drafts' images are shown too. Originals are never
+   published painting or background picture; on the editor's address (signed in) drafts' images are shown too. Originals are never
    served. An image's address never changes once written, so browsers and Cloudflare may keep it for a year. */
 async function media(request, env, ctx, url, editor) {
   const key = decodeURIComponent(url.pathname.slice('/media/'.length));
@@ -183,7 +183,7 @@ async function media(request, env, ctx, url, editor) {
   if (!editor) {
     const hit = await cache.match(request);
     if (hit) return hit;
-    const ok = await env.DB.prepare(`SELECT 1 FROM entries WHERE kind = 'painting'
+    const ok = await env.DB.prepare(`SELECT 1 FROM entries WHERE kind IN ('painting', 'background')
         AND json_extract(published, '$.base') = 'media/images/'
         AND coalesce(json_extract(published, '$.file'), json_extract(published, '$.name')) = ? LIMIT 1`).bind(m[1]).first();
     if (!ok) return notFound(env, url);

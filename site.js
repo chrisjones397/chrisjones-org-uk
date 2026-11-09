@@ -36,7 +36,7 @@ export function slug(title) {
 export async function load(env, mode) {
   const { results } = await env.DB.prepare('SELECT id, kind, draft, published FROM entries').all();
   const pick = (r) => (mode === 'draft' ? r.draft : r.published);
-  const sections = [], paintings = [], texts = {}, settings = {};
+  const sections = [], paintings = [], texts = {}, settings = {}, backgrounds = {};
   let changes = 0;
   for (const r of results) {
     if (r.draft !== r.published) changes++;
@@ -47,6 +47,7 @@ export async function load(env, mode) {
     else if (r.kind === 'painting') paintings.push({ id: r.id, ...d });
     else if (r.kind === 'text') texts[r.id.slice(2)] = d.text;
     else if (r.kind === 'settings') settings[r.id.slice(9)] = d;
+    else if (r.kind === 'background') backgrounds[r.id.slice(3)] = d;
   }
   const byOrder = (a, b) => a.order - b.order || a.title.localeCompare(b.title);
   sections.sort(byOrder);
@@ -54,7 +55,7 @@ export async function load(env, mode) {
   for (const p of paintings.sort(byOrder)) if (sec[p.section]) sec[p.section].paintings.push(p);
   const ordered = sections.flatMap((s) => s.paintings);
   const byName = Object.fromEntries(ordered.map((p) => [p.name, p]));
-  return { mode, sections, paintings: ordered, byName, texts, settings, changes };
+  return { mode, sections, paintings: ordered, byName, texts, settings, backgrounds, changes };
 }
 
 export const stem = (p) => p.file || p.name;
@@ -65,6 +66,17 @@ function imgTag(p, prefix, sizes, indent) {
   const srcW = p.widths.find((w) => w >= 480) || p.widths[p.widths.length - 1];
   return `<img src="${file(p, srcW, prefix)}"\n${indent}     srcset="${srcset}"\n${indent}     sizes="${sizes}"\n`
     + `${indent}     width="${p.w}" height="${p.h}" alt="${esc(p.title)}" loading="lazy">`;
+}
+
+/* A section's background picture (entry bg-<section>), put in as the section's first child, so the parallax
+   (motion.js, sections marked .parallax) and the header's glass (glass.js) find it like any section picture.
+   Its focus is where the screen's shape crops it round; --shade darkens it so the words over it read. */
+function bgTag(b) {
+  const at = (w) => `/${b.base}${b.file}-${w}.${b.ext}`;
+  const src = b.widths.find((w) => w >= 1536) || b.widths[b.widths.length - 1];
+  return `<img class="section-bg" src="${at(src)}" srcset="${b.widths.map((w) => `${at(w)} ${w}w`).join(', ')}" sizes="100vw"`
+    + ` width="${b.w}" height="${b.h}" alt="" loading="lazy" decoding="async"`
+    + ` style="object-position: ${(b.focus[0] * 100).toFixed(1)}% ${(b.focus[1] * 100).toFixed(1)}%">`;
 }
 
 export function galleryData(c) {
@@ -110,12 +122,24 @@ export function rewriter(c) {
       const t = c.texts[el.getAttribute('data-text')];
       if (t != null) el.setInnerContent(t);
     } })
+    .on('[data-background]', { element(el) {
+      const b = c.backgrounds && c.backgrounds[el.getAttribute('data-background')];
+      if (!b) return;
+      const cls = el.getAttribute('class') || '';
+      if (!/(^|\s)has-bg(\s|$)/.test(cls)) el.setAttribute('class', `${cls} has-bg`.trim());
+      el.setAttribute('style', `--shade: ${b.shade}`);
+      el.prepend(bgTag(b), { html: true });
+    } })
     .on('[data-paragraphs]', { element(el) {
       const t = c.texts[el.getAttribute('data-paragraphs')];
       if (t == null) return;
       const paras = t.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
       el.append(paras.map((x) => `\n          <p>${esc(x)}</p>`).join('') + '\n        ', { html: true });
     } });
+  // A section's own stand-in picture (index.html) goes only when the database has one for it.
+  for (const key of Object.keys(c.backgrounds || {})) {
+    if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-background="${key}"] > img.section-bg[data-stand-in]`, { element(el) { el.remove(); } });
+  }
   // A block's own paragraphs are replaced only when the database has text for it; otherwise the page's stay.
   for (const key of Object.keys(c.texts)) {
     if (/^[a-z0-9-]+$/.test(key)) r.on(`[data-paragraphs="${key}"] p`, { element(el) { el.remove(); } });
