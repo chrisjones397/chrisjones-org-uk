@@ -42,10 +42,11 @@ the client mostly sees symbols, so a name matters most for the code and the note
 - **Uses / places**, each pointing at what it shows: **Artwork** (a painting in the gallery, shown whole, so it
   points straight at a recipe: title, medium, size, year, genre, detail crops); **Background** (a section's:
   points at framings; keeps the shade, which depends on the words over it); **Foreground** (media placed among the
-  text of a page, beside or between paragraphs: points at a framing; keeps its caption, side and width). Named
-  for people, not after the HTML tag (Christopher, 10 Nov: he suggested "editorial image" or "foreground image";
-  Claude recommended Foreground, as it pairs with Background and "editorial" already means a licensing term,
-  "editorial use only", which may matter beside the credit field; to confirm). Later: portrait, team member...
+  text of a page, beside or between paragraphs: points at a framing; keeps its caption, side and width; named
+  for people, not after the HTML tag; confirmed by Christopher 10 Nov 2026). Later: portrait, team member...
+- **Hero**: the first section of the home page (the forest). The code, the database (bg-hero, t-hero) and the
+  editor all say Hero, and it's the usual web term; Claude had also been writing "the opening", which confused
+  him (10 Nov). Use Hero only (Claude's recommendation, to confirm in the review).
 - Already taken, so not for anything new: **version** (a video's versions; History's versions), **dev** (the
   branch and site), **Treatment** (the old name for Framing).
 
@@ -243,7 +244,65 @@ Claude, before pushing: `git pull --rebase` too.
   DEV_USER; load the tables with `npx wrangler d1 execute site-content-dev --env dev --local --persist-to
   /tmp/wr --file db/schema.sql` (then db/seed.sql). Headless Chrome with Playwright works here for the editor.
 
-## Next steps (agreed with Christopher, Nov 2026; start each in a new chat)
+## Next steps (agreed with Christopher, Nov 2026; start each in a new chat; item 0 comes first)
+
+0. WHOLE SITE REVIEW: do this first, at the start of the next session, before the uploads restructure
+   (Christopher, 10 Nov 2026, on switching the session's model to Fable 5.2). His brief: "check the whole project
+   for overall design, check the plan and identify improvements and redefine plan and target as necessary". So:
+   read the code and these notes as a whole, look at the public site and the editor as a visitor and a client
+   would, then give him a revised plan and order to agree before building anything. These notes have grown by
+   accretion: the review should also restructure this file (what's done, condensed; what's next, clear).
+   He has added a Figma connector (10 Nov): available for layout mock-ups if useful. Slice 4b's state: he tried
+   blink (works, may modify later) and Bring back on Small Composition in Yellow (worked); dev is 8 commits ahead
+   of main and not yet put live (he said "not yet", 10 Nov).
+   His notes from using the site (10 Nov 2026), to fold into the revised plan (his words, lightly tidied; he may
+   use terms loosely, as he doesn't know the glossary by heart yet):
+   Public site
+   a. The photo-to-painting video (Hero) needs redoing. It looks good, especially the last frame, but: it takes
+      too long; too many brushstrokes (the photo is covered several times: broad, then medium, then small); on an
+      upright phone much of the animation is off screen. His questions: should each size and shape of the photo
+      be the basis of its own animation? Is an mp4 the best approach, or could it be drawn live and so be
+      responsive, like the head animation? (Claude's first answer, not yet checked against painted-forest-tools:
+      drawn live on a canvas from the photo plus a list of strokes is likely the better fit: one set of data fits
+      any screen shape, length and stroke count become settings, and it's far smaller than several videos; the
+      cost is the phone's processor. Assess both in the review.) Eventually he'll film a real timelapse of
+      himself painting: in the end he wants no AI-generated artwork on the site; today's are placeholders.
+   b. The head animation needs redoing. He'll retake the videos (one for the head's contours, one for its
+      movement): the current ones were taken after a night without sleep; he has had a haircut; perhaps black
+      and white rather than colour; he asked whether hairline, colouring, blemishes and darkness round the eyes
+      can be improved (Claude: tone and colour evening in the texture, yes; black and white, yes; reshaping a
+      hairline convincingly is retouching best done on the source photos, and good light on the retake does most
+      of it). It's too heavy for scrolling and he likes every part, so ideas are needed that keep them all: the
+      wavy sea surface; swirling up into a tornado; swooping into the head's position (too fast relative to the
+      rest); the head moving to show it's 3D; triangles falling into place to build the skin; face to photograph.
+   c. The whole layout needs reconsidering; he wants suggestions. Gallery / Paintings confusion: /#paintings,
+      /gallery/ and /gallery/list/. The floating paintings aren't reliably placed in a pleasing way: he expected
+      "near overlaps" (edges only just overlapping) to be avoided; worse on a phone; the top painting ("green with
+      seven figures") is covered by the second (Composition in Blue with Border). Inconsistent: "View the floating
+      gallery" sits under the header, "View as a list" in the corner.
+   d. Old links don't matter: nobody is visiting yet, so no forwarding is needed (the /gallery redirect, step 5's
+      "change address" forwarding). Work towards a clean start.
+   e. The contact background (brush and palette) is from pexels.com; he wants only his own photos and work on
+      the site. The fern and forest is his own photo, from RSPB HQ.
+   Editor
+   f. The site preview's pill at the bottom (admin host, site pages) is styled unlike the other menus and pills;
+      why is "Draft" there, in yellow? (It marks the page as the draft preview, not the live site: say so better,
+      by symbol, and style all pills alike.)
+   g. "admin" is in the address twice (admin.chrisjones.org.uk/admin/).
+   h. The saved tick pushes buttons and other things about when it appears: it must not move anything.
+   i. Reordering doesn't work well: paintings should be dragged to reorder, and into other genres.
+   j. The floating gallery has no way of separating genres (he isn't sure it should).
+   k. Workflow: the Library should be THE content management system, with the upload. Recipes, framings and the
+      darkroom all start from Library items; the Gallery loses "Add a painting" (that's an upload) and picks from
+      the Library instead. Attributes must sit on the right entity (e.g. the "measured" flag). The Library's +
+      with several files worked well, but he'd crop before any resizing, certainly for a photo of a painting (so:
+      upload keeps only the original; sizes are made by a recipe). After changing the Hero's background he
+      couldn't tell what Review and publish was showing him, and doubts those attributes are on the right entity
+      (they aren't yet: that's the restructure).
+   l. Edit in place, for Content: a background is chosen only from the Library (paintings included: images,
+      videos and their renditions), with "None"; no uploading there. The Library's preview tiles are a good size;
+      in edit in place make them a scrollable floating panel (one row or column), which stays open after a choice
+      so the client can click through several and see each in place.
 
 1. Tidy git: done (Nov 2026).
    See Christopher's standing principle at the top. build_site.py (1b) is one example of something vestigial,
