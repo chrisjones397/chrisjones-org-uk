@@ -18,6 +18,32 @@ Consistency matters to him: all text below the header shares one shadow (`--shad
 own lighter one), links glow when pointed at, and all titles (h1, section h2) share one size and weight, set
 once at the top of site.css. Section headings mirror the opening title's position (22%).
 
+## Names (glossary, agreed with Christopher 10 Nov 2026)
+
+How names are chosen: one name per idea and one idea per name; the thing that's edited is named apart from what
+it produces; every new word is checked against what's already used (code, database, editor, branch names: so
+not "development", which would read as the dev branch); established terms where they fit. Use these names in
+the editor, the code, the database and these notes alike; add new ones here before using them. In the editor
+the client mostly sees symbols, so a name matters most for the code and the notes.
+
+- **Library item**: one thing uploaded, the file untouched (a photo, or a video's set of versions), plus what's
+  true of the picture itself (alt text, credit). Folder media/<code>/.
+- **Recipe**: the darkroom settings applied to an item (white balance; four-corner squaring up for flat things,
+  or straighten and crop for scenes). An item can have several. It's what gets edited.
+- **Rendition** (r1, r2...): one frozen set of sizes a recipe has produced. Adjusting a recipe makes the next
+  one; older ones are never overwritten, so History can bring them back and cached copies never go wrong (the
+  standard digital-asset-management term). Not to be used for the recipe.
+- **Framing**: how a picture (photo or video, through a recipe) is cropped and focused for a place on a page:
+  focus point, crops for wide and upright screens; for a video, how it plays and what reduced-motion visitors
+  get. Christopher's name, first for backgrounds (10 Nov: he asked whether photos placed elsewhere, e.g. beside
+  text, should share it). Claude's proposal, to confirm: one Framing for any place, as the settings are the same.
+- **Uses / places**, each pointing at what it shows: **Artwork** (a painting in the gallery, shown whole, so it
+  points straight at a recipe: title, medium, size, year, genre, detail crops); **Section background** (points at
+  framings; keeps the shade, which depends on the words over it); **Figure** (proposed, for a photo beside text
+  on a page: points at a framing; keeps its caption, side and width). Later: portrait, team member...
+- Already taken, so not for anything new: **version** (a video's versions; History's versions), **dev** (the
+  branch and site), **Treatment** (the old name for Framing).
+
 ## Branches and hosting
 
 - **dev** is where all work happens; it is published at dev.chrisjones.org.uk (with noindex).
@@ -490,10 +516,7 @@ Claude, before pushing: `git pull --rebase` too.
    - Uploads generally: confirmed by Christopher (9 Nov 2026), next, before backgrounds as lists (his order:
      restructure, then lists on top of it, so backgrounds are built once). Three layers, each its own entity:
      (1) Library item: the file as uploaded, untouched, plus what's true of the picture itself (alt text,
-     credit/photographer); (2) the darkroom recipe on an item (name not settled: he's weighing Treatment, Handling,
-     Rendering; Framing is taken, see below. Not "Rendition": that's what r1, r2... already are, each one frozen
-     output of a recipe (a recipe adjusted makes the next rN; old ones stay for History and caches), so the recipe,
-     the thing that's edited, needs a name of its own; Claude's suggestion of it was withdrawn, 9 Nov): white balance, then either four-corner squaring up for flat things (paintings, drawings, documents)
+     credit/photographer); (2) the Recipe (named 10 Nov 2026, see Names at the top; not "Rendition", which is what r1, r2... are): white balance, then either four-corner squaring up for flat things (paintings, drawings, documents)
      or straighten and crop for scenes (rooms, people, buildings), where squaring up would distort; it produces
      its sets of sizes; several per item allowed; (3) uses, each pointing at a recipe: artwork (title, medium,
      size, year, genre, detail crops, shown in the gallery; its measured size drives the squaring-up shape),
