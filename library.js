@@ -9,7 +9,7 @@
    An item's parts: its original (a photo as uploaded), each set of sizes made from it (r1, r2...), each video
    version (<w>x<h>.mp4), each set of video frames (wide-1, tall-1...). What uses an item: entries' drafts and
    published versions, and History (revisions' data: what "Bring back" restores), by its code (media) and the
-   parts they name. "Delete for good": the whole item only while no draft or published version uses it (if
+   parts they name (for a removal, what it was before, which "Bring back" restores). "Delete for good": the whole item only while no draft or published version uses it (if
    History does, it must be asked for, and those versions leave History); a part only while nothing at all does.
 
 */
@@ -66,7 +66,7 @@ async function survey(env) {
     listAll(env, 'media/'),
     env.DB.prepare('SELECT * FROM library').all(),
     env.DB.prepare('SELECT id, kind, draft, published FROM entries WHERE kind IN (\'painting\', \'background\')').all(),
-    env.DB.prepare('SELECT id, entry_id, kind, data FROM revisions WHERE kind IN (\'painting\', \'background\') AND data IS NOT NULL').all(),
+    env.DB.prepare('SELECT id, entry_id, kind, data, previous FROM revisions WHERE kind IN (\'painting\', \'background\') AND (data IS NOT NULL OR previous IS NOT NULL)').all(),
   ]);
   const items = new Map();
   const item = (code) => {
@@ -81,6 +81,8 @@ async function survey(env) {
     if (!it.parts.has(part)) it.parts.set(part, { part, bytes: 0, files: 0, uses: [] });
     const p = it.parts.get(part);
     p.bytes += o.size; p.files++; it.bytes += o.size; it.files++;
+    const at = o.uploaded instanceof Date ? o.uploaded.toISOString() : String(o.uploaded || '');
+    if (!p.made || at > p.made) p.made = at;          // when the part was made (its newest file)
     if (part === 'original') p.ext = m[2].split('.').pop();
   }
   const use = (u, how) => {
@@ -94,14 +96,15 @@ async function survey(env) {
     use(usesOf(e.kind, e.id, e.draft), { entry: e.id, state: 'draft' });
     use(usesOf(e.kind, e.id, e.published), { entry: e.id, state: e.published && JSON.parse(e.published).hidden ? 'hidden' : 'published' });
   }
-  for (const v of revisions.results) use(usesOf(v.kind, v.entry_id, v.data), { entry: v.entry_id, state: 'history', revision: v.id });
+  // History: what "Bring back" restores: a version's data, or for a removal what it was before (editor.js restore)
+  for (const v of revisions.results) use(usesOf(v.kind, v.entry_id, v.data ?? v.previous), { entry: v.entry_id, state: 'history', revision: v.id });
   await originalSizes(env, items);
 
   return [...items.values()].map((it) => {
     const r = it.row || {};
     const data = JSON.parse(r.data || '{}');
     const parts = [...it.parts.values()].map((p) => {
-      const out = { part: p.part, bytes: p.bytes, files: p.files, uses: p.uses };
+      const out = { part: p.part, bytes: p.bytes, files: p.files, uses: p.uses, made: p.made || '' };
       const ver = (data.versions || []).find((v) => v.file === p.part);
       if (ver) Object.assign(out, { w: ver.w, h: ver.h, seconds: ver.seconds });
       else if (/^\d+x\d+/.test(p.part)) { const [w, h] = p.part.split(/x|-/).map(Number); Object.assign(out, { w, h }); }

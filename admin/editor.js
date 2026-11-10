@@ -1518,10 +1518,13 @@ function historyView() {
         const name = v.kind === 'painting' ? what.title : v.kind === 'section' ? `Genre: ${what.title}` : label({ id: v.entry_id, kind: v.kind, draft: v.data, published: v.previous });
         const kind = !p ? 'new' : !d ? 'gone' : unhidden(v.data) === unhidden(v.previous) ? (d.hidden ? 'hiding' : 'showing') : 'changed';
         const mine = byId(v.entry_id);
-        const same = mine && mine.draft === v.data;
+        // Bring back a removal = undo it (what it was before); "as now" when the draft already is that
+        const back = kind === 'gone' ? v.previous : v.data;
+        const same = mine && mine.draft === back;
         return h('div', { class: 'row', style: 'margin-top:0.4rem' },
           h('span', { class: 'grow' }, name, ' ', h('span', { class: `badge ${kind}` }, { new: 'Added', gone: 'Removed', hiding: 'Hidden', showing: 'Shown again' }[kind] || 'Changed')),
-          same ? h('span', { class: 'muted' }, 'as now') : h('button', { onclick: () => act(() => call('POST', 'restore', { revision: v.id }), 'Brought back as a draft') }, 'Bring back'));
+          same ? h('span', { class: 'muted' }, 'as now') : h('button', { title: kind === 'gone' ? 'Put it back as it was before it was removed, as a draft (publish it under Review)' : 'Put this version back as a draft (publish it under Review)',
+            onclick: () => act(() => call('POST', 'restore', { revision: v.id }), 'Brought back as a draft: publish it under Review') }, 'Bring back'));
       })));
   }
   return out;
@@ -1584,9 +1587,9 @@ function libraryView() {
     if (grp === 'site') out.push(pick, libBusy ? h('p', { class: 'hint' }, libBusy) : null);
     if (items.length) out.push(h('div', { class: 'card' }, ...items.map(libraryRow)));
   }
-  for (const id of libPicked) if (!libraryData.items.some((it) => it.id === id)) libPicked.delete(id);
+  const chosen = pickedList();
+  for (const key of [...libPicked]) if (!chosen.some((c) => c.key === key)) libPicked.delete(key);
   if (libPicked.size) {
-    const chosen = libraryData.items.filter((it) => libPicked.has(it.id));
     out.push(h('div', { class: 'lib-comparebar' },
       h('button', { class: 'lib-compare', disabled: chosen.length < 2, title: chosen.length < 2 ? 'Tick one or two more to compare' : 'Compare side by side',
         'aria-label': 'Compare side by side', onclick: () => showItems(chosen) }, glyph(GLYPHS.compare, 20), h('span', {}, String(chosen.length))),
@@ -1618,10 +1621,7 @@ function libraryRow(it) {
   const pic = it.thumb
     ? h('img', { src: `/media/${it.thumb}`, alt: '', loading: 'lazy' })
     : h('span', { class: 'lib-none', title: 'No picture to show' }, glyph(GLYPHS.photo, 28));
-  const picked = libPicked.has(it.id), full = !picked && libPicked.size >= 3;
-  const tick = h('label', { class: 'lib-tick' + (picked ? ' on' : ''), title: full ? 'Three are ticked already: untick one to compare this' : picked ? 'Ticked to compare' : 'Tick two or three to compare them side by side' },
-    h('input', { type: 'checkbox', checked: picked, disabled: full, 'aria-label': `Compare ${it.name}`,
-      onchange: (ev) => { if (ev.target.checked) libPicked.add(it.id); else libPicked.delete(it.id); render(); } }));
+  const tick = pickTick(it.id, it.name);
   const saved = h('span', { class: 'lib-saved', title: 'Name saved', hidden: true }, glyph(GLYPHS.tick));
   const name = h('input', { type: 'text', class: 'lib-name', value: it.name, maxLength: 120, 'aria-label': 'Name',
     onkeydown: (ev) => { if (ev.key === 'Enter') ev.target.blur(); },
@@ -1650,6 +1650,22 @@ function libraryRow(it) {
     h('div', { class: 'lib-parts' }, ...it.parts.map((p) => partLine(it, p))));
 }
 
+/* A tick box to compare: an item (key its code) or one of its renditions (key <code>/<part>); three at most. */
+function pickTick(key, what) {
+  const picked = libPicked.has(key), full = !picked && libPicked.size >= 3;
+  return h('label', { class: 'lib-tick' + (picked ? ' on' : ''), title: full ? 'Three are ticked already: untick one to compare this' : picked ? 'Ticked to compare' : 'Tick two or three to compare them side by side' },
+    h('input', { type: 'checkbox', checked: picked, disabled: full, 'aria-label': `Compare ${what}`,
+      onchange: (ev) => { if (ev.target.checked) libPicked.add(key); else libPicked.delete(key); render(); } }));
+}
+/* The ticked things, as { it, part } (part null for a whole item). */
+function pickedList() {
+  return [...libPicked].map((key) => {
+    const [code, part] = key.split('/');
+    const it = libraryData.items.find((x) => x.id === code);
+    return it && (!part || it.parts.some((p) => p.part === part)) ? { it, part: part || null, key } : null;
+  }).filter(Boolean);
+}
+
 /* One mark per thing using it, at its strongest (on the site, in a draft, or only in History). */
 function strongest(list) {
   const by = new Map();
@@ -1664,12 +1680,18 @@ const useMarks = (uses, name) => uses.map((u) => h('span', { class: `lib-use ${u
 function partLine(it, p) {
   let icon, what;
   if (p.part === 'original') { icon = glyph(GLYPHS.photo, 16); what = `Original${p.w ? `, ${p.w} × ${p.h}` : ''}${p.ext ? ` (${p.ext.toUpperCase()})` : ''}`; }
-  else if (/^r\d+$/.test(p.part)) { icon = glyph(GLYPHS.sizes, 16); what = `${p.sizes || p.files} sizes${p.w ? `, up to ${p.w} × ${p.h}` : ''}`; }
+  else if (/^r\d+$/.test(p.part)) {
+    const n = p.sizes || p.files, day = p.made ? new Date(p.made).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+    icon = glyph(GLYPHS.sizes, 16);
+    what = `${p.part}: ${n} size${n === 1 ? '' : 's'}${p.w ? `, up to ${p.w} × ${p.h}` : ''}${day ? `, ${day}` : ''}`;
+  }
   else if (/^\d+x\d+/.test(p.part)) { icon = shapeOf(p, it.parts); what = `${p.w} × ${p.h}${p.seconds ? `, ${p.seconds} seconds` : ''}`; }
   else if (/^(wide|tall)-/.test(p.part)) { icon = glyph(GLYPHS.frames, 16); what = `First and last frames, ${p.part.startsWith('tall') ? 'upright' : 'wide'}`; }
   else { icon = glyph(GLYPHS.photo, 16); what = `${p.files} other file${p.files === 1 ? '' : 's'}`; }
   const uses = strongest(p.uses);
+  const ren = /^r\d+$/.test(p.part) && it.data && it.data.renditions && it.data.renditions[p.part];
   return h('div', { class: 'lib-part', title: `${p.part}${p.files > 1 ? `/ (${p.files} files)` : ''}` },
+    ren ? pickTick(`${it.id}/${p.part}`, `${it.name}, ${p.part}`) : h('span', { class: 'lib-tick-space' }),
     h('span', { class: 'lib-part-icon' }, icon), h('span', { class: 'lib-part-what' }, what),
     h('span', { class: 'lib-part-uses' }, ...useMarks(uses, it.name).map((m) => { m.lastChild && m.lastChild.nodeType === 3 && m.lastChild.remove(); return m; })),
     h('span', { class: 'lib-size' }, MB(p.bytes)),
@@ -1690,17 +1712,31 @@ function shapeOf(p, parts) {
    apart underneath: the original's pixels, its weight, when it was added, its name and code. The best (most pixels)
    is marked when comparing. Tap the backdrop, the cross or Escape to close. */
 function showItems(list) {
-  const px = (it) => { const o = it.data && it.data.original; return o && o.w ? o.w * o.h : 0; };
+  list = list.map((x) => (x.it ? x : { it: x, part: null }));
+  const renOf = (x) => x.part && x.it.data.renditions[x.part];
+  // pixels: a rendition's largest size; an item's original
+  const px = (x) => { const r = renOf(x); if (r) return r.w * r.h; const o = x.it.data && x.it.data.original; return o && o.w ? o.w * o.h : 0; };
   const most = list.length > 1 ? Math.max(...list.map(px)) : 0;
   const when = (t) => (t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'not known');
-  const facts = (it) => {
+  const upTo = (widths) => widths.filter((w) => w <= 1536).pop() || widths[0];
+  const largeOf = (x) => { const r = renOf(x); return r ? `${x.it.id}/${x.part}/${upTo(r.widths)}.${r.ext || 'jpg'}` : x.it.large; };
+  const best = (x) => (most && px(x) === most ? { class: 'lib-best', title: 'The most pixels of these' } : {});
+  const facts = (x) => {
+    const it = x.it, r = renOf(x);
+    const lines = [h('div', { class: 'lib-cmp-name' }, it.name, x.part ? h('span', { class: 'muted' }, ` · ${x.part}`) : null), h('div', { class: 'lib-cmp-code' }, it.id)];
+    if (r) {
+      const p = it.parts.find((q) => q.part === x.part), u = strongest(p.uses)[0];
+      lines.push(h('div', best(x), glyph(GLYPHS.sizes, 13), ` ${r.widths.length} sizes, up to ${r.w} × ${r.h}`));
+      lines.push(h('div', {}, MB(p.bytes)));
+      lines.push(h('div', {}, u ? glyph(GLYPHS[STATES[u.state][0]], 13) : null, ` ${u ? STATES[u.state][1] : 'Unused'}`));
+      lines.push(h('div', {}, glyph(GLYPHS.past, 13), ` ${when(p.made)}`));
+      return h('div', { class: 'lib-cmp-facts' }, ...lines);
+    }
     const o = it.data && it.data.original, orig = it.parts.find((p) => p.part === 'original');
-    const lines = [h('div', { class: 'lib-cmp-name' }, it.name), h('div', { class: 'lib-cmp-code' }, it.id)];
     if (it.kind === 'video') {
       for (const v of it.parts.filter((p) => /^\d+x\d+/.test(p.part))) lines.push(h('div', {}, glyph(GLYPHS.play, 13), ` ${v.w} × ${v.h}${v.seconds ? `, ${v.seconds} s` : ''}, ${MB(v.bytes)}`));
     } else {
-      lines.push(h('div', { class: most && px(it) === most ? 'lib-best' : '', title: most && px(it) === most ? 'The most pixels of these' : '' },
-        glyph(GLYPHS.photo, 13), o && o.w ? ` ${o.w} × ${o.h} (${(o.w * o.h / 1e6).toFixed(1)} megapixels)` : ' size not known'));
+      lines.push(h('div', best(x), glyph(GLYPHS.photo, 13), o && o.w ? ` ${o.w} × ${o.h} (${(o.w * o.h / 1e6).toFixed(1)} megapixels)` : ' size not known'));
       if (orig) lines.push(h('div', {}, `Original ${MB(orig.bytes)}${orig.ext ? ` ${orig.ext.toUpperCase()}` : ''}`));
     }
     lines.push(h('div', {}, glyph(GLYPHS.past, 13), ` ${when(it.added)}`));
@@ -1708,12 +1744,12 @@ function showItems(list) {
   };
   const close = () => { box.remove(); removeEventListener('keydown', onKey); };
   const onKey = (ev) => { if (ev.key === 'Escape') close(); };
-  const box = h('div', { class: 'lib-overlay', role: 'dialog', 'aria-label': list.length > 1 ? 'Compare' : list[0].name,
+  const box = h('div', { class: 'lib-overlay', role: 'dialog', 'aria-label': list.length > 1 ? 'Compare' : list[0].it.name,
     onclick: (ev) => { if (ev.target === box || ev.target.classList.contains('lib-cmp')) close(); } },
     h('button', { class: 'lib-close', title: 'Close', 'aria-label': 'Close', onclick: close }, glyph(GLYPHS.close, 20)),
-    h('div', { class: `lib-cmp n${list.length}` }, ...list.map((it) => h('figure', {},
-      it.large ? h('img', { src: `/media/${it.large}`, alt: it.name }) : h('span', { class: 'lib-none' }, glyph(GLYPHS.photo, 40)),
-      facts(it)))));
+    h('div', { class: `lib-cmp n${list.length}` }, ...list.map((x) => h('figure', {},
+      largeOf(x) ? h('img', { src: `/media/${largeOf(x)}`, alt: x.it.name }) : h('span', { class: 'lib-none' }, glyph(GLYPHS.photo, 40)),
+      facts(x)))));
   document.body.append(box);
   addEventListener('keydown', onKey);
 }

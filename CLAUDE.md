@@ -33,14 +33,19 @@ the client mostly sees symbols, so a name matters most for the code and the note
 - **Rendition** (r1, r2...): one frozen set of sizes a recipe has produced. Adjusting a recipe makes the next
   one; older ones are never overwritten, so History can bring them back and cached copies never go wrong (the
   standard digital-asset-management term). Not to be used for the recipe.
-- **Framing**: how a picture (photo or video, through a recipe) is cropped and focused for a place on a page:
-  focus point, crops for wide and upright screens; for a video, how it plays and what reduced-motion visitors
-  get. Christopher's name, first for backgrounds (10 Nov: he asked whether photos placed elsewhere, e.g. beside
-  text, should share it). Claude's proposal, to confirm: one Framing for any place, as the settings are the same.
+- **Media**: images and videos in general (later perhaps animations and drawings, e.g. the head animation),
+  Christopher's word (10 Nov 2026). Already how the code uses it (/media/ addresses, R2 binding MEDIA); an
+  entry's `media` field holds a Library item's code (could become `item` in the restructure).
+- **Framing**: how a piece of media (through a recipe) is cropped and focused for a place on a page: focus point,
+  crops for wide and upright screens; for a video, how it plays and what reduced-motion visitors get. For any
+  place on a page, not only backgrounds (agreed 10 Nov 2026).
 - **Uses / places**, each pointing at what it shows: **Artwork** (a painting in the gallery, shown whole, so it
-  points straight at a recipe: title, medium, size, year, genre, detail crops); **Section background** (points at
-  framings; keeps the shade, which depends on the words over it); **Figure** (proposed, for a photo beside text
-  on a page: points at a framing; keeps its caption, side and width). Later: portrait, team member...
+  points straight at a recipe: title, medium, size, year, genre, detail crops); **Background** (a section's:
+  points at framings; keeps the shade, which depends on the words over it); **Foreground** (media placed among the
+  text of a page, beside or between paragraphs: points at a framing; keeps its caption, side and width). Named
+  for people, not after the HTML tag (Christopher, 10 Nov: he suggested "editorial image" or "foreground image";
+  Claude recommended Foreground, as it pairs with Background and "editorial" already means a licensing term,
+  "editorial use only", which may matter beside the credit field; to confirm). Later: portrait, team member...
 - Already taken, so not for anything new: **version** (a video's versions; History's versions), **dev** (the
   branch and site), **Treatment** (the old name for Framing).
 
@@ -392,7 +397,7 @@ Claude, before pushing: `git pull --rebase` too.
      fixed; the `media` table (db/schema.sql; created in both databases 9 Nov 2026) holds id, kind, grp
      (site/painting), name, files, bytes, added, and is brought up to date with R2 on every GET library (rows
      added, files updated, rows whose files are gone dropped; names kept). Uses: entries' draft and published,
-     and revisions' data only (previous is never restored). Delete for good: refused (409) while a draft or the
+     and revisions' data (and a removal's previous, which Bring back restores since 4b). Delete for good: refused (409) while a draft or the
      published site uses it; with history: true, its revisions go and any release left empty; then R2, the row,
      and the cache: caches.default locally, and Cloudflare's purge by URL if secret PURGE_TOKEN (Zone > Cache
      Purge) is set beside var ZONE_ID. Editor: Library tab (admin/editor.js libraryView), Site pictures and
@@ -507,6 +512,17 @@ Claude, before pushing: `git pull --rebase` too.
         HEIC/AVIF with irot; tested on each), once, into the item's data.original { w, h } (0 x 0 if unreadable),
         up to 20 per GET library. That fills it for items moved from the old layout and for new ones (nothing
         recorded it before).
+     Then, from his use of it (10 Nov 2026): renditions can be compared too (a tick on each rN line, which now
+        shows its name and date, "r2: 6 sizes, up to 1708 × 2082, 10 Nov"; keys <code>/<part> in libPicked; the
+        overlay shows the set's largest size, megabytes, whether it's used and when it was made, from the R2 upload
+        time library.js now gives each part as `made`), e.g. Mondschein über der Friedrichsgracht's r1 and r2.
+        Unticking all: the cross in the pill (he hadn't noticed the pill at first: a learning point, not a fault).
+        Bring back on a "Removed" line in History did nothing (it re-applied the removal to something already
+        gone, yet said "Brought back"): editor.js restore() now undoes a removal, putting back the revision's
+        previous (what it was before) as a draft; refused if its picture was deleted for good from the Library or
+        its genre is gone; library.js counts a removal's previous as a History use, so Delete for good can't take a
+        picture Bring back still needs without taking that History version too. (Small Composition in Yellow on
+        dev: release 38 removed it; its photo af4e9259 is still in the Library, so it can come back.)
      c. Library routes ("Make a painting" from a Library photo, "Back into the gallery", uses marks linking to where
         they're used, "Replace photo… From the Library…"): moved into the restructure below (Christopher, 9 Nov).
      Tested locally (wrangler dev, Playwright): hide and show a painting and a genre (published and draft, release

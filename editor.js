@@ -416,20 +416,25 @@ async function setHidden(env, who, id, hidden) {
   return { entries: await rows(env) };
 }
 
-/* Bring back an earlier version (a revision) as the draft. */
+/* Bring back an earlier version (a revision) as the draft. For a removal, that means undoing it: what it was just
+   before it was removed (the revision's previous), not the removal itself (which would do nothing to something
+   already gone). Refused if the picture it needs was deleted for good from the Library, or its genre is gone. */
 async function restore(env, who, revision) {
   const v = await env.DB.prepare('SELECT * FROM revisions WHERE id = ?').bind(revision).first();
   if (!v) throw new Bad('No such version');
-  const at = now();
-  if (v.data === null) return save(env, who, [{ id: v.entry_id, kind: v.kind, data: null }]);
+  const data = v.data ?? v.previous;
+  if (data === null) throw new Bad('There is nothing in that version to bring back');
+  const d = JSON.parse(data);
+  if (d.media && !(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(d.media).first())) {
+    throw new Bad('Its picture has been deleted for good from the Library, so that version can\'t come back');
+  }
   if (v.kind === 'painting') {
-    const d = JSON.parse(v.data);
     const sec = await env.DB.prepare('SELECT draft FROM entries WHERE id = ?').bind(d.section).first();
-    if (!sec || !sec.draft) throw new Bad('That version\'s section no longer exists: restore the section first');
+    if (!sec || !sec.draft) throw new Bad('That version\'s genre no longer exists: bring the genre back first');
   }
   await env.DB.prepare(`INSERT INTO entries (id, kind, draft, published, draft_at, draft_by) VALUES (?, ?, ?, NULL, ?, ?)
     ON CONFLICT(id) DO UPDATE SET draft = excluded.draft, draft_at = excluded.draft_at, draft_by = excluded.draft_by`)
-    .bind(v.entry_id, v.kind, v.data, at, who).run();
+    .bind(v.entry_id, v.kind, data, now(), who).run();
   return { entries: await rows(env) };
 }
 
