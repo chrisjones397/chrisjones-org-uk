@@ -244,9 +244,53 @@ Claude, before pushing: `git pull --rebase` too.
   DEV_USER; load the tables with `npx wrangler d1 execute site-content-dev --env dev --local --persist-to
   /tmp/wr --file db/schema.sql` (then db/seed.sql). Headless Chrome with Playwright works here for the editor.
 
-## Next steps (agreed with Christopher, Nov 2026; start each in a new chat; item 0 comes first)
+## Agreed plan (Christopher, 10 Nov 2026, after the whole site review; this supersedes the order in "Next steps")
 
-0. WHOLE SITE REVIEW: do this first, at the start of the next session, before the uploads restructure
+The review is done (item 0 below is history; main and dev were level at 3a084bb when it was written). Its findings:
+entries are coupled (a painting carries its file, sizes, preview and darkroom settings; sizes recorded in three
+places); the gallery's placement rules judge gaps only sideways (downward spacing is fixed: 7 of 17 neighbouring
+pairs graze top to bottom on wide screens; on upright phones two paintings are over half covered as a nearer one
+passes); the wall grows with the collection (18 paintings, about five screens); paintings exist only inside the 3D
+drawing on the home page (invisible to search engines and screen readers); the Hero video has about 13,800 strokes
+in 20 seconds, the scene covered in four passes; the head animation's build scripts aren't in the repository;
+database changes are made by hand (use numbered migration files); admin/editor.js is one 1,866-line script that
+redraws everything (split into modules before drag-to-reorder and edit in place); the README describes the old
+storage layout; a leftover net-checks branch; .float-text styles duplicated in index.html; fonts from Google rather
+than the site; a draft rendition of a published item can be fetched by guessing its address.
+
+Order (start each in a new chat):
+1. Clean start (small): rewrite these notes condensed, fix the README; remove old redirects and old-format readers
+   (nobody visits yet); one Gallery vocabulary and "Hero" throughout; editor quick fixes (the tick that moves
+   things, the preview pill, "admin" twice in the address).
+2. Gallery, public: placement fixed in both directions; the two view links in one consistent place; genres settled.
+3. Hero: first try a half-height Hero on upright phones (his idea: CSS only; a 4:3 video then shows about three
+   quarters of its width, so the fern against the dark trees is in view and a separate upright video may not be
+   needed). Then one re-render: shorter, passes merged. An upright version only if half-height isn't enough.
+4. Uploads restructure, with migrations and the editor split into modules: the Library the only upload, the Gallery
+   picking from it, dragging to reorder and between genres, attributes on the right entity, crop before resizing.
+5. Framings and backgrounds as lists.
+6. Edit in place, replacing the Content tab, with the floating Library panel.
+7. Detail images and painting pages.
+8. Head animation, after his retake.
+9. Users and roles.
+Dropped: "change address" forwarding. The contact photo swap is his to do in the Library.
+
+Decisions:
+- Gallery scale: the home page wall shows a selection; the full gallery is a page of its own (floating or grid, by
+  genre).
+- Addresses: everything under /gallery/: the grid at /gallery/, a painting at /gallery/<name>/, the section
+  #gallery. "Gallery" is the word (the collection has drawings as well as paintings).
+- Hero stays a video, re-rendered (the stroke plan is hand-tuned to this photo). He is mindful of his usage
+  allowance: keep it to one render, few stills. The filmed timelapse is a long way off; his alternative idea: a
+  reveal by calculated brushstrokes from the photo to his own real painting of it (the strokes take their colour
+  from a photo of the finished painting, so the end frame is his work).
+- Head animation: to play itself once in a one-screen section, pausable like the Hero, instead of three screens
+  of scrolling. He's worried it's a lot of fast movement: try it on dev, speeds adjustable, his call after seeing.
+- Steps 2 and 3 (visitor-facing) come before the restructure.
+
+## Next steps as they stood before the review (history and detail; the order is the agreed plan above)
+
+0. WHOLE SITE REVIEW: done 10 Nov 2026 (see the agreed plan above). The brief was: before the uploads restructure
    (Christopher, 10 Nov 2026, on switching the session's model to Fable 5.2). His brief: "check the whole project
    for overall design, check the plan and identify improvements and redefine plan and target as necessary". So:
    read the code and these notes as a whole, look at the public site and the editor as a visitor and a client
