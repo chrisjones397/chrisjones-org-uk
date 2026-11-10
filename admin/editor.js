@@ -1722,8 +1722,7 @@ function showItems(list) {
   const px = (x) => { const r = renOf(x); if (r) return r.w * r.h; const o = x.it.data && x.it.data.original; return o && o.w ? o.w * o.h : 0; };
   const most = list.length > 1 ? Math.max(...list.map(px)) : 0;
   const when = (t) => (t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'not known');
-  const upTo = (widths) => widths.filter((w) => w <= 1536).pop() || widths[0];
-  const largeOf = (x) => { const r = renOf(x); return r ? `${x.it.id}/${x.part}/${upTo(r.widths)}.${r.ext || 'jpg'}` : x.it.large; };
+  const largeOf = (x) => { const r = renOf(x); return r ? `${x.it.id}/${x.part}/${Math.max(...r.widths)}.${r.ext || 'jpg'}` : x.it.large; };
   const best = (x) => (most && px(x) === most ? { class: 'lib-best', title: 'The most pixels of these' } : {});
   const facts = (x) => {
     const it = x.it, r = renOf(x);

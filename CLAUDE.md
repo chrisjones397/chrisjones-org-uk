@@ -507,7 +507,7 @@ Claude, before pushing: `git pull --rebase` too.
         or three ticked a pill at the bottom compares them (showItems: an overlay, side by side, one above another on
         an upright phone; under each, name, code, the original's pixels and megapixels (most marked green), its
         megabytes and type, date added; a video lists its versions). library.js gives each item thumb and large
-        (largest size up to 1536). The original's pixels: dimensions.js (server only, in .assetsignore) reads them
+        (its largest size: comparing is for detail, Christopher 10 Nov). The original's pixels: dimensions.js (server only, in .assetsignore) reads them
         from the first 512 kilobytes of the original (an R2 range read; JPEG with EXIF quarter-turns, PNG, WebP,
         HEIC/AVIF with irot; tested on each), once, into the item's data.original { w, h } (0 x 0 if unreadable),
         up to 20 per GET library. That fills it for items moved from the old layout and for new ones (nothing

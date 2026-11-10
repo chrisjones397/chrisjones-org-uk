@@ -122,10 +122,10 @@ async function survey(env) {
   });
 }
 
-/* Pictures for the list: the newest set of sizes, or a video's last frame; thumb its smallest, large the largest
-   up to 1536 across (for seeing it large and comparing). */
+/* Pictures for the list: the newest set of sizes, or a video's last frame; thumb its smallest, large its largest
+   (for seeing it large and comparing, where detail matters). */
 function picturesOf(code, parts, data) {
-  const upTo = (widths) => widths.filter((w) => w <= 1536).pop() || widths[0];
+  const upTo = (widths) => Math.max(...widths);
   const ren = parts.filter((p) => /^r\d+$/.test(p.part)).sort((a, b) => Number(b.part.slice(1)) - Number(a.part.slice(1)))[0];
   if (ren && data.renditions && data.renditions[ren.part]) {
     const r = data.renditions[ren.part], ext = r.ext || 'jpg';
