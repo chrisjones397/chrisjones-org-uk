@@ -1561,6 +1561,10 @@ const GLYPHS = {
   frames: 'M3 4.5h14v11H3zM7 4.5v11M13 4.5v11',                                     // a strip of frames
   add: 'M10 4v12M4 10h12',
   compare: 'M2.5 4.5h6.5v11H2.5zM11 4.5h6.5v11H11',                                 // two side by side
+  blink: 'M4 3.5h9v9H4zM7 7.5h9v9H7',                                                 // one over the other
+  swap: 'M4 7h12l-3-3M16 13H4l3 3',                                                    // arrows both ways
+  fit: 'M8 8 2.5 2.5M2.5 7V2.5H7M12 8l5.5-5.5M13 2.5h4.5V7M8 12l-5.5 5.5M2.5 13v4.5H7M12 12l5.5 5.5M17.5 13v4.5H13',
+  pause: 'M7 4.5v11M13 4.5v11',
   close: 'M5 5l10 10M15 5L5 15',
   live: 'M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',                                // published
   draft: 'M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3',                                        // a pencil: in a draft
@@ -1591,8 +1595,8 @@ function libraryView() {
   for (const key of [...libPicked]) if (!chosen.some((c) => c.key === key)) libPicked.delete(key);
   if (libPicked.size) {
     out.push(h('div', { class: 'lib-comparebar' },
-      h('button', { class: 'lib-compare', disabled: chosen.length < 2, title: chosen.length < 2 ? 'Tick one or two more to compare' : 'Compare side by side',
-        'aria-label': 'Compare side by side', onclick: () => showItems(chosen) }, glyph(GLYPHS.compare, 20), h('span', {}, String(chosen.length))),
+      h('button', { class: 'lib-compare', disabled: chosen.length < 2, title: chosen.length < 2 ? 'Tick one or two more to compare' : chosen.length === 2 ? 'Compare: blink between the two' : 'Compare side by side',
+        'aria-label': 'Compare', onclick: () => (chosen.length === 2 ? blinkView(chosen) : showItems(chosen)) }, glyph(GLYPHS.compare, 20), h('span', {}, String(chosen.length))),
       h('button', { title: 'Untick them all', 'aria-label': 'Untick them all', onclick: () => { libPicked.clear(); render(); } }, glyph(GLYPHS.close, 16))));
   }
   return out.filter(Boolean);
@@ -1747,11 +1751,95 @@ function showItems(list) {
   const box = h('div', { class: 'lib-overlay', role: 'dialog', 'aria-label': list.length > 1 ? 'Compare' : list[0].it.name,
     onclick: (ev) => { if (ev.target === box || ev.target.classList.contains('lib-cmp')) close(); } },
     h('button', { class: 'lib-close', title: 'Close', 'aria-label': 'Close', onclick: close }, glyph(GLYPHS.close, 20)),
+    list.length === 2 ? h('button', { class: 'lib-mode', title: 'Blink between the two instead', 'aria-label': 'Blink between the two',
+      onclick: () => { close(); blinkView(list); } }, glyph(GLYPHS.blink, 20)) : null,
     h('div', { class: `lib-cmp n${list.length}` }, ...list.map((x) => h('figure', {},
       largeOf(x) ? h('img', { src: `/media/${largeOf(x)}`, alt: x.it.name }) : h('span', { class: 'lib-none' }, glyph(GLYPHS.photo, 40)),
       facts(x)))));
   document.body.append(box);
   addEventListener('keydown', onKey);
+}
+
+/* Two things blinked in one place (Christopher's way of comparing renditions): both drawn in the same box, one
+   shown at a time. Tap the picture, the ⇄ button, Space or an arrow key to swap; ▶ swaps on its own every 0.7
+   seconds. Zoom with a pinch, a trackpad pinch, the mouse wheel or + and −, and drag to look round: both move
+   together, so the same part of each is seen. The two labels in the corner (a coloured dot and a name each, the
+   one showing bright) stay put whatever the zoom. Largest size of each, so detail can be checked. */
+function blinkView(pair) {
+  pair = pair.map((x) => (x.it ? x : { it: x, part: null }));
+  const renOf = (x) => {
+    const rs = (x.it.data && x.it.data.renditions) || {};
+    const part = x.part || Object.keys(rs).sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)))[0];
+    return part && rs[part] ? { part, ...rs[part] } : null;
+  };
+  const srcOf = (x) => { const r = renOf(x); return r ? `/media/${x.it.id}/${r.part}/${Math.max(...r.widths)}.${r.ext || 'jpg'}` : x.it.large && `/media/${x.it.large}`; };
+  const sizeOf = (x) => { const r = renOf(x); return r ? `${r.w} × ${r.h}` : ''; };
+  let shown = 0, s = 1, tx = 0, ty = 0, timer = null;
+  const imgs = pair.map((x, i) => h('img', { src: srcOf(x), alt: x.it.name, draggable: false, class: i ? 'off' : '' }));
+  const inner = h('div', { class: 'blink-inner' }, ...imgs);
+  const stage = h('div', { class: 'blink-stage' }, inner);
+  const labels = pair.map((x, i) => h('div', { class: `blink-label k${i}` + (i ? '' : ' on') },
+    h('span', { class: 'dot' }), h('span', {}, x.it.name, x.part ? h('b', {}, ` ${x.part}`) : null), h('span', { class: 'muted' }, ` ${sizeOf(x)}`)));
+  const draw = () => { inner.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`; };
+  const show = (i) => { shown = i; imgs.forEach((im, k) => im.classList.toggle('off', k !== i)); labels.forEach((l, k) => l.classList.toggle('on', k === i)); };
+  const swap = () => show(1 - shown);
+  const clamp = () => {
+    const W = stage.clientWidth, H = stage.clientHeight;
+    s = Math.min(12, Math.max(1, s));
+    tx = Math.min(0, Math.max(W - W * s, tx)); ty = Math.min(0, Math.max(H - H * s, ty));
+    draw();
+  };
+  const zoomAt = (f, cx, cy) => { const r = stage.getBoundingClientRect(), x = cx - r.left, y = cy - r.top, n = Math.min(12, Math.max(1, s * f)); tx = x - (x - tx) * n / s; ty = y - (y - ty) * n / s; s = n; clamp(); };
+  const zoomMid = (f) => { const r = stage.getBoundingClientRect(); zoomAt(f, r.left + r.width / 2, r.top + r.height / 2); };
+  const fit = () => { s = 1; tx = 0; ty = 0; draw(); };
+  stage.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    if (ev.ctrlKey || s === 1) zoomAt(Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.002)), ev.clientX, ev.clientY);
+    else { tx -= ev.deltaX; ty -= ev.deltaY; clamp(); }
+  }, { passive: false });
+  // pointers: one drags (a tap without moving swaps), two pinch
+  const ptrs = new Map(); let moved = false, pinch = null;
+  stage.addEventListener('pointerdown', (ev) => { stage.setPointerCapture(ev.pointerId); ptrs.set(ev.pointerId, [ev.clientX, ev.clientY]); moved = ptrs.size > 1 ? true : false; pinch = null; });
+  stage.addEventListener('pointermove', (ev) => {
+    const was = ptrs.get(ev.pointerId); if (!was) return;
+    const now = [ev.clientX, ev.clientY];
+    if (ptrs.size === 1) {
+      if (Math.hypot(now[0] - was[0], now[1] - was[1]) > 4 || moved) { moved = true; tx += now[0] - was[0]; ty += now[1] - was[1]; clamp(); ptrs.set(ev.pointerId, now); }
+      return;
+    }
+    ptrs.set(ev.pointerId, now);
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (pinch) { zoomAt(d / pinch.d, m[0], m[1]); tx += m[0] - pinch.m[0]; ty += m[1] - pinch.m[1]; clamp(); }
+    pinch = { d, m };
+  });
+  const up = (ev) => { if (!ptrs.has(ev.pointerId)) return; ptrs.delete(ev.pointerId); if (!ptrs.size && !moved && ev.type === 'pointerup') swap(); if (ptrs.size < 2) pinch = null; };
+  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+  const play = h('button', { title: 'Blink on its own (tap again to stop)', 'aria-label': 'Blink on its own', onclick: () => toggleAuto() }, glyph(GLYPHS.play, 18));
+  const toggleAuto = () => {
+    if (timer) { clearInterval(timer); timer = null; play.replaceChildren(glyph(GLYPHS.play, 18)); return; }
+    timer = setInterval(swap, 700); play.replaceChildren(glyph(GLYPHS.pause, 18));
+  };
+  const close = () => { if (timer) clearInterval(timer); box.remove(); removeEventListener('keydown', onKey); removeEventListener('resize', clamp); };
+  const onKey = (ev) => {
+    if (ev.key === 'Escape') close();
+    else if (ev.key === ' ' || ev.key.startsWith('Arrow')) { ev.preventDefault(); swap(); }
+    else if (ev.key === '+' || ev.key === '=') zoomMid(1.4);
+    else if (ev.key === '-') zoomMid(1 / 1.4);
+    else if (ev.key === '0') fit();
+  };
+  const box = h('div', { class: 'lib-overlay blink', role: 'dialog', 'aria-label': 'Blink between the two' },
+    h('div', { class: 'blink-labels' }, ...labels),
+    h('button', { class: 'lib-close', title: 'Close', 'aria-label': 'Close', onclick: close }, glyph(GLYPHS.close, 20)),
+    stage,
+    h('div', { class: 'blink-bar' },
+      h('button', { title: 'Swap (or tap the picture, or Space)', 'aria-label': 'Swap', onclick: swap }, glyph(GLYPHS.swap, 18)),
+      play,
+      h('button', { title: 'Zoom out', 'aria-label': 'Zoom out', onclick: () => zoomMid(1 / 1.6) }, '−'),
+      h('button', { title: 'Zoom in (or pinch, or the mouse wheel)', 'aria-label': 'Zoom in', onclick: () => zoomMid(1.6) }, '+'),
+      h('button', { title: 'Whole picture', 'aria-label': 'Whole picture', onclick: fit }, glyph(GLYPHS.fit, 18)),
+      h('button', { title: 'Side by side instead', 'aria-label': 'Side by side', onclick: () => { close(); showItems(pair); } }, glyph(GLYPHS.compare, 18))));
+  document.body.append(box);
+  addEventListener('keydown', onKey); addEventListener('resize', clamp);
 }
 
 function deletePart(it, p) {

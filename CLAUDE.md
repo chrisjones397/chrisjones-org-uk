@@ -517,6 +517,12 @@ Claude, before pushing: `git pull --rebase` too.
         overlay shows the set's largest size, megabytes, whether it's used and when it was made, from the R2 upload
         time library.js now gives each part as `made`), e.g. Mondschein über der Friedrichsgracht's r1 and r2.
         Unticking all: the cross in the pill (he hadn't noticed the pill at first: a learning point, not a fault).
+        Blinking (his idea, 10 Nov): with two ticked, Compare opens blinkView(): both at their largest size drawn in
+        one box, one shown at a time; tap the picture, ⇄, Space or an arrow swaps; ▶ swaps every 0.7 s; zoom by
+        pinch, trackpad pinch (ctrl+wheel), mouse wheel (pans once zoomed), + and −; drag to look round; both move
+        together. Two labels top left (amber and blue dots, name and rN, size; the one showing outlined and bright)
+        stay put whatever the zoom. Buttons switch between blink and side by side. Side by side (three, or chosen)
+        now scrolls when it doesn't fit (he couldn't scroll it and had to resize the window).
         Bring back on a "Removed" line in History did nothing (it re-applied the removal to something already
         gone, yet said "Brought back"): editor.js restore() now undoes a removal, putting back the revision's
         previous (what it was before) as a draft; refused if its picture was deleted for good from the Library or
