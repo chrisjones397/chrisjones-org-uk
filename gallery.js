@@ -16,6 +16,7 @@
    (the "gallery-data" block; site.js galleryData). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
    the few paintings hung around the words that are already in the page. */
 import * as THREE from './face/vendor/three.module.min.js';
+import { arrange } from './wall.js';
 
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
 // The arrangement, from the database's gallery settings (entry settings-gallery; all 1 as first built). Adding ?tune to the page's
@@ -99,15 +100,8 @@ function start() {
     return mesh;
   });
 
-  // Laying out the wall for this window. Down, each painting follows the last with room for both (more room on
-  // a phone, where they're one above another rather than side by side). Across, each is placed to keep the
-  // wall balanced as you see it: of the places it could go, it takes the one that best evens out the weight
-  // (how big the paintings look) on the left and right of those around it, so big and small ones mix on both
-  // sides rather than gathering on one. Overlapping is welcome, but only clearly: next to a neighbour it will
-  // pass on screen, a painting either keeps a clear gap or overlaps by a good part of its width, never just
-  // grazes it, and its edges never quite line up with the neighbour's, as that looks unintended. It also
-  // avoids hiding most of a neighbour, and sitting straight below the one before. The section is then made as
-  // tall as the journey.
+  // Laying out the wall for this window: where each painting hangs is worked out in wall.js (arrange). The
+  // section is then made as tall as the journey.
   let H = 0, W = 0, perPx = 0, travelPx = 0, scale = 1;
   function layout() {
     W = stage.clientWidth; H = stage.clientHeight;
@@ -117,56 +111,15 @@ function start() {
     camera.updateProjectionMatrix();
     const viewH0 = 2 * D0 * viewTan;                           // the view's height at the middle depth
     perPx = viewH0 / H;                                         // ...so one pixel of scrolling is this far
-    const narrow = camera.aspect < 0.9;
-    scale = Math.min(1, (D0 * viewTan * camera.aspect) / 4) * P.size;
     shuffle();
-    let y = 0, lastH = 0;
-    const placed = [];
+    const wall = arrange(planes.map((m) => m.userData), P, { aspect: camera.aspect, D0, MID, RANGE, viewH0 });
+    scale = wall.scale;
     planes.forEach((m, i) => {
-      const u = m.userData;
-      const mix = Math.min(Math.max(P.nearness, 0), 1);
-      u.d = Math.max(MID + ((1 - mix) * u.f + mix * u.r - 0.5) * RANGE * P.depth, 4);
-      const sw = u.w * scale, sh = u.h * scale;
-      m.scale.set(sw, sh, 1);
-      const seen = sh * D0 / u.d;                               // its height as it looks, at the middle depth
-      // the first hangs with its top just below the heading (30% down the view); each after it below the last
-      if (!i) y = 0.2 * viewH0 - seen / 2;
-      else y -= (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2;
-      lastH = seen;
-      u.cy = i ? y : y * u.d / D0;      // where the view is when it's in the middle
-      u.y = u.cy;
-      // Across, worked out as it looks (at the middle depth), then put at its own depth
-      const seenW = sw * D0 / u.d, half = D0 * viewTan * camera.aspect;
-      const room = Math.max(half * 0.95 - seenW / 2, 0);
-      const reach = Math.min(room * (narrow ? 0.7 : 1) * P.spread, room);
-      let best = 0, bestScore = Infinity;
-      for (let c = -1; c <= 1.0001; c += 0.05) {
-        const sx = c * reach;
-        let mass = seenW * seen * sx, total = seenW * seen, cover = 0, awkward = 0;
-        for (const q of placed) {
-          const dy = Math.abs(q.cy - y);
-          if (dy < viewH0 * 0.6) { mass += q.a * q.sx; total += q.a; }
-          // neighbours that pass each other on screen (depths differ, so they slide past one another)
-          if (dy < (q.h + seen) / 2 + viewH0 * 0.3) {
-            const gap = Math.abs(q.sx - sx) - (q.w + seenW) / 2;          // across: + a gap, - an overlap
-            const narrowest = Math.min(q.w, seenW);
-            if (gap > -0.25 * narrowest && gap < 0.06 * half) awkward += 1;   // grazing, or edges meeting
-            const lefts = Math.abs((q.sx - q.w / 2) - (sx - seenW / 2)), rights = Math.abs((q.sx + q.w / 2) - (sx + seenW / 2));
-            if (gap < 0 && Math.min(lefts, rights) < 0.04 * half) awkward += 1;  // edges lined up
-          }
-          const ox = Math.max(0, (q.w + seenW) / 2 - Math.abs(q.sx - sx)), oy = Math.max(0, (q.h + seen) / 2 - dy);
-          cover += Math.max(0, (ox * oy) / Math.min(q.a, seenW * seen) - 0.45);   // only hiding most of one counts
-        }
-        const prev = placed[placed.length - 1];
-        const under = prev ? Math.max(0, 0.3 - Math.abs(prev.sx - sx) / (half || 1)) : 0;
-        const score = Math.abs(mass / total) / (half || 1) + 3 * awkward + 2 * cover + under + 0.25 * Math.abs(c - (u.jitter * 2 - 1));
-        if (score < bestScore) { bestScore = score; best = sx; }
-      }
-      placed.push({ sx: best, cy: y, w: seenW, h: seen, a: seenW * seen });
-      u.x = best * u.d / D0;
+      const u = m.userData, at = wall.items[i];
+      m.scale.set(at.sw, at.sh, 1);
+      Object.assign(u, { d: at.d, x: at.x, y: at.y, cy: at.cy });
     });
-    const end = planes[planes.length - 1].userData.cy;
-    travelPx = Math.ceil(-end / perPx);                         // until the last painting is in the middle
+    travelPx = Math.ceil(-wall.end / perPx);                    // until the last painting is in the middle
     section.style.height = `${H + travelPx}px`;
   }
   layout();
