@@ -3,8 +3,8 @@
 //   chrisjones-org-uk-dev  builds dev,  deploy command: npx wrangler deploy --env dev
 // The dev Worker MUST use --env dev: without it, it would deploy under the live Worker's name.
 // Nothing is built: the repository is the site. Most of it is served straight from the files. worker.js runs
-// first only for the pages filled in from the content database (the home page, painting addresses, the list),
-// uploaded images and the editor; and, where no file matches, for old addresses and "page not found".
+// first only for the pages filled in from the content database (the home page, the gallery page, painting
+// addresses), uploaded images and the editor; and, where no file matches, for "page not found".
 //
 // Each Worker has its own content database and editor address:
 //   live: database site-content,     images site-media,     site chrisjones.org.uk,     editor admin.chrisjones.org.uk
@@ -21,14 +21,14 @@
   "assets": {
     "directory": ".",                    // the site is the repository itself (less .assetsignore)
     "binding": "ASSETS",                 // how worker.js reaches the files
-    "not_found_handling": "none",        // an address with no file goes to worker.js (old addresses, 404.html with the header)
-    "run_worker_first": ["/", "/index.html", "/paintings/*", "/gallery/list", "/gallery/list/*", "/media/*", "/admin", "/admin/*"]
+    "not_found_handling": "none",        // an address with no file goes to worker.js (404.html with the header)
+    "run_worker_first": ["/", "/index.html", "/gallery", "/gallery/*", "/media/*", "/edit", "/edit/*"]
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "site-content", "database_id": "92160592-99ad-48c8-84db-e418928d0f46" }
   ],
   "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "site-media" }       // uploaded images (served at /media/p/...) and originals
+    { "binding": "MEDIA", "bucket_name": "site-media" }       // the Library's files (served at /media/<code>/...)
   ],
   "vars": {
     "ACCESS_TEAM": "chrisjones-org-uk",
@@ -45,7 +45,7 @@
         "directory": ".",
         "binding": "ASSETS",
         "not_found_handling": "none",
-        "run_worker_first": ["/", "/index.html", "/paintings/*", "/gallery/list", "/gallery/list/*", "/media/*", "/admin", "/admin/*"]
+        "run_worker_first": ["/", "/index.html", "/gallery", "/gallery/*", "/media/*", "/edit", "/edit/*"]
       },
       "d1_databases": [
         { "binding": "DB", "database_name": "site-content-dev", "database_id": "746fef4b-4f14-402a-b658-3ef2a1576dbb" }

@@ -1,4 +1,4 @@
-/* Thick-glass header. Wherever a picture passes under the header (the opening video, the floating gallery, the
+/* Thick-glass header. Wherever a picture passes under the header (the Hero video, the floating gallery, the
    Get in touch photo) the header draws that part of the picture itself: frosted exactly like the normal header
    (saturate 140%, blur 10px, its own tint), plus a rounded glass edge along the bottom that bends the picture
    just beyond it. Where there's no picture under it (plain grey, the profile's head animation) it fades into the
@@ -162,7 +162,7 @@
     });
   }
 
-  // The sections' backgrounds (the opening video, the Get in touch photo...), each with its section's shade
+  // The sections' backgrounds (the Hero video, the Get in touch photo...), each with its section's shade
   // (--shade, which darkens it on the page). A video: its poster first, then each new frame while it plays under
   // the header. A video swapped for a still (backgrounds.js) is a picture like any other; with a fade, the last
   // frame, which ends on top.

@@ -1,5 +1,5 @@
 /* Where a painting's or a background's files are: one copy of the rule, used by the page (site.js), the editor
-   page (admin/editor.js) and, through the gallery data, the floating gallery. Published, like links.js.
+   page (edit/editor.js) and, through the gallery data, the floating gallery. Published, like links.js.
 
    The layout (step 1d, Nov 2026): one folder in R2 for each Library item, named by its code (8 hex digits, made
    when it's uploaded, never changed; the name shown is the Library's own, in D1). Served at /media/<code>/...

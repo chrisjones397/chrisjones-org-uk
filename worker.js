@@ -1,28 +1,28 @@
 /* The site's server code. Most of the site is served straight from the files; Cloudflare runs this first
    (run_worker_first in wrangler.jsonc) only for the pages that show content from the database, the uploaded
    images and the editor, and otherwise only for addresses where there's no file (not_found_handling "none"):
-   old addresses sent on, and the "page not found" page.
+   the "page not found" page.
 
    Two kinds of address reach it:
    - The site (chrisjones.org.uk, www, and dev.chrisjones.org.uk): visitors see the published content.
    - The editor (admin.chrisjones.org.uk, and admin-dev.chrisjones.org.uk for dev): the whole site again, but
-     showing the drafts, with a bar for getting to the editor (/admin/), where content is changed, reviewed
+     showing the drafts, with a bar for getting to the editor (/edit/), where content is changed, reviewed
      and published. Cloudflare Access guards all of it; editor.js checks the sign-in again.
 
    Pages filled in from the database (site.js does the filling):
-     /                    the home page
-     /paintings/<name>/   the home page with that painting brought forward in the floating gallery: one page
+     /                    the home page (its gallery section is #gallery)
+     /gallery/            the gallery page: every painting as a grid
+     /gallery/<name>/     the home page with that painting brought forward in the floating gallery: one page
                           and one view however you arrive. Its title and link-preview details are the painting's,
                           with <base href="/"> so the page's own files are found from the top folder.
-     /gallery/list/       every painting as a plain grid
      anything else        templates/404.html, with status 404
-   Every page gets the site's header (templates/header.html) as it's served. Old addresses: /gallery/ (once the
-   floating gallery's own page) goes to the home page's gallery section.
+   Every page gets the site's header (templates/header.html) as it's served. An address missing only its last /
+   is sent on to the one with it (the usual way, so each page has one address).
    Files kept in R2 (binding MEDIA): /media/<code>/<file> (the Library's layout, paths.js): only what's published,
    except to the editor. Videos are sent in pieces when asked (range requests: 206 Partial Content), which is how
    browsers play video, and Safari insists on it. */
 
-import { load, rewriter, homeRewriter, listRewriter, homePreview, esc } from './site.js';
+import { load, rewriter, homeRewriter, gridRewriter, homePreview, esc } from './site.js';
 import { signedIn, api } from './editor.js';
 import notFoundPage from './templates/404.html';   // .html files are imported as text (Wrangler's default rules)
 
@@ -44,29 +44,24 @@ export default {
     if (editor) {
       const who = await signedIn(request, env, url);
       if (!who) return signInAgain(request, url);
-      if (path === '/admin') return Response.redirect(`${url.origin}/admin/`, 301);
-      if (path.startsWith('/admin/api/')) return api(request, env, url, who);
-      if (path.startsWith('/admin/')) {
-        const page = await env.ASSETS.fetch(new URL(path === '/admin/' ? '/admin/index.html' : path, url));
+      if (path === '/edit') return Response.redirect(`${url.origin}/edit/`, 301);
+      if (path.startsWith('/edit/api/')) return api(request, env, url, who);
+      if (path.startsWith('/edit/')) {
+        const page = await env.ASSETS.fetch(new URL(path === '/edit/' ? '/edit/index.html' : path, url));
         const h = new Headers(page.headers);
         h.set('cache-control', 'no-store');
         return new Response(page.body, { status: page.status, headers: h });
       }
-    } else if (path === '/admin' || path.startsWith('/admin/')) {
+    } else if (path === '/edit' || path.startsWith('/edit/')) {
       return notFound(env, url);
-    }
-    if (path === '/gallery' || path === '/gallery/' || path === '/gallery/index.html') {
-      return Response.redirect(`${url.origin}/#paintings`, 301);
     }
 
     const mode = editor ? 'draft' : 'published';
-    if (path === '/' || path === '/index.html') return home(env, url, mode, editor);
-    if (path === '/gallery/list' || path === '/gallery/list/index.html') return Response.redirect(`${url.origin}/gallery/list/`, 301);
-    if (path === '/gallery/list/') return listPage(env, url, mode, editor);
-    const m = path.match(/^\/paintings\/([a-z0-9-]+)\/?$/);
+    if (path === '/') return home(env, url, mode, editor);
+    const m = path.match(/^\/gallery(?:\/([a-z0-9-]+))?(\/?)$/);
     if (m) {
-      if (!path.endsWith('/')) return Response.redirect(`${url.origin}${path}/${url.search}`, 301);
-      return home(env, url, mode, editor, m[1]);
+      if (!m[2]) return Response.redirect(`${url.origin}${path}/${url.search}`, 301);
+      return m[1] ? home(env, url, mode, editor, m[1]) : galleryPage(env, url, mode, editor);
     }
     // Reached only where there's no file (or under the run_worker_first addresses above): try the files once more
     const res = await env.ASSETS.fetch(request);
@@ -87,10 +82,10 @@ async function notFound(env, url, mode = 'published') {
    then starts a fresh sign-in by itself (silently, if the sign-in address still has a good session). A marker
    cookie, kept for a minute, means a second failure shows a page instead of going round again, so a mistake in
    the settings (ACCESS_TEAM, ACCESS_AUD) can't loop. Requests from the editor's script (the API, images) get a
-   401, which admin/editor.js turns into a "Sign in again" link, so nothing typed is lost. */
+   401, which edit/editor.js turns into a "Sign in again" link, so nothing typed is lost. */
 const RETRY = 'signin_retry';
 function signInAgain(request, url) {
-  const page = request.method === 'GET' && !url.pathname.startsWith('/admin/api/') && !url.pathname.startsWith('/media/')
+  const page = request.method === 'GET' && !url.pathname.startsWith('/edit/api/') && !url.pathname.startsWith('/media/')
     && request.headers.get('x-requested-with') !== 'XMLHttpRequest';
   if (!page) {
     return new Response(JSON.stringify({ error: 'Your sign-in has run out: sign in again', signin: true }), {
@@ -139,7 +134,7 @@ async function home(env, url, mode, editor, name) {
   if (name && !p) return notFound(env, url, mode);
   const page = await env.ASSETS.fetch(new URL('/', url));
   const rw = finish(homeRewriter(c), c, url, editor);
-  // The picture in link previews: the painting shown, or else the opening's background (site.js homePreview).
+  // The picture in link previews: the painting shown, or else the Hero's background (site.js homePreview).
   const pic = p ? { src: `/${p.preview.src}`, w: p.preview.w, h: p.preview.h } : homePreview(c);
   if (pic) {
     rw.on('head', { element(el) {
@@ -148,7 +143,7 @@ async function home(env, url, mode, editor, name) {
     } });
   }
   if (p) {
-    const here = `${url.origin}/paintings/${p.name}/`;
+    const here = `${url.origin}/gallery/${p.name}/`;
     const set = (value) => ({ element(el) { el.setAttribute('content', value); } });
     rw.on('head', { element(el) {
       el.prepend('<base href="/">', { html: true });
@@ -163,23 +158,32 @@ async function home(env, url, mode, editor, name) {
   return respond(rw.transform(page), editor);
 }
 
-async function listPage(env, url, mode, editor) {
+async function galleryPage(env, url, mode, editor) {
   const c = await load(env, mode);
-  const page = await env.ASSETS.fetch(new URL('/gallery/list/index.html', url));
-  return respond(finish(listRewriter(c), c, url, editor).transform(page), editor);
+  const page = await env.ASSETS.fetch(new URL('/gallery/index.html', url));
+  return respond(finish(gridRewriter(c), c, url, editor).transform(page), editor);
 }
 
-/* The editor's bar on its preview of the site: what you're looking at, and the way to the editor. */
+/* The editor's pill on its preview of the site, styled like the editor's own floating pills (edit/index.html):
+   the eye says this is the preview (the editor's Preview symbol: the site as it will be, drafts included, which
+   visitors don't see yet); the amber count is the changes waiting to be published (as on the editor's Review),
+   or a green tick when everything is published; the pencil opens the editor. Symbols, with tooltips. */
+const SVG = (d, colour = 'currentColor') => `<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="${colour}"
+  stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 function bar(c) {
   const n = c.changes;
-  const changes = n ? `${n} change${n === 1 ? '' : 's'} to publish` : 'all published';
+  const pill = 'display:inline-flex;align-items:center;justify-content:center;min-width:2.5rem;min-height:2.5rem;padding:0 0.5rem;border-radius:999px;color:#eee;text-decoration:none';
+  const count = n
+    ? `<a href="/edit/#review" title="${n} change${n === 1 ? '' : 's'} waiting to be published: review" aria-label="Review ${n} change${n === 1 ? '' : 's'}" style="${pill}">`
+      + `<span style="display:inline-block;min-width:1.4em;padding:0 0.35em;border-radius:999px;background:#f5c66b;color:#111;font-size:0.8rem;line-height:1.5;text-align:center">${n}</span></a>`
+    : `<span title="Everything is published: the preview is the same as the live site" style="${pill}">${SVG('<path d="M4 10.5l4 4L16 6"/>', '#8fd18f')}</span>`;
   return `
-<div id="cms-bar" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483647;display:flex;gap:12px;align-items:center;
-  padding:7px 14px;max-width:calc(100vw - 20px);border-radius:999px;background:rgba(20,20,20,0.88);color:#eee;font:13px/1.3 -apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
-  box-shadow:0 2px 12px rgba(0,0,0,0.4);white-space:nowrap;text-shadow:none">
-  <span style="color:#f5c66b">Draft</span><span style="color:#aaa">${changes}</span>
-  <a href="/admin/" style="color:#fff;text-decoration:none">Edit</a>
-  ${n ? '<a href="/admin/#review" style="color:#fff;text-decoration:none">Review</a>' : ''}
+<div id="cms-bar" style="position:fixed;left:50%;bottom:max(1rem,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483647;
+  display:flex;gap:0.35rem;align-items:center;padding:0.35rem;border-radius:999px;background:rgba(35,35,35,0.92);border:1px solid #3a3a3a;
+  box-shadow:0 2px 12px rgba(0,0,0,0.4);font:16px/1.5 -apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;text-shadow:none">
+  <span title="Preview: the site as it will be, with your drafts. Visitors don't see them until they're published." style="${pill};color:#f5c66b">${SVG('<path d="M1.8 10S5 4.5 10 4.5 18.2 10 18.2 10 15 15.5 10 15.5 1.8 10 1.8 10z"/><circle cx="10" cy="10" r="2.6"/>')}</span>
+  ${count}
+  <a href="/edit/" title="Open the editor" aria-label="Open the editor" style="${pill}">${SVG('<path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M11.5 5.5l3 3"/>')}</a>
 </div>`;
 }
 

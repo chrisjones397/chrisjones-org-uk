@@ -1,4 +1,4 @@
-/* The editor's server side: who is signed in, and the API the editor page (admin/editor.js) calls.
+/* The editor's server side: who is signed in, and the API the editor page (edit/editor.js) calls.
 
    It runs only on the editor's address (admin.chrisjones.org.uk for live, admin-dev.chrisjones.org.uk for
    dev), which Cloudflare Access guards as a whole: nobody reaches it without the one-time code sent to an
@@ -59,7 +59,7 @@ const b64text = (s) => new TextDecoder().decode(b64bytes(s));
 // ---- the API ----------------------------------------------------------------------------------------------
 
 export async function api(request, env, url, who) {
-  const path = url.pathname.slice('/admin/api/'.length);
+  const path = url.pathname.slice('/edit/api/'.length);
   try {
     if (request.method === 'GET') {
       if (path === 'state') return json(await state(env, who));
@@ -118,17 +118,17 @@ const num = (v, what) => { if (typeof v !== 'number' || !isFinite(v)) throw new 
 const int = (v, what) => { if (!Number.isInteger(v) || v < 0 || v > 100000) throw new Bad(`${what} must be a whole number`); return v; };
 const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'drift', 'seed'];
 
-/* The page sections' paragraph entries (admin/editor.js PAGE), which may be created by the first paragraph typed. */
+/* The page sections' paragraph entries (edit/editor.js PAGE), which may be created by the first paragraph typed. */
 const PARAGRAPHS = ['t-hero', 't-gallery', 't-contact', 't-profile', 't-footer'];
 
 /* The page sections that can have a photo or a video behind them (entries bg-<section>; index.html marks each
-   with data-background="<section>"; BACKGROUNDS in admin/editor.js lists the same). The gallery has its floating
+   with data-background="<section>"; BACKGROUNDS in edit/editor.js lists the same). The gallery has its floating
    wall and the profile its head animation (a live 3D drawing), so they aren't listed. A new section that can take
-   one needs only its name here and in admin/editor.js, and the attribute. */
+   one needs only its name here and in edit/editor.js, and the attribute. */
 const BACKGROUNDS = ['hero', 'contact', 'footer'];
 
-/* How a painting's images were made from its original (admin/darkroom.js): white balance 'none', 'paper' (all
-   round) or 'picks' (from spots), and the four corners it was squared up from, all as fractions of the original's
+/* How a painting's images were made from its original (edit/darkroom.js): white balance 'none' or 'picks' (from
+   spots), and the four corners it was squared up from, all as fractions of the original's
    width and height; brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
    colour kept, 0 to 1) go with any white balance; the corners are in the order the painting's top left, top
    right, bottom right and bottom left, so they also say which way up it goes (and whether it's mirrored); shape is the size from its details [height, width] when the crop took that shape. Kept so
@@ -136,7 +136,7 @@ const BACKGROUNDS = ['hero', 'contact', 'footer'];
 function processOf(p) {
   if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
   if (typeof p.original !== 'string' || !/^media\/[0-9a-f]{8}$/.test(p.original)) throw new Bad('Bad original');
-  if (!['none', 'paper', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
+  if (!['none', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
   const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
   const points = (a, lo, hi, what) => {
     if (!Array.isArray(a) || a.length < lo || a.length > hi) throw new Bad(`Bad ${what}`);
@@ -182,8 +182,7 @@ export function normalise(id, kind, d) {
     if (pv.src !== `media/${d.media}/${d.rendition}/preview.jpg`) throw new Bad('Bad preview image');
     if (!/^s-[a-z0-9-]{1,80}$/.test(d.section || '')) throw new Bad('Bad section');
     // Medium, size in centimetres (height, width) and year, kept separately; the details line visitors see is
-    // made from them ("Oil on canvas, 60 x 90 cm, 2020"). Older entries with only a details line keep it.
-    const parts = d.medium != null || d.cm != null || d.year != null;
+    // made from them ("Oil on canvas, 60 x 90 cm, 2020").
     const medium = str(d.medium ?? '', 120, 'Medium'), year = str(d.year ?? '', 20, 'Year');
     let cm = null;
     if (d.cm != null) {
@@ -193,13 +192,13 @@ export function normalise(id, kind, d) {
     // estimated: the size isn't measured (only a scale; the photo gave the shape). size_shown: whether visitors see
     // the size, kept only when it differs from the default (shown when measured, hidden when not); an estimated
     // size that is shown is followed by "(est.)".
-    const estimated = parts && cm && !!d.estimated;
+    const estimated = !!cm && !!d.estimated;
     const shown = !!cm && (d.size_shown == null ? !estimated : !!d.size_shown);
     const size = cm && shown && `${cm[0]} x ${cm[1]} cm${estimated ? ' (est.)' : ''}`;
-    const details = parts ? [medium, size, year].filter(Boolean).join(', ') : str(d.details || '', 200, 'Details');
+    const details = [medium, size, year].filter(Boolean).join(', ');
     return {
-      name: d.name, title, ...(parts ? { medium, cm, year, ...(estimated ? { estimated: true } : {}),
-        ...(cm && shown !== !estimated ? { size_shown: shown } : {}) } : {}), details, section: d.section,
+      name: d.name, title, medium, cm, year, ...(estimated ? { estimated: true } : {}),
+      ...(cm && shown !== !estimated ? { size_shown: shown } : {}), details, section: d.section,
       order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       media: d.media, rendition: d.rendition,
@@ -311,7 +310,7 @@ async function save(env, who, items) {
       if (it.id !== `p-${d.name}` && !old) throw new Bad('A new painting\'s id must be p-<name>');
       for (const n of names) {
         const [name, id] = n.split('\u0000');
-        if (name === d.name && id !== it.id) throw new Bad(`Another painting already has the address /paintings/${d.name}/`);
+        if (name === d.name && id !== it.id) throw new Bad(`Another painting already has the address /gallery/${d.name}/`);
       }
     }
     stmts.push(env.DB.prepare(`INSERT INTO entries (id, kind, draft, published, draft_at, draft_by) VALUES (?, ?, ?, NULL, ?, ?)
@@ -438,7 +437,7 @@ async function restore(env, who, revision) {
   return { entries: await rows(env) };
 }
 
-/* GET /admin/api/original?key=media/<code>: a Library item's original photo (original.<ext>), for reopening a
+/* GET /edit/api/original?key=media/<code>: a Library item's original photo (original.<ext>), for reopening a
    painting's picture in the editor. Only ever to the signed-in editor (this API); visitors never get originals.
    x-original says what the darkroom records as the original (media/<code>). */
 async function original(env, key) {
@@ -452,13 +451,13 @@ async function original(env, key) {
     'x-original': key, 'cache-control': 'private, no-store' } });
 }
 
-/* PUT /admin/api/upload?key=media/<code>/<file> */
+/* PUT /edit/api/upload?key=media/<code>/<file> */
 async function upload(request, env, url) {
   if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on yet', 503);
   return uploadItem(request, env, url.searchParams.get('key') || '');
 }
 
-/* PUT /admin/api/upload?key=media/<code>/<file>: a file of a Library item (library.js uploadAllowed has the
+/* PUT /edit/api/upload?key=media/<code>/<file>: a file of a Library item (library.js uploadAllowed has the
    names it may have), stored as sent, streamed through. Never overwrites. */
 async function uploadItem(request, env, key) {
   if (!(await uploadAllowed(env, key))) throw new Bad('Bad file name');

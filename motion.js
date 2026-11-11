@@ -1,4 +1,4 @@
-/* Eased text: the opening title drifts down a little as you scroll, and the Gallery heading, its mirror image
+/* Eased text: the Hero title drifts down a little as you scroll, and the Gallery heading, its mirror image
    across the line between the two sections, drifts up the same amount; and the profile text rises and
    fades into its place as its section arrives, the heading first and each paragraph a beat later.
    Each follows the scroll a moment late and settles with a slight spring. Nothing moves for
@@ -29,7 +29,7 @@
   const header = document.querySelector('.header');
   if (heading && gallery) pieces.push({ el: heading, wait: 0, fade: false,
     // in its place while the gallery is still below the window; as the line between the sections rises to the
-    // top of the window, the heading rises towards it, just as the opening title sinks towards it. It comes
+    // top of the window, the heading rises towards it, just as the Hero title sinks towards it. It comes
     // to rest as far below the header as the title ends above the bottom of the window (the header covers the
     // top of the window, where nothing covers the bottom), so it rises less by the header's height.
     target: () => {
@@ -87,7 +87,7 @@
   wake();
 })();
 
-/* Parallax: the sections' backgrounds (the opening's, the contact section's: .section-bg) move more slowly than the page as you
+/* Parallax: the sections' backgrounds (the Hero's, the contact section's: .section-bg) move more slowly than the page as you
    scroll, as if they were further away. Nothing moves for visitors who have asked their device to reduce motion,
    nor while the header's pause button is on (pause.js). */
 (function () {
@@ -128,7 +128,7 @@
 
 /* Snapping, with the visitor rather than against them. Once a scroll comes to rest, the page may glide on to
    the next resting place in the direction it was going: never back the other way. The resting places are the
-   top of each full-window section (the opening, contact). The gallery and the profile are taller than the
+   top of each full-window section (the Hero, contact). The gallery and the profile are taller than the
    window: going down, the page settles at their start, going up at their end, and within them scrolling is
    free, so they're never taken over, and leaving them is never pulled back.
    It only glides on once the visitor has scrolled at least 15% of the window into the next section (that much

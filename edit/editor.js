@@ -1,4 +1,4 @@
-/* The editor page (admin/index.html). Its views:
+/* The editor page (edit/index.html). Its views:
      #gallery  add a painting (at the top), and change the genres and paintings
      #content  change the page's words, section by section.
    One saving rule (step 1d): every change saves itself as a draft at once, everywhere (paintings too: there is no
@@ -9,7 +9,7 @@
      #library  every file in storage (Site pictures, Paintings): what uses each, its name, Delete for good
      #review   every unpublished change, each with a tick: publish the ticked ones, or all, or discard them.
      #history  each publication, and every earlier version of anything, which can be brought back as a draft.
-   It talks to editor.js on the server through /admin/api/. Page elements are built with textContent, never
+   It talks to editor.js on the server through /edit/api/. Page elements are built with textContent, never
    from strings of HTML, so nothing typed in can become part of the page. */
 
 import { SITES, tidy, ok, icon } from '/links.js';
@@ -75,7 +75,7 @@ async function fetchFor(url, opts = {}, ms) {
   return r;
 }
 async function call(method, path, body) {
-  const r = await fetchFor(`/admin/api/${path}`, {
+  const r = await fetchFor(`/edit/api/${path}`, {
     method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined,
   }, 30000);
   const data = await r.json().catch(() => ({ error: `The server answered ${r.status}` }));
@@ -123,8 +123,11 @@ function placeMarks() {
       el.title = tip;
       setTimeout(() => { el.classList.remove('saved'); el.removeAttribute('title'); }, MARK_MS - age);
     } else {
+      // The tick takes no room, so nothing moves when it appears: it sits on the top right corner of the button or
+      // label that was changed (a tick box's label runs the width of the row, so its tick is at the row's right).
       const t = h('span', { class: 'mark', title: tip, style: `animation-delay: ${delay}` }, glyph(GLYPHS.tick, 16));
-      if (el.tagName === 'LABEL') el.append(t); else (el.closest('label') || el).after(t);
+      const host = el.tagName === 'LABEL' || el.tagName === 'BUTTON' ? el : el.closest('label');
+      if (host) { host.classList.add('marked'); host.append(t); } else { t.classList.add('beside'); el.after(t); }
       setTimeout(() => t.remove(), MARK_MS - age);
     }
   }
@@ -148,8 +151,8 @@ const unhidden = (v) => { const o = JSON.parse(v); delete o.hidden; return JSON.
 const status = (e) => (!changed(e) ? null : e.published == null ? 'new' : e.draft == null ? 'gone'
   : unhidden(e.draft) === unhidden(e.published) ? (draftOf(e).hidden ? 'hiding' : 'showing') : 'changed');
 const STATUS = { new: 'New', changed: 'Changed', gone: 'Removed', hiding: 'Hidden', showing: 'Shown again' };
-/* Hidden: what visitors see (hiding acts at once, slice 4b); a draft that hides (left from before 4b) counts too. */
-const isHidden = (e) => !!(e && ((e.published && liveOf(e).hidden) || (e.draft && draftOf(e).hidden)));
+/* Hidden: what visitors see (hiding acts at once, so the published version says). */
+const isHidden = (e) => !!(e && e.published && liveOf(e).hidden);
 /* Hide or show again, at once (an eye: open while on the site, closed while hidden): the opposite of Publish, so it
    takes effect straight away, as a release in History, and other waiting changes stay waiting. Nothing to hide on a
    thing never published, so no eye there. */
@@ -687,7 +690,6 @@ async function framesOf(src, say) {
 function detailsFields(f, d, onSize) {
   const media = [...new Set(entries.filter((e) => e.kind === 'painting' && current(e)).map((e) => current(e).medium).filter(Boolean))].sort();
   const listId = `media-${Math.random().toString(36).slice(2, 8)}`;
-  const old = !d.cm && d.details ? /^(.*?),\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm(?:,\s*(.*))?$/i.exec(d.details) : null;
   const remembered = (k, dflt) => { try { return localStorage.getItem(k) || dflt; } catch { return dflt; } };
   const isNew = !d.title;
   const typed = (side) => () => {
@@ -706,13 +708,13 @@ function detailsFields(f, d, onSize) {
   const out = [
     h('label', {}, 'Medium'),
     f.medium = h('input', { type: 'text', autocomplete: 'off', list: listId,
-      value: d.medium ?? (old ? old[1] : isNew ? remembered('editor-medium', '') : d.details || '') }),
+      value: d.medium ?? (isNew ? remembered('editor-medium', '') : '') }),
     h('datalist', { id: listId }, ...media.map((m) => h('option', { value: m }))),
     h('div', { class: 'row size' },
-      f.hBox = num(d.cm ? d.cm[0] : old ? old[2] : isNew ? remembered('editor-height', '60') : '', 'Height (cm)', 'height'),
-      f.wBox = num(d.cm ? d.cm[1] : old ? old[3] : '', 'Width (cm)', 'width'),
+      f.hBox = num(d.cm ? d.cm[0] : isNew ? remembered('editor-height', '60') : '', 'Height (cm)', 'height'),
+      f.wBox = num(d.cm ? d.cm[1] : '', 'Width (cm)', 'width'),
       f.yBox = h('label', { class: 'num' }, 'Year', h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off',
-        value: d.year ?? (old ? old[4] || '' : isNew ? String(new Date().getFullYear()) : '') }))),
+        value: d.year ?? (isNew ? String(new Date().getFullYear()) : '') }))),
     h('div', { class: 'row how' },
       h('label', { class: 'tick', title: 'The height and width are as measured, and the picture is squared up to exactly that shape' },
         f.measured = h('input', { type: 'radio', name: group, checked: !unmeasured, onchange: how }), 'Measured'),
@@ -791,7 +793,7 @@ function paintingRow(e, items, i, secs) {
     h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
     ...pictureFields(e, d, f),
-    h('p', { class: 'hint' }, `Address: /paintings/${d.name}/ (stays the same if the title changes)`),
+    h('p', { class: 'hint' }, `Address: /gallery/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
       // never published: undoing would take it away altogether, which is what Remove (with its question) is for
       changed(e) && e.published != null ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
@@ -859,7 +861,7 @@ async function storePicture(id, re) {
         }
         orig = re.kept.key;
       }
-      pic = { ...(await storeImages(orig.slice(6), dr.result(), say)), white_paper: dr.white === 'paper', process: dr.record(orig) };
+      pic = { ...(await storeImages(orig.slice(6), dr.result(), say)), process: dr.record(orig) };
       re.made.add(`${pic.media}/${pic.rendition}`);
     }
     let before = null;
@@ -888,7 +890,7 @@ async function storePicture(id, re) {
 
 /* Reopening a painting's picture: its darkroom starts with the saved choices summarised, and opening a section
    reads the original back from R2 and starts from those choices (or, for paintings moved from git, which have
-   none: the whole photo, with the paper's white balance if it's a drawing on white paper). */
+   none: the whole photo, with "Find the paper"'s spots if it's a drawing on white paper, white_paper). */
 const reopened = new Map();         // painting id -> { dr }, while its Edit form is open
 const pictureOf = (d) => {          // the painting's current picture, at a size fit for comparing
   const w = d.widths.find((x) => x >= 1024) || d.widths[d.widths.length - 1];
@@ -909,7 +911,7 @@ function pictureFields(e, d, f) {
       start: d.process ? { process: d.process } : { white, guess: false },
       fetch: async () => {
         const key = d.process ? d.process.original : `media/${d.media}`;
-        const r = await fetchFor(`/admin/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
+        const r = await fetchFor(`/edit/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
         return { original: r.headers.get('x-original') || key, blob: await r.blob() };
       },
@@ -987,7 +989,7 @@ function whiteText(r) {
   const n = (r.spots || []).length;
   if (!r.white || r.white === 'none' || (r.white === 'picks' && !n)) return 'None: as photographed';
   const b = Math.round((r.brightness ?? 1) * 100), w = Math.round((r.warmth ?? 0) * 100);
-  return (r.white === 'paper' ? 'Paper all round' : `From ${n} white ${n === 1 ? 'spot' : 'spots'}`)
+  return (r.white === 'paper' ? 'The paper made white' : `From ${n} white ${n === 1 ? 'spot' : 'spots'}`)
     + (b !== 100 ? `, white at ${b}%` : '') + (w ? `, keeping ${w}% of the warmth` : '');
 }
 function cornersText(r) {
@@ -1017,7 +1019,6 @@ function darkroom(opts = {}) {
           h('span', { class: 'grow' }),
           h('button', { type: 'button', title: 'Place white spots round the margins of a drawing on white paper', onclick: () => findSpots() }, 'Find the paper'),
           g.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
-        g.legacyNote = h('p', { class: 'hint', hidden: true }, 'Made with the older "paper all round" method. Finding the paper or picking white replaces it, and the picture may change slightly.'),
         g.sliders = h('div', { class: 'sliders' },
           h('label', {}, 'Brightness of the white ', g.brightOut = h('span', { class: 'muted' })),
           slider(g.bright = h('input', { type: 'range', min: 50, max: 100, step: 1, value: 100, oninput: () => slid() }),
@@ -1129,7 +1130,7 @@ function darkroom(opts = {}) {
     }
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
-    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null, paper: false };
+    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
     URL.revokeObjectURL(img.src);
     p.guess = guessCorners(p.src);
     const choices = typeof start === 'function' ? start(p) : start;
@@ -1148,14 +1149,15 @@ function darkroom(opts = {}) {
   /* Put the controls to the choices load() was given. */
   function apply({ process, white = 'none', guess = true, brightness = 1, warmth = 0 } = {}) {
     if (process) {
-      p.paper = process.white === 'paper'; p.spots = process.white === 'picks' ? (process.spots || []).map((q) => q.slice()) : [];
+      p.spots = process.white === 'picks' ? (process.spots || []).map((q) => q.slice()) : [];
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
       g.shape.checked = !!process.shape || !process.corners;      // as it was made
     } else {
-      p.paper = white === 'paper'; p.spots = []; g.shape.checked = true;
+      g.shape.checked = true;
       g.bright.value = Math.round(brightness * 100); g.warm.value = Math.round(warmth * 100);
       p.corners = guess && p.guess && !wholePhoto(p.guess) ? p.guess : null;   // a new photo: start from the guess
+      p.spots = white === 'paper' ? findPaper(p.src, p.corners) : [];       // a drawing on white paper: find the paper
     }
     slid(); clearTimeout(timer);
   }
@@ -1172,18 +1174,17 @@ function darkroom(opts = {}) {
   async function pickSpots() {
     if (!p) return;
     const r = await fullView(p.src, 'spots', p.spots, null, ghost && ghost.spots, () => findPaper(p.src, p.corners));
-    if (r) { p.spots = r; p.paper = false; }          // done: the spots decide (none = no white balance)
+    if (r) p.spots = r;                               // done: the spots decide (none = no white balance)
     update();
   }
   /* Spots round the painting's margins, for a drawing on white paper (darkroom.js findPaper). */
   function findSpots() {
     if (!p) return;
-    p.spots = findPaper(p.src, p.corners); p.paper = false;
+    p.spots = findPaper(p.src, p.corners);
     update();
   }
-  /* The white balance follows from the spots: none without any. 'paper' only for an older record made with
-     "paper all round", until spots replace it. */
-  const white = () => (p && p.spots.length ? 'picks' : p && p.paper ? 'paper' : 'none');
+  /* The white balance follows from the spots: none without any. */
+  const white = () => (p && p.spots.length ? 'picks' : 'none');
   async function setCorners() {
     if (!p) return;
     await busy('Getting the full-size view ready…');
@@ -1236,7 +1237,6 @@ function darkroom(opts = {}) {
   async function update() {
     if (!p) return;
     g.sliders.hidden = white() === 'none';
-    g.legacyNote.hidden = white() !== 'paper';
     g.spotsBtn.textContent = p.spots.length ? `Change white (${p.spots.length} ${p.spots.length === 1 ? 'spot' : 'spots'})…` : 'Pick white…';
     g.wholeBtn.hidden = !cropped();
     const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
@@ -1392,7 +1392,7 @@ function addForm(secs) {
       const { key: original, id: item, shared } = await keepOriginal(file, title, dr.known && dr.known.file === file ? dr.known : null, (t) => { f.progress.textContent = t; });
       const pic = await storeImages(item, dr.result(), (t) => { f.progress.textContent = t; });
       const data = { name, title, ...det, section: f.section.value, order: paintingsIn(f.section.value).length, wide: f.wide.checked,
-        white_paper: dr.white === 'paper', ...pic, process: dr.record(original) };
+        ...pic, process: dr.record(original) };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'painting', data }] });
       try { localStorage.setItem('editor-medium', det.medium); localStorage.setItem('editor-height', String(det.cm[0])); } catch { /* private browsing */ }
       adding = null;                                 // a fresh form, and a fresh note
@@ -1406,7 +1406,7 @@ function addForm(secs) {
 }
 
 async function put(key, blob, type, ms = 120000) {
-  const r = await fetchFor(`/admin/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, ms);
+  const r = await fetchFor(`/edit/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, ms);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
   return r.json();
 }

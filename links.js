@@ -1,7 +1,7 @@
 /* The contact links: the places someone can find or write to the site's owner, each a tick and a username in the
    editor (Content, Contact), with the link built from the username. One copy of the list, used by the page
    (site.js puts the ticked ones into the contact section and the header), the server (editor.js checks what's
-   saved) and the editor page (admin/editor.js imports this file from the site's top folder).
+   saved) and the editor page (edit/editor.js imports this file from the site's top folder).
 
    Stored as one entry, 'links' (kind 'links'): { <site>: { name, on } } in the order below, so an unticked site
    keeps its username for next time. Shown in this order too.

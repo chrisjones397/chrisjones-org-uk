@@ -15,7 +15,7 @@
    The list of paintings and the settings come from the database: worker.js writes them into the page
    (the "gallery-data" block; site.js galleryData). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
    the few paintings hung around the words that are already in the page. */
-import * as THREE from '../face/vendor/three.module.min.js';
+import * as THREE from './face/vendor/three.module.min.js';
 
 const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
 // The arrangement, from the database's gallery settings (entry settings-gallery; all 1 as first built). Adding ?tune to the page's
@@ -200,16 +200,16 @@ function start() {
   // How far down the wall the page has scrolled, in pixels: 0 at the section's top, travelPx at its end
   const progress = () => Math.min(Math.max(-section.getBoundingClientRect().top, 0), travelPx);
 
-  // A painting's address. Bringing a painting forward puts its address, /paintings/<name>/, in the address bar
+  // A painting's address. Bringing a painting forward puts its address, /gallery/<name>/, in the address bar
   // (without loading anything), and the browser's Back sends it back again. That address, opened from a link,
   // is this same page with that painting brought forward (worker.js serves it, with a <base href="/"> so the
   // page's files are found). So a painting's address always shows the same thing, and nothing reloads.
   const SITE_TITLE = 'Christopher Jones - Fine Art';
   const homeURL = new URL('./', document.baseURI).href;
-  const pageURL = (m) => new URL(`paintings/${m.userData.p.name}/`, document.baseURI).href;
+  const pageURL = (m) => new URL(`gallery/${m.userData.p.name}/`, document.baseURI).href;
   const named = (name) => planes.find((x) => x.userData.p.name === name) || null;
   let focus = null, leaving = [], focusAt = 0, pushed = false;
-  const opened = location.href.split('#')[0] !== homeURL && named((location.pathname.match(/\/paintings\/([a-z0-9-]+)\/?$/) || [])[1]);
+  const opened = location.href.split('#')[0] !== homeURL && named((location.pathname.match(/^\/gallery\/([a-z0-9-]+)\/?$/) || [])[1]);
   if (opened) {
     // Opened at a painting's address: the wall is put where that painting hangs, and it's brought forward
     const opening = section.getBoundingClientRect().top + scrollY + Math.max(-opened.userData.cy / perPx, 0);

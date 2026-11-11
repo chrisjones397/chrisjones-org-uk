@@ -9,13 +9,13 @@
   <link rel="manifest" href="favicon/site.webmanifest">
   <title>Christopher Jones - Fine Art</title>
   <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
-  <!-- Link previews (messages, social media): the finished painting from the opening video -->
+  <!-- Link previews (messages, social media) -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Christopher Jones - Fine Art">
   <meta property="og:title" content="Christopher Jones - Fine Art">
   <meta property="og:description" content="Paintings in oil, watercolour, and pastel">
   <meta property="og:url" content="https://chrisjones.org.uk/">
-  <!-- og:image (the picture in link previews): worker.js adds it, the opening's background or the painting shown -->
+  <!-- og:image (the picture in link previews): worker.js adds it, the Hero's background or the painting shown -->
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="face/face.css">
   <script>
     /* Addresses in the page (pictures, scripts, links) are worked out from the home page's folder, fixed here
-       with a <base>, because the gallery changes the address bar to a painting's address (/paintings/<name>/)
+       with a <base>, because the gallery changes the address bar to a painting's address (/gallery/<name>/)
        when one is brought forward, and they mustn't then be worked out from there. (Opened at a painting's
        address, worker.js has already put in <base href="/">.) */
     if (!document.querySelector('base')) {
@@ -67,7 +67,7 @@
   
   <main id="main-content">
 
-    <!-- Opening: its background (data-background) is chosen in the editor (entry bg-hero), put in by site.js -->
+    <!-- Hero: its background (data-background) is chosen in the editor (entry bg-hero), put in by site.js -->
     <section class="hero" data-background="hero">
       <div class="hero-words" data-paragraphs="hero">
         <h1 class="hero-title" data-text="hero-title">Fine art in oil, watercolour, and pastel</h1>
@@ -75,64 +75,27 @@
     </section>
 
     <!-- The gallery: an invitation, with a few paintings hung around it -->
-    <section id="paintings" class="invite">
+    <section id="gallery" class="invite">
       <!-- worker.js fills in the paintings hung round the words (.invite-wall) and the gallery's data, from the database -->
       <div class="invite-wall" aria-hidden="true">
       </div>
       <div id="float-stage" class="float-stage float-section" data-base="">
         <div class="float-text">
-          <div id="float-caption" class="float-caption"><a class="t" href="gallery/list/" title="Open this painting's page"></a><p class="d"></p></div>
-          <a class="float-list" href="gallery/list/">View as a list</a>
+          <div id="float-caption" class="float-caption"><a class="t" href="gallery/" title="Open this painting's page"></a><p class="d"></p></div>
+          <a class="float-list" href="gallery/">View as a list</a>
         </div>
       </div>
-      <style>
-    /* The text over the gallery sits in the same 1200-pixel column as the header, so its left and right
-       edges line up with the name and the menu above */
-    .float-text {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: max(24px, 5vh);
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 20px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 2rem;
-      pointer-events: none;
-    }
-    .float-text a { pointer-events: auto; }
-    .float-caption {
-      opacity: 0;
-      transform: translateY(6px);
-      transition: opacity 0.5s ease, transform 0.5s ease;
-    }
-    .float-caption.on { opacity: 1; transform: none; }
-    .float-caption .t { display: block; font-size: 1.5rem; font-weight: 300; }
-    .float-caption:not(.on) a { pointer-events: none; }
-    .float-caption .d { font-size: 0.9rem; margin-top: 0.35em; opacity: 0.85; }   /* as the gallery's captions */
-    .float-list {
-      font-size: 0.95rem;                                                    /* as Previous / Next */
-      white-space: nowrap;
-    }
-    .float-list:hover, .float-list:focus { color: rgba(255,255,255,1); }
-    @media (max-width: 720px) {
-      .float-text { flex-direction: column; align-items: flex-start; gap: 0.9rem; bottom: 20px; }
-      .float-caption .t { font-size: 1.25rem; }
-    }
-  </style>
       <script type="application/json" id="gallery-data">{"settings": {}, "paintings": []}</script>
-      <script type="module" src="gallery/gallery.js"></script>
+      <script type="module" src="gallery.js"></script>
       <div class="invite-words">
         <h2 class="invite-title" data-text="gallery-title">Gallery</h2>
         <div class="words-paras" data-paragraphs="gallery"></div>
-        <a class="invite-button" href="gallery/list/" data-text="gallery-button">See the paintings</a>
-        <p class="invite-alt"><a href="gallery/list/">View as a list</a></p>
+        <a class="invite-button" href="gallery/" data-text="gallery-button">See the paintings</a>
+        <p class="invite-alt"><a href="gallery/">View as a list</a></p>
       </div>
     </section>
 
-    <!-- Contact: a full-window picture, moving like the opening one, with the details over it -->
+    <!-- Contact: a full-window picture, moving like the Hero's, with the details over it -->
     <!-- data-background: the section can have a photo or video behind it, chosen in the editor (entry bg-contact),
          put in by site.js -->
     <section id="contact" class="contact parallax" data-background="contact">

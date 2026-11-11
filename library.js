@@ -21,7 +21,7 @@ const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 class Bad extends Error { constructor(m, s = 400) { super(m); this.status = s; } }
 export { Bad };
 
-const SECTIONS = { hero: 'Opening', contact: 'Contact', footer: 'Footer' };
+const SECTIONS = { hero: 'Hero', contact: 'Contact', footer: 'Footer' };
 
 /* Every key under a prefix, with its size and upload time. */
 export async function listAll(env, prefix) {
@@ -157,13 +157,13 @@ async function originalSizes(env, items) {
 
 // ---- the API ----------------------------------------------------------------------------------------------
 
-/* GET /admin/api/library */
+/* GET /edit/api/library */
 export async function library(env) {
   if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on', 503);
   return { items: await survey(env) };
 }
 
-/* POST /admin/api/library/new { kind, grp, name, hash?, data? }: a new, empty item; answers its code. */
+/* POST /edit/api/library/new { kind, grp, name, hash?, data? }: a new, empty item; answers its code. */
 export async function newItem(env, who, b) {
   if (!['photo', 'video'].includes(b.kind)) throw new Bad('An item is a photo or a video');
   if (!['site', 'painting'].includes(b.grp)) throw new Bad('Bad group');
@@ -189,7 +189,7 @@ function dataOf(d) {
   return text;
 }
 
-/* POST /admin/api/library/data { id, data }: merged into the item's record (a part named again replaces its own). */
+/* POST /edit/api/library/data { id, data }: merged into the item's record (a part named again replaces its own). */
 export async function setData(env, id, data) {
   const row = await env.DB.prepare('SELECT data FROM library WHERE id = ?').bind(id).first();
   if (!row) throw new Bad('No such item', 404);
@@ -206,7 +206,7 @@ export async function setData(env, id, data) {
   return { id, data: d };
 }
 
-/* GET /admin/api/library/next?id=<code>&part=r|wide|tall|<w>x<h>: the next free part name in the item's folder
+/* GET /edit/api/library/next?id=<code>&part=r|wide|tall|<w>x<h>: the next free part name in the item's folder
    (r3, wide-2, 1536x1152 or 1536x1152-2), so nothing is ever overwritten. */
 export async function nextPart(env, id, part) {
   if (!CODE.test(id)) throw new Bad('Bad code');
@@ -221,7 +221,7 @@ export async function nextPart(env, id, part) {
   throw new Bad('Bad part');
 }
 
-/* GET /admin/api/stored?hash=: a photo already stored with that content (the first 12 hex digits of its SHA-256,
+/* GET /edit/api/stored?hash=: a photo already stored with that content (the first 12 hex digits of its SHA-256,
    worked out in the browser), as media/<code>, or null; so the same photo is never uploaded twice. */
 export async function storedPhoto(env, hash) {
   if (!/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
@@ -231,14 +231,14 @@ export async function storedPhoto(env, hash) {
   return has ? `media/${row.id}` : null;
 }
 
-/* PUT /admin/api/upload?key=media/<code>/<file>: is this a file an item may have? (the item must exist) */
+/* PUT /edit/api/upload?key=media/<code>/<file>: is this a file an item may have? (the item must exist) */
 export async function uploadAllowed(env, key) {
   const m = /^media\/([0-9a-f]{8})\/(original\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff)|r\d{1,3}\/(?:\d{2,4}|preview)\.jpg|\d{2,5}x\d{2,5}(?:-\d{1,2})?\.mp4|(?:wide|tall)-\d{1,3}\/(?:first|last)-\d{2,4}\.jpg)$/.exec(key);
   if (!m) return false;
   return !!(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(m[1]).first());
 }
 
-/* POST /admin/api/library/name { id, name } */
+/* POST /edit/api/library/name { id, name } */
 export async function rename(env, id, name) {
   if (typeof name !== 'string' || !name.trim() || name.length > 120) throw new Bad('A name must be 1 to 120 characters');
   const r = await env.DB.prepare('UPDATE library SET name = ? WHERE id = ?').bind(name.trim(), id).run();
@@ -246,7 +246,7 @@ export async function rename(env, id, name) {
   return { id, name: name.trim() };
 }
 
-/* POST /admin/api/library/delete { id, part?, history? }: an item for good (see the top), or one of its parts. */
+/* POST /edit/api/library/delete { id, part?, history? }: an item for good (see the top), or one of its parts. */
 export async function remove(env, url, id, part, history) {
   if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on', 503);
   if (!CODE.test(id)) throw new Bad('Bad code');

@@ -1,8 +1,7 @@
-/* Preparing a photo of a painting in the browser before it's uploaded (used by admin/editor.js):
+/* Preparing a photo of a painting in the browser before it's uploaded (used by edit/editor.js):
      1. white balance from spots on the photo that should be white or neutral grey (none: no white balance; one
         spot evens out the colour; two or more also follow the light's fall-off across the photo, six or more
-        along a gentle curve). "Find the paper" places them round a drawing's margins. Older records may say
-        "paper all round" (the build's method), which is still followed so they come out the same;
+        along a gentle curve). "Find the paper" places them round a drawing's margins;
      2. crop: four corners dragged onto the painting's corners, and the picture squared up (perspective
         corrected), optionally to the shape of the size given in its details.
    The choices are kept with the painting (its "process"), as fractions of the untouched original's width and
@@ -87,7 +86,8 @@ function applyPaper(c, paperAt, { brightness = 1, warmth = 0 } = {}) {
   ctx.putImageData(im, 0, 0);
 }
 
-/* "Paper all round": the old build_site.py's white_paper() (removed from git, Nov 2026). The paper's colour is read all round the outer edges (a band
+/* "Paper all round", used only to even out the background before guessing the corners (guessCorners). The paper's
+   colour is read all round the outer edges (a band
    2% of the shorter side deep, in 16 lengths along each side, on a copy 512 pixels across) and filled in
    smoothly inside (a Coons patch: each point blends the four sides by how near it is to them). */
 function paperAllRound(c) {
@@ -214,7 +214,7 @@ export function findPaper(src, corners) {
 export function whiteBalanced(src, white, spots, how) {
   if (white === 'none' || (white === 'picks' && !spots.length)) return { canvas: src, note: '' };
   const c = copy(src);
-  const { paperAt, note } = white === 'paper' ? paperAllRound(c) : paperFromSpots(c, spots);
+  const { paperAt, note } = paperFromSpots(c, spots);
   applyPaper(c, paperAt, how);
   return { canvas: c, note };
 }

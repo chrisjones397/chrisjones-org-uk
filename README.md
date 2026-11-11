@@ -1,64 +1,66 @@
 # chrisjones.org.uk
 
-Plain HTML, CSS and JavaScript, published by Cloudflare from this repository. The paintings and page text come
-from a database, edited at admin.chrisjones.org.uk (see Content, below).
+Plain HTML, CSS and JavaScript, published by Cloudflare from this repository. The paintings, page text and
+pictures come from a database and file storage, changed in the editor at **admin.chrisjones.org.uk/edit/**.
+
+## Addresses
+
+- **chrisjones.org.uk/**: the home page: the Hero (the forest), the gallery section, contact, profile.
+- **/gallery/**: the gallery page, every painting as a grid.
+- **/gallery/<name>/**: a painting: the home page with that painting brought forward in the floating gallery.
+- **/media/<code>/...**: pictures and videos from storage (only what's published).
+- **admin.chrisjones.org.uk**: the whole site again, showing drafts, with a pill at the bottom; **/edit/** there
+  is the editor.
 
 ## Branches
 
 - **main** is the live site, chrisjones.org.uk. It only receives finished work from dev.
-- **dev** is where changes are made and checked, at dev.chrisjones.org.uk. When a change is approved, dev is merged into main.
-- **painted-forest-tools** holds the scripts, photo and brush stamps that make the opening video. Never published or merged.
+- **dev** is where changes are made and checked, at dev.chrisjones.org.uk.
+- **painted-forest-tools** holds the scripts, photo and brush stamps that make the Hero video. Never published or
+  merged.
 
 Every commit is kept, so any file, or the whole site, can be returned to an earlier state.
 
-## Content: paintings and page text (the editor)
+## The editor
 
-Paintings, sections and the marked page text live in a database (Cloudflare D1), not in git. They're edited at
-**admin.chrisjones.org.uk** (sign in with the one-time code sent to your email):
+Sign in with the one-time code sent to your email. dev has its own editor, **admin-dev.chrisjones.org.uk/edit/**,
+with its own copy of the content, for trying out code changes: content never travels from dev to live.
 
-- the whole site, showing the drafts in place, with a bar at the bottom ("Draft · 2 changes to publish · Edit · Review");
-- **/admin/** is the editor: change text, sections and paintings, add a painting from a photo. Every change is
-  saved as a draft at once (a tick shows it; there are no Save buttons); visitors see nothing until it's published.
-  The eye hides a painting, genre or background from visitors without removing it (published like any change);
-- **Review**: every unpublished change with a tick. Publish the ticked ones, or all, or discard them;
-- **History**: each publication, and every earlier version of anything, which can be brought back as a draft.
+- **Gallery**: add a painting from a photo (white balance and squaring up happen in the browser), and change the
+  genres and their paintings.
+- **Content**: each section's heading, paragraphs and background (photo or video), and the contact links.
+- **Library**: every file in storage, what uses it, its name, comparing two or three, Delete for good.
+- **Review**: every change not yet published, each with a tick. Publish the ticked ones, or all, or discard them.
+- **History**: each publication, and every earlier version, which can be brought back as a draft.
 
-dev has its own copy of the database and its own editor, **admin-dev.chrisjones.org.uk**, for trying out code
-changes without touching the live content. dev is for code only: content never travels from dev to live.
+Every change is saved as a draft at once (a tick shows it; there are no Save buttons); visitors see nothing until
+it's published. The eye hides a painting, genre or background from visitors straight away, without removing it.
 
-Every painting's images are kept in R2, Cloudflare's file storage (buckets site-media and site-media-dev), in two
-folders: `originals/` (each photo as uploaded, never shown) and `images/` (the sizes the site shows, named after
-the painting: `red-on-blue-768.jpg`; a later painting reusing a name gets `red-on-blue-v2-...`). Visitors can
-only open the images of published paintings. The paintings that were on the site before the move were
-moved into R2 too.
+On the preview, the pill at the bottom says where you are: the eye means you're looking at the preview with your
+drafts, the number is how many changes are waiting to be published (tap it to review them), and the pencil opens
+the editor.
 
-`db/schema.sql` describes the tables; `db/seed.sql` is the content as first imported, for local tests. The old
-`masters/`, `img/` and `paintings.yaml` were removed from git in November 2026 (they're in the history, in the
-commit before "Remove the old painting files").
+## Where things are kept
 
-Nothing is built: the repository is the site, as it's served, plus the Worker's code. Shared pieces are kept
-once each:
+- **Content** (paintings' details, genres, page text, settings): Cloudflare D1, a database: site-content (live)
+  and site-content-dev (dev). `db/schema.sql` describes the tables.
+- **Files** (photos, videos and the sizes made from them): Cloudflare R2, file storage: site-media (live) and
+  site-media-dev (dev). One folder per Library item, `media/<code>/`: the original as uploaded (never shown to
+  visitors), each set of sizes made from it (`r1/`, `r2/`...), a video's versions and its first and last frames.
+  The code never changes, so renaming an item in the Library breaks nothing.
+- **The site's code**: this repository. Nothing is built: the repository is the site as it's served, plus the
+  Worker's code. Each shared piece is kept once: styles in `site.css`; the header in `templates/header.html`,
+  which `worker.js` puts into every page as it's served; "page not found" in `templates/404.html`.
 
-- **Styles**: `site.css`, linked from every page.
-- **The header**: `templates/header.html`. `worker.js` puts it into each page as it's served, in place of
-  `<header data-partial="header">`. Change it there and every page changes.
-- **"Page not found"**: `templates/404.html`, sent by `worker.js` (status 404) for any address with no file.
-  `templates/` isn't published itself.
-- **Scripts** keep plain addresses (`motion.js`, no `?v=...`): Cloudflare sends every file with an ETag and
-  "check before using" (`Cache-Control: public, max-age=0, must-revalidate`), so a browser always asks whether a
-  file has changed, and gets the new one if it has (or a quick "not modified" if not).
-- **Pictures and videos** (paintings, and the backgrounds of the opening, contact and footer) are all in
-  Cloudflare's storage (R2), chosen in the editor; none are in git. The link-preview picture for the home page
-  is the opening's background (its last frame, if a video).
+`worker.js` answers the pages that show content (filling them in from the database with `site.js`), the files in
+storage, and the editor. Scripts keep plain addresses: Cloudflare sends every file with "check before using", so a
+browser always gets a changed file at once.
 
-A painting's address, chrisjones.org.uk/paintings/<name>/, is the home page with that painting brought
-forward in the gallery. On Cloudflare, `worker.js` answers the home page, those addresses and the list page,
-filling in the content from the database (`site.js`), and adds the header. The old /gallery/ address is sent
-on to the home page's gallery section. Your local Apache copy can't run the Worker, so it shows pages with no
-header and no paintings: check the site on dev.chrisjones.org.uk instead.
-To run your local code as Cloudflare would, against the dev database and dev image storage (needs Node, and
-signing in to Cloudflare once with `npx wrangler login`): `npx wrangler dev --env dev --remote`, then open
-http://localhost:8787. Without `--remote` it uses an empty local database.
+## Looking at changes
+
+Check the site on dev.chrisjones.org.uk. To run your local copy as Cloudflare would, against the dev database and
+storage (needs Node, and signing in to Cloudflare once with `npx wrangler login`): `npx wrangler dev --env dev
+--remote`, then open http://localhost:8787.
 
 ## Putting dev live
 
@@ -72,19 +74,17 @@ Live is whatever is on main, so going live means moving main up to match dev. On
     git push                    # Cloudflare builds and publishes main
     git checkout dev            # back to working on dev
 
-`--ff-only` refuses (and changes nothing) if main has anything dev doesn't, so it can never mix in
-something unexpected. If it refuses, stop and look before going further.
+`--ff-only` refuses (and changes nothing) if main has anything dev doesn't, so it can never mix in something
+unexpected. If it refuses, stop and look before going further.
 
 The other way, on GitHub (works from a phone): Pull requests, New pull request, base: main, compare: dev,
 Create pull request, then Merge.
 
 ## How Cloudflare publishes it
 
-`wrangler.jsonc` holds the settings. Two Workers build from this repository: the live one builds main
-with the deploy command `npx wrangler deploy`; the dev one builds dev with `npx wrangler deploy --env dev`.
-The dev Worker must keep `--env dev`, or it would deploy under the live Worker's name. There is no build
-command: Cloudflare publishes the files as they are.
+`wrangler.jsonc` holds the settings. Two Workers build from this repository: the live one builds main with the
+deploy command `npx wrangler deploy`; the dev one builds dev with `npx wrangler deploy --env dev`. The dev Worker
+must keep `--env dev`, or it would deploy under the live Worker's name. There is no build command.
 
-## What isn't published
-
-`.assetsignore` lists what Cloudflare leaves out: the database files, the server code and its templates, wrangler.jsonc and this README.
+`.assetsignore` lists what Cloudflare leaves out: the database files, the server code and its templates,
+wrangler.jsonc and this README.

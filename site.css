@@ -1,4 +1,4 @@
-/* The site's styles, shared by every page (the home page, the list page and the "page not found" page).
+/* The site's styles, shared by every page (the home page, the gallery page and the "page not found" page).
    Linked from each page's <head>; nothing is copied into the pages. */
 /* Fundamentals */
 * {
@@ -18,7 +18,7 @@ html {
 html.smooth { scroll-behavior: smooth; }
 /* Snapping is done by motion.js, in the direction the visitor is scrolling. The contact link still needs
    to land with the section filling the window: */
-#contact, #paintings { scroll-margin-top: calc(3rem - var(--header-height)); }   /* cancels the page's room for the header */
+#contact, #gallery { scroll-margin-top: calc(3rem - var(--header-height)); }   /* cancels the page's room for the header */
 @media screen and (prefers-reduced-motion: reduce) {
   html.smooth {
     scroll-behavior: auto;
@@ -34,7 +34,7 @@ body, html {
    Links glow on top of whichever shadow they have when pointed at (see "Text links" below). */
 body { --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); }
 .header { --shadow: 0 1px 6px rgba(0, 0, 0, 0.25); text-shadow: var(--shadow); }
-/* Headings: one look everywhere below the header. Titles (the opening title, each section's heading, a
+/* Headings: one look everywhere below the header. Titles (the Hero title, each section's heading, a
    painting's name on its page, the list's) share one size and weight; the list's section names are smaller. */
 h1, h2, h3 { font-weight: 300; letter-spacing: 0.01em; }
 h1, h2 { font-size: clamp(1.6rem, 4.5vw, 4.2rem); }
@@ -182,7 +182,7 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   -webkit-backdrop-filter: none;
 }
 
-/* Opening image: full window width, starting under the see-through header */
+/* Hero image: full window width, starting under the see-through header */
 .hero {
   position: relative;
   overflow: hidden;   /* the title drifts down with the scroll; it stays within the picture */
@@ -191,7 +191,7 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
   height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
 }
-/* The opening title and any paragraphs under it (edited as the Hero section) */
+/* The Hero title and any paragraphs under it (edited as the Hero section) */
 .hero-words {
   position: absolute;
   left: 0;
@@ -230,7 +230,7 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   margin-top: 0.9em;
 }
 
-/* Contact: a full-window picture with the details over it, styled like the opening title */
+/* Contact: a full-window picture with the details over it, styled like the Hero title */
 .contact {
   position: relative;
   overflow: hidden;
@@ -307,7 +307,7 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 }
 .invite-wall { position: absolute; inset: 0; transition: opacity 1s; }
 .gallery-3d .invite-wall, .gallery-live .invite-wall { opacity: 0; pointer-events: none; }   /* the floating gallery takes their place */
-/* The floating wall in the page (gallery/gallery.js). The section is as tall as the wall (the script sets
+/* The floating wall in the page (gallery.js). The section is as tall as the wall (the script sets
    the exact height); the view of it stays in place while the page scrolls through, and the paintings
    rise past. It fades in once its paintings have loaded. The heading scrolls away with the page. */
 .float-section { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
@@ -324,7 +324,7 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 .gallery-live .float-section { opacity: 1; }
 .gallery-live .float-section .float-text { display: flex; }
 .gallery-3d .invite-words { position: absolute; inset: 0; padding: 0; }
-/* The heading mirrors the opening title: that title's bottom is 22% of the window up from the bottom of
+/* The heading mirrors the Hero title: that title's bottom is 22% of the window up from the bottom of
    its section; this heading's top is 22% down from the top of its section */
 .gallery-3d .invite-title {
   position: absolute;
@@ -413,10 +413,7 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 }
 .site-footer a { display: inline-flex; }
 
-/* Gallery */
-section#gallery {
-  min-height: calc(var(--vh, 1vh) * 100);
-}
+/* The gallery page's grid (gallery/index.html) */
 .gallery-block {
   max-width: 1200px;
   margin: 0 auto;
@@ -534,7 +531,7 @@ section#gallery {
   .float-caption .t { font-size: 1.25rem; }
 }
 
-/* Pages other than the home page (<body class="page">): the list and "page not found" */
+/* Pages other than the home page (<body class="page">): the gallery page and "page not found" */
 .page .site-footer { margin-top: 0; }
 .notfound {
   max-width: 1200px;
@@ -548,7 +545,6 @@ section#gallery {
   gap: 1.25rem;
   text-align: center;
 }
-.notfound p a { text-decoration: underline; text-underline-offset: 0.2em; }
-.list-page { padding-top: 130px; }
-.list-page h1 { text-align: center; }
-.list-page .float-link { text-align: center; margin: 0.6rem 0 1.5rem; font-size: 0.95rem; }
+.gallery-page { padding-top: 130px; }
+.gallery-page h1 { text-align: center; }
+.gallery-page .float-link { text-align: center; margin: 0.6rem 0 1.5rem; font-size: 0.95rem; }

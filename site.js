@@ -1,11 +1,11 @@
 /* The site's content, from the database, put into its pages.
 
-   The pages themselves are the hand-written files (index.html, gallery/list/index.html, 404.html). What visitors
+   The pages themselves are the hand-written files (index.html, gallery/index.html, templates/404.html). What visitors
    see of the paintings and the marked page text now comes from the content database (D1, binding DB; tables
    in db/schema.sql), so this fills those parts in on the way out, with Cloudflare's HTMLRewriter:
      - the floating gallery's data (<script id="gallery-data">) and the paintings hung around the invitation;
      - text marked data-text="key" (replaced) and data-paragraphs="key" (its <p>s replaced);
-     - the list page's grid;
+     - the gallery page's grid;
      - the site's header, one copy for every page (templates/header.html, bundled into the Worker as text), in
        place of <header data-partial="header">, with an icon for each ticked contact link (links.js);
      - the contact section's links (data-links), from the same entry.
@@ -22,7 +22,6 @@ const PARTIALS = { header };
 const INVITE_COUNT = 5;
 const SIZES_GRID = '(max-width: 540px) 100vw, (max-width: 899px) 50vw, 33vw';
 const SIZES_WIDE = '(max-width: 1200px) 100vw, 1200px';
-const SIZE_RE = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/;   // "60 x 90 cm": height x width
 
 export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 // Text on the page: escaped, with hyphens inside words kept from breaking onto two lines 
@@ -128,9 +127,9 @@ function headerLinks(links) {
     : `\n          <a href="${esc(s.url(u))}" target="_blank" rel="noopener" class="nav-link nav-icon" aria-label="${esc(`${s.name}: ${u}`)}" title="${esc(s.name)}">${icon(s.key, 20)}</a>`)).join('') + '\n        ';
 }
 
-/* The picture for link previews (og:image) of the home page: the opening's background, the photo or the video's
+/* The picture for link previews (og:image) of the home page: the Hero's background, the photo or the video's
    last frame (the picture a visitor's eye ends on), at the size nearest above 1200 pixels across, the width link
-   previews are drawn at. Null when the opening has none. */
+   previews are drawn at. Null when the Hero has none. */
 export function homePreview(c) {
   const b = c.backgrounds && c.backgrounds.hero;
   if (!b) return null;
@@ -141,12 +140,8 @@ export function homePreview(c) {
 }
 
 export function galleryData(c) {
-  const items = c.paintings.map((p) => {
-    const m = SIZE_RE.exec(p.details || '');
-    return { name: p.name, title: p.title, details: p.details, wide: p.wide, w: p.w, h: p.h, widths: p.widths,
-      cm: p.cm || (m ? [parseFloat(m[1]), parseFloat(m[2])] : null),     // the size as entered, or read from older details lines
-      at: paintingPattern(p) };
-  });
+  const items = c.paintings.map((p) => ({ name: p.name, title: p.title, details: p.details, wide: p.wide,
+    w: p.w, h: p.h, widths: p.widths, cm: p.cm, at: paintingPattern(p) }));
   // inside <script>, so no "<" may appear as itself
   return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items }).replace(/</g, '\\u003c');
 }
@@ -155,17 +150,17 @@ function inviteHtml(c) {
   const wanted = ((c.settings.invitation || {}).paintings || []).map((n) => c.byName[n]).filter(Boolean);
   const chosen = (wanted.length ? wanted : c.paintings).slice(0, INVITE_COUNT);
   const ind = '          ';
-  return chosen.map((p) => `\n        <a class="invite-pic" href="paintings/${p.name}/" tabindex="-1">`
+  return chosen.map((p) => `\n        <a class="invite-pic" href="gallery/${p.name}/" tabindex="-1">`
     + `\n${ind}${imgTag(p, '', '(max-width: 700px) 40vw, 24vw', ind)}\n        </a>`).join('') + '\n      ';
 }
 
-function listHtml(c, prefix) {
+function gridHtml(c, prefix) {
   return c.sections.filter((s) => s.paintings.length).map((s) => {
     const head = `\n          <div class="entire"><h3 id="${slug(s.title)}">${shown(s.title)}</h3></div>\n`;
     return head + s.paintings.map((p) => {
       const kind = p.wide ? 'entire' : (p.h > p.w ? 'portrait' : 'landscape');
       const details = p.details ? `\n            <p>${shown(p.details)}</p>` : '';
-      return `          <div class="${kind}">\n            <a href="${prefix}paintings/${p.name}/">\n              `
+      return `          <div class="${kind}">\n            <a href="${prefix}gallery/${p.name}/">\n              `
         + `${imgTag(p, prefix, p.wide ? SIZES_WIDE : SIZES_GRID, '              ')}\n            </a>\n`
         + `            <p>${shown(p.title)}</p>${details}\n          </div>\n`;
     }).join('');
@@ -211,6 +206,6 @@ export function homeRewriter(c) {
     .on('.invite-wall', { element(el) { el.setInnerContent(inviteHtml(c), { html: true }); } });
 }
 
-export function listRewriter(c) {
-  return rewriter(c).on('.list-page .wrapper', { element(el) { el.setInnerContent(listHtml(c, '/'), { html: true }); } });
+export function gridRewriter(c) {
+  return rewriter(c).on('.gallery-page .wrapper', { element(el) { el.setInnerContent(gridHtml(c, '/'), { html: true }); } });
 }
