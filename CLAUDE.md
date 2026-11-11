@@ -64,7 +64,8 @@ against what's already used (code, database, editor, branches). Add new names he
   moves by fast-forwarding to dev, when Christopher says. **painted-forest-tools**: the Hero video's scripts; never
   merged or published. (net-checks, a diagnostic branch, deleted by him 11 Nov 2026.)
 - Two Workers build from the repository: chrisjones-org-uk builds main (`npx wrangler deploy`),
-  chrisjones-org-uk-dev builds dev (`npx wrangler deploy --env dev`; it must keep `--env dev`). No build command:
+  chrisjones-org-uk-dev builds dev (migrations first, then `npx wrangler deploy --env dev`; both must keep
+  `--env dev`). No build command:
   nothing is built. Settings in wrangler.jsonc; `.assetsignore` lists what isn't published (anchor root files
   with /, as a bare name matches in every folder).
 - Claude works in a cloud clone: edits, commits and pushes to dev. Christopher reviews on dev and says when to
@@ -167,10 +168,9 @@ Files (all at the top level unless said):
   `npx wrangler d1 migrations apply DB --remote`, with `--env dev` for dev, applies those not yet applied, in
   order, each once, recorded in the table d1_migrations; in a build it answers its own question with yes). Never
   edit one that has been applied: add the next. 0001_initial.sql is the tables as they stood (IF NOT EXISTS, so a
-  no-op on both databases, whose tables were checked identical to it on 11 Nov 2026). NOT YET APPLIED ANYWHERE
-  REMOTE, see the plan, step 4: the deploy commands don't run migrations yet. The standard way (Cloudflare's
-  docs) is to apply them in the deploy command, so the database changes with the code, including when he puts
-  dev live. The old db/seed.sql (pre-Library format, unusable) was deleted.
+  no-op on both databases, whose tables were checked identical to it on 11 Nov 2026). The standard way
+  (Cloudflare's docs) is to apply them in the deploy command, so the database changes with the code, including
+  when he puts dev live: dev's does; live's not yet (see the plan, step 4). The old db/seed.sql (pre-Library format, unusable) was deleted.
 - **R2**: bucket site-media (live), site-media-dev (dev), binding MEDIA. One folder per Library item (paths.js):
   a photo's original.<ext> (never shown to visitors) and renditions r1/, r2/ (<width>.<ext>, preview.jpg for
   paintings); a video's <w>x<h>.mp4 versions (one set) and frames wide-1/, tall-1/ (first-/last-<width>.jpg,
@@ -319,16 +319,14 @@ editor redraws the whole view after every change; fonts come from Google, not th
    from a file, compare and blink, publish, History's Bring back, Delete for good), run on the old single script
    and on the modules: every view's HTML and the final database contents came out identical. Not tested: videos,
    the full-screen corner and spot views, real phones, Safari.
-   **Open, his to do before slice 2** (slice 2 has the first real migration): migrations aren't applied by the
-   builds yet. The two build tokens ("chrisjones397-github-io build token" and "...-dev build token", user API
-   tokens, My Profile > API Tokens) have no D1 permission (Cloudflare's default for Workers Builds: Workers
-   Scripts, KV, R2 only). He adds Account > D1 > Edit to both; then the deploy commands (Worker > Settings >
-   Build, or PATCH the triggers by API: live 7d78d6d4-0728-4141-8a1b-43ec43441cac, dev
-   8834efe2-0394-4763-b062-25a83f572101) become
-   `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy` (live) and
-   `npx wrangler d1 migrations apply DB --remote --env dev && npx wrangler deploy --env dev` (dev). Dev first,
-   check its build log says 0001 was applied; change live's only once main has migrations/ (after he puts this
-   live), or its build would fail for want of the folder. A failed build leaves the running site as it was.
+   **Migrations in the builds**: dev's deploy command is now (11 Nov 2026, changed by API on trigger
+   8834efe2-0394-4763-b062-25a83f572101)
+   `npx wrangler d1 migrations apply DB --remote --env dev && npx wrangler deploy --env dev`. The dev build token
+   has D1: Edit on his account. **Still to do, once this slice is live (main has migrations/)**: live's deploy
+   command (trigger 7d78d6d4-0728-4141-8a1b-43ec43441cac) becomes
+   `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`, after checking the live build token
+   ("chrisjones397-github-io build token", My Profile > API Tokens) has D1: Edit; before then its build would fail
+   for want of the folder. A failed build leaves the running site as it was.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
