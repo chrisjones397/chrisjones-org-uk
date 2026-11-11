@@ -48,16 +48,24 @@ a {
   color: inherit;
 }
 
-/* Header */
+/* Header: a floating bar, inset from the window's edges with rounded corners and a soft shadow, rather than a strip
+   across the top, so the pictures under it run on round it and it reads as an object of its own */
+:root { --bar-gap: 14px; }                 /* the gap between the bar and the window's edges */
+@media (max-width: 720px) { :root { --bar-gap: 8px; } }
 .header {
   background-color: rgba(255,255,255,0.4);
   backdrop-filter: saturate(140%) blur(10px);
   -webkit-backdrop-filter: saturate(140%) blur(10px);
-  border-bottom: 1px rgba(255, 255, 255, 0.4) solid;
+  border: 1px rgba(255, 255, 255, 0.4) solid;
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
   position: fixed;
-  top: 0;
+  top: var(--bar-gap);
+  left: var(--bar-gap);
+  right: var(--bar-gap);
+  max-width: 1240px;
+  margin: 0 auto;                          /* centred once the window is wider than that */
   z-index: 1000;
-  width: 100%;
 }
 .header-block {
   min-height: 90px;
@@ -182,6 +190,7 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   height: 100%;
   display: block;
   pointer-events: none;
+  border-radius: inherit;                  /* the bar's rounded corners */
 }
 .header-block {
   position: relative;
@@ -192,14 +201,18 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   -webkit-backdrop-filter: none;
 }
 
-/* Hero image: full window width, starting under the see-through header */
+/* Hero image: full window width, starting at the top, under the floating header bar */
 .hero {
   position: relative;
   overflow: hidden;   /* the title drifts down with the scroll; it stays within the picture */
 }
+/* The Hero's height: the whole window on wide screens; on upright ones, only as tall as the 4:3 video needs to
+   show its whole width (three quarters of the window's width), and never less than half the window. So an upright
+   phone gets a half-height Hero showing about three quarters of the video's width (the fern against the dark trees)
+   instead of a third, and an upright tablet the whole width. (The framings, step 5, may set this per picture.) */
 .hero {
-  height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
-  height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
+  height: clamp(50svh, 75vw, 100svh);  /* (for browsers without the script in the head) */
+  height: clamp(calc(var(--vh, 1svh) * 50), 75vw, calc(var(--vh, 1svh) * 100));   /* --vh: measured once */
 }
 /* The Hero title and any paragraphs under it (edited as the Hero section) */
 .hero-words {
