@@ -57,10 +57,10 @@ export async function load(env, mode) {
   for (const p of paintings.sort(byOrder)) if (sec[p.section]) sec[p.section].paintings.push(p);
   const ordered = sections.flatMap((s) => s.paintings);
   const byName = Object.fromEntries(ordered.map((p) => [p.name, p]));
-  // The home page's selection: the starred paintings (home), in the gallery's order; none starred, all of them
-  const starred = ordered.filter((p) => p.home);
-  const home = starred.length ? starred : ordered;
-  return { mode, sections, paintings: ordered, home, byName, texts, settings, backgrounds, links, changes };
+  // Featured: the starred paintings, the home page's selection, in the gallery's order; none starred, all of them
+  const starred = ordered.filter((p) => p.featured);
+  const featured = starred.length ? starred : ordered;
+  return { mode, sections, paintings: ordered, featured, byName, texts, settings, backgrounds, links, changes };
 }
 
 const file = (p, w, prefix = '') => `${prefix}${paintingAt(p, w)}`;
@@ -142,10 +142,10 @@ export function homePreview(c) {
   return { src: f.last(w), w, h: Math.round(v.h * w / v.w) };
 }
 
-/* The floating wall's data (gallery.js): on the home page the starred paintings; on the gallery page every painting,
+/* The floating wall's data (gallery.js): on the home page the Featured paintings; on the gallery page every painting,
    with where each genre starts (groups: its title and the index of its first painting). */
 export function galleryData(c, whole) {
-  const list = whole ? c.paintings : c.home;
+  const list = whole ? c.paintings : c.featured;
   const groups = [];
   if (whole) {
     let at = 0;
@@ -157,9 +157,9 @@ export function galleryData(c, whole) {
   return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items, groups }).replace(/</g, '\\u003c');
 }
 
-/* Without the floating wall (no WebGL, or reduced motion): the first few starred paintings hung round the words */
+/* Without the floating wall (no WebGL, or reduced motion): the first few Featured paintings hung round the words */
 function inviteHtml(c) {
-  const chosen = c.home.slice(0, INVITE_COUNT);
+  const chosen = c.featured.slice(0, INVITE_COUNT);
   const ind = '          ';
   return chosen.map((p) => `\n        <a class="invite-pic" href="gallery/${p.name}/" tabindex="-1">`
     + `\n${ind}${imgTag(p, '', '(max-width: 700px) 40vw, 24vw', ind)}\n        </a>`).join('') + '\n      ';

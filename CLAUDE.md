@@ -53,6 +53,8 @@ against what's already used (code, database, editor, branches). Add new names he
   Hero; never "the opening".
 - **Gallery**: the collection (paintings and drawings), its home page section (#gallery), and its page (/gallery/).
   In the editor its groupings are **genres** (kind 'section' in the data, for history's sake).
+- **Featured**: the starred paintings (a star in the editor; field `featured`), the home page's wall. Not a genre
+  (the Featured genre was removed, 11 Nov 2026).
 - Taken, so not for anything new: **version** (a video's versions; History's versions), **dev** (the branch and
   site), **Treatment**.
 
@@ -117,14 +119,14 @@ Files (all at the top level unless said):
   header partial (with an icon per ticked contact link), `data-text="key"` and `data-paragraphs="key"` (entries
   t-<key>; a block's own <p>s are replaced only when the database has text for it), `data-background` sections
   (bgTag: an <img> or <video class="section-bg">, focus, `--shade`), the contact links (`data-links`), the gallery
-  data JSON (home: the starred paintings, `c.home`, all of them if none is starred; gallery page: all, with
+  data JSON (home: the Featured paintings, `c.featured`, all of them if none is starred; gallery page: all, with
   `groups`, where each genre starts) and the invitation wall (homeRewriter), the grid (gridRewriter, each item
   id="p-<name>"). homePreview() gives the home page's
   og:image (the Hero's photo, or its video's last frame, nearest above 1200 pixels).
 - **paths.js**, **links.js** (shared by server, page and editor, published): the R2 layout, and the contact
   sites (Email, Instagram, Bluesky, Facebook, Threads, X, LinkedIn, TikTok, YouTube, Mastodon: pattern, address,
   icon). The email address is written backwards in data-addr; index.html's script turns it round and copies it.
-- **gallery.js** (Three.js, vendored in face/vendor/): the floating wall, on the home page (#gallery, the starred
+- **gallery.js** (Three.js, vendored in face/vendor/): the floating wall, on the home page (#gallery, the Featured
   paintings) and the gallery page (section .wall, all, genre titles as text in the section, aria-hidden). The
   stage says where it is: data-page (where sending a painting back returns to), data-title. The section is as
   tall as the wall; the view is sticky while the page scrolls through and paintings rise past at different depths.
@@ -172,8 +174,8 @@ Files (all at the top level unless said):
   measured), details (made by the server: "Oil on canvas, 60 x 90 cm, 2020", "(est.)" after a shown estimate),
   section (genre), order, wide, white_paper (a drawing on white paper: reopening starts with "Find the paper"'s
   spots), w, h, widths, media, rendition, ext, preview, process (the darkroom's choices; paintings moved from git
-  have none), home (starred: on the home page's wall; only when true; a star in the editor's Gallery tab, a
-  draft change like any other), hidden. A measured size drives the squared-up shape (unless "Square up to its measured proportions"
+  have none), featured (starred: on the home page's wall; only when true; a star in the editor's Gallery tab,
+  a draft change like any other), hidden. A measured size drives the squared-up shape (unless "Square up to its measured proportions"
   is unticked); not measured, the photo's perspective gives the shape and the size only the scale.
 - **Background entry** bg-<section> (hero, contact, footer: BACKGROUNDS in editor.js and edit/editor.js;
   index.html marks them data-background): type photo (rendition, widths, w, h) or video (versions, frames, play
@@ -259,14 +261,14 @@ site; a draft rendition of a published item can be fetched by guessing its addre
 2. **Gallery, public: built 11 Nov 2026 (on dev, not yet live).** Placement judged in both directions over the
    scrolling (wall.js; at six window sizes with the live paintings, grazes went from up to all the time two are
    in view to at most a quarter of it, edges lined up from up to 10 pairs to none; the wall about a tenth longer).
-   His decisions: a star per painting chooses the home page's wall (and the no-3D stand-ins; the old
-   settings-invitation entry and its code are gone; deleted from dev's database, still in live's, harmless, to
-   delete when this goes live); /gallery/ floating by default, one wall with genre titles passing; the view switch
+   His decisions: a star per painting, called Featured, chooses the home page's wall (and the no-3D
+   stand-ins; the old settings-invitation entry, five painting names set by hand in the database with no editor
+   control, and its code are gone; deleted from dev's database, still in live's, harmless, to delete when this
+   goes live); /gallery/ floating by default, one wall with genre titles passing; the view switch
    as two symbols just under the header, right-aligned under the menu's symbols (the gap before the pause
    button evened up for it). A painting's address is now the gallery page with it brought forward. On dev's
-   database the five former invitation paintings are starred. Still for him: "Featured" is a genre holding only
-   Green Background with Seven Figures; move that painting to a real genre and remove Featured (dev and live),
-   and star paintings on live once it's live (until then live's home wall shows every painting).
+   database the five former invitation paintings are starred. He removed the Featured genre (11 Nov 2026). Still
+   for him: star paintings on live once it's live (until then live's home wall shows every painting).
    Tested locally (wrangler dev, Playwright, no pictures as R2 isn't local): the gallery page floating with genre
    titles, switching to the grid and back, remembered on reload, a painting's address brought forward and
    Escape back to /gallery/, the switch's alignment (computer and phone sizes), the home page's switch showing

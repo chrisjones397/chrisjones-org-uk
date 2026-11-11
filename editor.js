@@ -204,7 +204,7 @@ export function normalise(id, kind, d) {
       media: d.media, rendition: d.rendition,
       ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
       ...(d.process != null ? { process: processOf(d.process) } : {}),
-      ...(d.home === true ? { home: true } : {}), ...hide(d),   // home: starred, on the home page's wall; only when true
+      ...(d.featured === true ? { featured: true } : {}), ...hide(d),   // Featured (starred): on the home page's wall; only when true
     };
   }
   if (kind === 'background') return backgroundOf(id, d);
