@@ -16,7 +16,11 @@ records of everything built before then, is in the history at commit 4375002 (`g
 - Solve problems properly and simply, not with fixes stacked on hacks; keep functionality in one place (the
   repository) rather than split across services. Every step reversible.
 - Decoupled entities (his data-warehousing background): each thing its own entity, linked by ids; attributes on
-  the right entity.
+  the right entity. Design the whole entity model first, then build in slices (Kimball's way: the bus matrix up
+  front, the marts one at a time), so no slice carries an old shape forward.
+- Design checks (agreed 11 Nov 2026): before each structural decision (tables, storage layout, routing, caching,
+  what runs where), check Cloudflare's Reference Architectures (developers.cloudflare.com/reference-architecture/)
+  and the relevant official docs, and tell him what they recommend and where the design departs from them, and why.
 - Interface (site, editor, client work): symbols rather than text, with tooltips; he imagines the client has ADD
   and can't search a haystack of words. E.g. a change saved shows a tick, plainly not a button. Nothing may move
   when something appears. The client uses the editor for years, so a short learning curve is fine.
@@ -325,6 +329,10 @@ editor redraws the whole view after every change; fonts come from Google, not th
    dev the same with `--env dev` on both halves. Both build tokens have D1: Edit. 0001 is recorded as applied in
    both databases (their build logs showed it). A failed migration fails the build and leaves the running site
    as it was. Slice 2 is next.
+   **Before slice 2 (agreed 11 Nov 2026): the entity model.** Write the whole model as docs/entities.md (every
+   entity in the glossary, its attributes, keys and links; storage keyed by content digest, names living in the
+   database, never in storage), checked against the design checks above. He agrees it before any table is
+   built; the slices then build to it.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
