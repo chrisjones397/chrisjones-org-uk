@@ -62,8 +62,7 @@ against what's already used (code, database, editor, branches). Add new names he
 
 - **dev**: all work; published at dev.chrisjones.org.uk (noindex). **main**: live, chrisjones.org.uk; it only
   moves by fast-forwarding to dev, when Christopher says. **painted-forest-tools**: the Hero video's scripts; never
-  merged or published. **net-checks**: a diagnostic branch from 4 Nov 2026, not needed; his to delete
-  (`git push origin --delete net-checks`).
+  merged or published. (net-checks, a diagnostic branch, deleted by him 11 Nov 2026.)
 - Two Workers build from the repository: chrisjones-org-uk builds main (`npx wrangler deploy`),
   chrisjones-org-uk-dev builds dev (`npx wrangler deploy --env dev`; it must keep `--env dev`). No build command:
   nothing is built. Settings in wrangler.jsonc; `.assetsignore` lists what isn't published (anchor root files
