@@ -242,7 +242,7 @@ strokes in 20 seconds, the scene covered in four passes; the head animation's bu
 changes by hand; edit/editor.js is one 1,860-line script that redraws everything; fonts come from Google, not the
 site; a draft rendition of a published item can be fetched by guessing its address.
 
-1. **Clean start: done 11 Nov 2026 (on dev, not yet live).** These notes condensed and the README rewritten.
+1. **Clean start: done 11 Nov 2026, live.** These notes condensed and the README rewritten.
    One Gallery vocabulary: section #gallery (was #paintings), the gallery page /gallery/ (was /gallery/list/,
    file gallery/index.html), a painting /gallery/<name>/ (was /paintings/<name>/), the floating wall's script
    gallery.js at the top level (was gallery/gallery.js); "Hero" throughout (the Library's background names say
@@ -258,17 +258,17 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    Tested locally (wrangler dev, Playwright): every address above, painting brought forward from its address and
    sent back, menu link from a painting's address, the editor and its API at /edit/, the tick's placement, the
    pill. Not tested on a phone or Safari.
-2. **Gallery, public: built 11 Nov 2026 (on dev, not yet live).** Placement judged in both directions over the
+2. **Gallery, public: done 11 Nov 2026, live.** Placement judged in both directions over the
    scrolling (wall.js; at six window sizes with the live paintings, grazes went from up to all the time two are
    in view to at most a quarter of it, edges lined up from up to 10 pairs to none; the wall about a tenth longer).
    His decisions: a star per painting, called Featured, chooses the home page's wall (and the no-3D
    stand-ins; the old settings-invitation entry, five painting names set by hand in the database with no editor
-   control, and its code are gone; deleted from dev's database, still in live's, harmless, to delete when this
-   goes live); /gallery/ floating by default, one wall with genre titles passing; the view switch
+   control, and its code are gone, deleted from both databases); /gallery/ floating by default, one wall with genre titles passing; the view switch
    as two symbols just under the header, right-aligned under the menu's symbols (the gap before the pause
    button evened up for it). A painting's address is now the gallery page with it brought forward. On dev's
-   database the five former invitation paintings are starred. He removed the Featured genre (11 Nov 2026). Still
-   for him: star paintings on live once it's live (until then live's home wall shows every painting).
+   database the five former invitation paintings are starred. He removed the Featured genre on both (Green Background
+   with Seven Figures now in Drawings). Live had no paintings starred when it went live, so its home wall shows
+   every painting until he stars some.
    Tested locally (wrangler dev, Playwright, no pictures as R2 isn't local): the gallery page floating with genre
    titles, switching to the grid and back, remembered on reload, a painting's address brought forward and
    Escape back to /gallery/, the switch's alignment (computer and phone sizes), the home page's switch showing
