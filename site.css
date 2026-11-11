@@ -197,9 +197,13 @@ a:hover svg, a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255,255,255,
   position: relative;
   overflow: hidden;   /* the title drifts down with the scroll; it stays within the picture */
 }
+/* The Hero's height: the whole window on wide screens; on upright ones, only as tall as the 4:3 video needs to
+   show its whole width (three quarters of the window's width), and never less than half the window. So an upright
+   phone gets a half-height Hero showing about three quarters of the video's width (the fern against the dark trees)
+   instead of a third, and an upright tablet the whole width. (The framings, step 5, may set this per picture.) */
 .hero {
-  height: 100svh;                      /* fills the window exactly (on phones, with the browser's bars showing) */
-  height: calc(var(--vh, 1svh) * 100); /* ...measured once (see the script in the head) */
+  height: clamp(50svh, 75vw, 100svh);  /* (for browsers without the script in the head) */
+  height: clamp(calc(var(--vh, 1svh) * 50), 75vw, calc(var(--vh, 1svh) * 100));   /* --vh: measured once */
 }
 /* The Hero title and any paragraphs under it (edited as the Hero section) */
 .hero-words {

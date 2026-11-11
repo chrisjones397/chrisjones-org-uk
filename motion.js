@@ -32,8 +32,11 @@
     // top of the window, the heading rises towards it, just as the Hero title sinks towards it. It comes
     // to rest as far below the header as the title ends above the bottom of the window (the header covers the
     // top of the window, where nothing covers the bottom), so it rises less by the header's height.
+    // The Hero may be shorter than the window (upright screens), so the line starts higher: the heading's
+    // journey is measured over the Hero's height, from the page's top to the line reaching the window's top.
     target: () => {
-      const s = VH - Math.min(Math.max(gallery.getBoundingClientRect().top, 0), VH);
+      const H = (hero && hero.offsetHeight) || VH;
+      const s = VH * (1 - Math.min(Math.max(gallery.getBoundingClientRect().top, 0), H) / H);
       return (header ? header.offsetHeight / VH : 0) * s - TITLE_DRIFT * s;
     } });
   const stage = document.querySelector('.face-stage'), words = document.querySelector('.face-words');
@@ -131,8 +134,9 @@
    top of each full-window section (the Hero, contact). The gallery and the profile are taller than the
    window: going down, the page settles at their start, going up at their end, and within them scrolling is
    free, so they're never taken over, and leaving them is never pulled back.
-   It only glides on once the visitor has scrolled at least 15% of the window into the next section (that much
-   of it is showing); short of that, the page stays where it was left.
+   It only glides on once the visitor has scrolled at least 15% of the window on from where the page last rested
+   (and the next resting place is no more than 85% of the window away); short of that, the page stays where it
+   was left.
    Any wheel, touch or key during a glide hands control straight back to the visitor. */
 (function () {
   const sections = [...document.querySelectorAll('.hero, .invite, .contact, .face-section')];
@@ -159,7 +163,13 @@
     const ahead = stops.filter(([p]) => (d > 0 ? p > y : p < y)).sort((a, b) => d * (a[0] - b[0]));
     if (!ahead.length) return null;
     const [p, way] = ahead[0];
-    if (Math.abs(p - y) > (1 - INTO) * innerHeight) return null;    // not yet far enough into it
+    // not yet far enough: it must have moved 15% of the window on from the resting place behind it (for a
+    // full-window section, the same as 15% of the next one showing; the half-height Hero on upright phones shows
+    // half the gallery from the start, so a small nudge there doesn't send the page on)
+    const behind = stops.map(([q]) => q).filter((q) => (d > 0 ? q <= y : q >= y))
+      .sort((a, b) => d * (b - a))[0];
+    if (behind !== undefined && Math.abs(y - behind) < INTO * innerHeight) return null;
+    if (Math.abs(p - y) > (1 - INTO) * innerHeight) return null;    // still too far from it
     return !way || way === d ? p : null;
   }
   // Eases in and out (smootherstep), so the glide starts and lands gently rather than all at once.
