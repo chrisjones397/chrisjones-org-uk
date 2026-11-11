@@ -2,7 +2,7 @@
 
    The pages themselves are the hand-written files (index.html, gallery/index.html, templates/404.html). What visitors
    see of the paintings and the marked page text now comes from the content database (D1, binding DB; tables
-   in db/schema.sql), so this fills those parts in on the way out, with Cloudflare's HTMLRewriter:
+   in migrations/), so this fills those parts in on the way out, with Cloudflare's HTMLRewriter:
      - the floating gallery's data (<script id="gallery-data">) and the paintings hung around the invitation;
      - text marked data-text="key" (replaced) and data-paragraphs="key" (its <p>s replaced);
      - the gallery page's grid;

@@ -1,3 +1,11 @@
+-- Migration 0001: the tables as they stood on 11 Nov 2026, when numbered migrations began (step 4, slice 1).
+-- Both databases already had these tables, made by hand before then, so every statement says IF NOT EXISTS:
+-- applying this to them changes nothing and only records it as applied; on an empty database (a local test, or a
+-- new site) it makes the tables. Migrations are applied in number order, each once, by
+--   npx wrangler d1 migrations apply DB --remote            (live; add --env dev for dev, --local for a local test)
+-- which keeps its record in the table d1_migrations. Never edit a migration that has been applied anywhere: add
+-- the next number instead (npx wrangler d1 migrations create DB "what it does").
+--
 -- The site's content database (Cloudflare D1: site-content for live, site-content-dev for dev).
 -- Every piece of content is one row in entries, holding its draft and its published version side by side
 -- as JSON. A change waiting to be published is any row whose draft differs from its published version.

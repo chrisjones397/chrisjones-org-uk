@@ -1,4 +1,4 @@
-/* Preparing a photo of a painting in the browser before it's uploaded (used by edit/editor.js):
+/* Preparing a photo of a painting in the browser before it's uploaded (used by edit/picture.js and edit/uploads.js):
      1. white balance from spots on the photo that should be white or neutral grey (none: no white balance; one
         spot evens out the colour; two or more also follow the light's fall-off across the photo, six or more
         along a gentle curve). "Find the paper" places them round a drawing's margins;

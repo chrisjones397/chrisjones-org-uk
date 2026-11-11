@@ -8,7 +8,7 @@ worker.js
 /editor.js
 /library.js
 /dimensions.js
-db/
+migrations/
 templates/
 .dev.vars
 .git/

@@ -2,6 +2,8 @@
 //   chrisjones-org-uk      builds main, deploy command: npx wrangler deploy
 //   chrisjones-org-uk-dev  builds dev,  deploy command: npx wrangler deploy --env dev
 // The dev Worker MUST use --env dev: without it, it would deploy under the live Worker's name.
+// The content database's tables are made and changed by the numbered files in migrations/ (the default folder for
+// `wrangler d1 migrations apply DB`); .assetsignore keeps them off the site.
 // Nothing is built: the repository is the site. Most of it is served straight from the files. worker.js runs
 // first only for the pages filled in from the content database (the home page, the gallery page, painting
 // addresses), uploaded images and the editor; and, where no file matches, for "page not found".

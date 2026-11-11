@@ -1,11 +1,11 @@
-/* The editor's server side: who is signed in, and the API the editor page (edit/editor.js) calls.
+/* The editor's server side: who is signed in, and the API the editor page (edit/, starting at edit/editor.js) calls.
 
    It runs only on the editor's address (admin.chrisjones.org.uk for live, admin-dev.chrisjones.org.uk for
    dev), which Cloudflare Access guards as a whole: nobody reaches it without the one-time code sent to an
    allowed email address. This checks Access's signed token as well, so a mistake in the Access settings
    can't open it up.
 
-   Content lives in the database (db/schema.sql): each entry has a draft and a published version. Editing
+   Content lives in the database (migrations/): each entry has a draft and a published version. Editing
    changes drafts only; publishing copies chosen drafts to published, as one release, keeping a revision of
    each so any earlier version can be brought back as a draft. Uploaded files go to R2 (binding MEDIA), one folder
    per Library item (library.js, paths.js).
@@ -118,13 +118,13 @@ const num = (v, what) => { if (typeof v !== 'number' || !isFinite(v)) throw new 
 const int = (v, what) => { if (!Number.isInteger(v) || v < 0 || v > 100000) throw new Bad(`${what} must be a whole number`); return v; };
 const GALLERY_SETTINGS = ['size', 'spacing', 'spread', 'depth', 'nearness', 'drift', 'seed'];
 
-/* The page sections' paragraph entries (edit/editor.js PAGE), which may be created by the first paragraph typed. */
+/* The page sections' paragraph entries (edit/state.js PAGE), which may be created by the first paragraph typed. */
 const PARAGRAPHS = ['t-hero', 't-gallery', 't-contact', 't-profile', 't-footer'];
 
 /* The page sections that can have a photo or a video behind them (entries bg-<section>; index.html marks each
-   with data-background="<section>"; BACKGROUNDS in edit/editor.js lists the same). The gallery has its floating
+   with data-background="<section>"; PAGE in edit/state.js marks the same with bg). The gallery has its floating
    wall and the profile its head animation (a live 3D drawing), so they aren't listed. A new section that can take
-   one needs only its name here and in edit/editor.js, and the attribute. */
+   one needs only its name here and in edit/state.js, and the attribute. */
 const BACKGROUNDS = ['hero', 'contact', 'footer'];
 
 /* How a painting's images were made from its original (edit/darkroom.js): white balance 'none' or 'picks' (from

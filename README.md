@@ -43,7 +43,7 @@ the editor.
 ## Where things are kept
 
 - **Content** (paintings' details, genres, page text, settings): Cloudflare D1, a database: site-content (live)
-  and site-content-dev (dev). `db/schema.sql` describes the tables.
+  and site-content-dev (dev). The tables are made and changed by the numbered files in `migrations/`, applied in order, each once.
 - **Files** (photos, videos and the sizes made from them): Cloudflare R2, file storage: site-media (live) and
   site-media-dev (dev). One folder per Library item, `media/<code>/`: the original as uploaded (never shown to
   visitors), each set of sizes made from it (`r1/`, `r2/`...), a video's versions and its first and last frames.

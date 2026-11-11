@@ -155,15 +155,22 @@ Files (all at the top level unless said):
 
 ## Content: D1, R2 and the editor
 
-- **D1** (db/schema.sql): `entries` (one row per painting, genre, text, setting, background, links; `draft` and
+- **D1** (migrations/): `entries` (one row per painting, genre, text, setting, background, links; `draft` and
   `published` JSON side by side; a change = they differ; draft NULL = removed in the draft, published NULL =
   never published), `releases` (each publish), `revisions` (what each entry became, and was, per release),
   `library` (items: id = code, kind photo/video, grp site/painting, name, hash, data, added). JSON is written with
   fixed key order (editor.js normalise), so equal text means no change. Databases: live site-content
   (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb). Query
   through the Cloudflare API connector. dev's database is a sandbox for code: content never goes from dev to live.
-  db/seed.sql is an old snapshot for local tests only. Changes to the tables are still made by hand: numbered
-  migration files come with step 4.
+  **Migrations** (step 4 slice 1): the tables are made and changed only by numbered files in migrations/ (Wrangler's
+  standard D1 migrations: `npx wrangler d1 migrations create DB "what it does"` makes the next file;
+  `npx wrangler d1 migrations apply DB --remote`, with `--env dev` for dev, applies those not yet applied, in
+  order, each once, recorded in the table d1_migrations; in a build it answers its own question with yes). Never
+  edit one that has been applied: add the next. 0001_initial.sql is the tables as they stood (IF NOT EXISTS, so a
+  no-op on both databases, whose tables were checked identical to it on 11 Nov 2026). NOT YET APPLIED ANYWHERE
+  REMOTE, see the plan, step 4: the deploy commands don't run migrations yet. The standard way (Cloudflare's
+  docs) is to apply them in the deploy command, so the database changes with the code, including when he puts
+  dev live. The old db/seed.sql (pre-Library format, unusable) was deleted.
 - **R2**: bucket site-media (live), site-media-dev (dev), binding MEDIA. One folder per Library item (paths.js):
   a photo's original.<ext> (never shown to visitors) and renditions r1/, r2/ (<width>.<ext>, preview.jpg for
   paintings); a video's <w>x<h>.mp4 versions (one set) and frames wide-1/, tall-1/ (first-/last-<width>.jpg,
@@ -176,15 +183,19 @@ Files (all at the top level unless said):
   have none), featured (starred: on the home page's wall; only when true; a star in the editor's Gallery tab,
   a draft change like any other), hidden. A measured size drives the squared-up shape (unless "Square up to its measured proportions"
   is unticked); not measured, the photo's perspective gives the shape and the size only the scale.
-- **Background entry** bg-<section> (hero, contact, footer: BACKGROUNDS in editor.js and edit/editor.js;
+- **Background entry** bg-<section> (hero, contact, footer: BACKGROUNDS in editor.js, PAGE's bg in edit/state.js;
   index.html marks them data-background): type photo (rendition, widths, w, h) or video (versions, frames, play
   once/loop, calm last/fade); both focus and shade.
 - **The editor** (any host starting "admin": admin.chrisjones.org.uk for live, admin-dev for dev, each wholly
   behind Cloudflare Access, "Site editor" and "Site editor (dev)", team chrisjones-org-uk; editor.js checks the
   Access token too, vars ACCESS_TEAM and ACCESS_AUD). On that host the whole site shows drafts, with a pill at the
   bottom (worker.js bar(): an amber eye = this is the preview; the amber count = changes waiting, to Review, or a
-  green tick when all is published; a pencil to the editor). The editor itself is /edit/ (edit/index.html,
-  edit/editor.js, edit/darkroom.js; its API /edit/api/* in editor.js and library.js). On other hosts /edit is
+  green tick when all is published; a pencil to the editor). The editor itself is /edit/ (edit/index.html and
+  ES modules in edit/, listed in order at the top of edit/editor.js, each importing only from those above it:
+  dom, state, marks, render, server, widgets, darkroom, uploads, details, picture, add, painting, background,
+  uses, compare, the five *-view.js, editor.js which registers the views and starts. Shared state is the one
+  `state` object in state.js, written only by server.js; render() still redraws the whole view. Its API
+  /edit/api/* is in editor.js and library.js). On other hosts /edit is
   not found. A rejected token: worker.js signInAgain() clears Access's cookie once and retries, then shows a
   "Couldn't sign you in" page; API calls get 401 and the editor shows a "Sign in again" bar.
   Tabs: Gallery (add a painting, genres and their paintings, Edit forms), Content (a box per page section:
@@ -213,9 +224,12 @@ Files (all at the top level unless said):
 Local test: `.dev.vars` with DEV_USER="local test" (never committed);
 `npx wrangler dev --env dev --local --persist-to /tmp/wr --port 8787` is the site, a second one on --port 8788
 (with --inspector-port 9230) is the editor, signed in as DEV_USER; load the tables with
-`npx wrangler d1 execute site-content-dev --env dev --local --persist-to /tmp/wr --file db/schema.sql`, then
-content (db/seed.sql, or rows copied from dev's database). Headless Chromium with Playwright works for the editor
-and, slowly (no graphics card), the gallery.
+`CI=1 npx wrangler d1 migrations apply DB --env dev --local --persist-to /tmp/wr`, then content: a few rows
+written by hand in dev's format (don't pull whole tables through the connector: about 45 kilobytes of JSON). R2
+works locally too (empty), so uploads can be tested with made-up pictures. Headless Chromium with Playwright
+works for the editor and, slowly (no graphics card), the gallery. Install wrangler and playwright outside the
+repository; if Playwright's browser download is refused, launch with executablePath set to the one under
+/opt/pw-browsers.
 
 ## Testing
 
@@ -237,9 +251,8 @@ Review findings still open: entries are coupled (a painting carries its file, si
 settings); the gallery judges gaps only sideways (paintings graze top to bottom, two over half covered on upright
 phones); the wall grows with the collection (18 paintings, about five screens); paintings exist only in the 3D
 drawing on the home page (invisible to search engines and screen readers); the Hero video has about 13,800
-strokes in 20 seconds, the scene covered in four passes; the head animation's build scripts aren't here; database
-changes by hand; edit/editor.js is one 1,860-line script that redraws everything; fonts come from Google, not the
-site; a draft rendition of a published item can be fetched by guessing its address.
+strokes in 20 seconds, the scene covered in four passes; the head animation's build scripts aren't here; the
+editor redraws the whole view after every change; fonts come from Google, not the site; a draft rendition of a published item can be fetched by guessing its address.
 
 1. **Clean start: done 11 Nov 2026, live.** These notes condensed and the README rewritten.
    One Gallery vocabulary: section #gallery (was #paintings), the gallery page /gallery/ (was /gallery/list/,
@@ -298,7 +311,24 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    In slices, each its own chat, each ending in a working state on dev: (1) migration files and edit/editor.js split
    into modules, nothing changing for him (no design decisions); (2) Library item and Recipe tables, paintings'
    process moved into Recipes; (3) the Library the only upload, the Gallery picking from it; (4) dragging to
-   reorder and between genres, and the smaller extras. He starts slice 1 next (11 Nov 2026), on Fable.
+   reorder and between genres, and the smaller extras.
+   **Slice 1: done 11 Nov 2026, on dev** (not live). edit/editor.js (1,884 lines) cut into 20 modules by line
+   ranges, no logic changed; migrations/0001_initial.sql replaces db/schema.sql. Tested locally (wrangler dev,
+   Playwright, fresh database made by the migration): a 42-step run through all five views, with real uploads to
+   local R2 (add a painting, reopen its picture and change it, Library photos, backgrounds from the Library and
+   from a file, compare and blink, publish, History's Bring back, Delete for good), run on the old single script
+   and on the modules: every view's HTML and the final database contents came out identical. Not tested: videos,
+   the full-screen corner and spot views, real phones, Safari.
+   **Open, his to do before slice 2** (slice 2 has the first real migration): migrations aren't applied by the
+   builds yet. The two build tokens ("chrisjones397-github-io build token" and "...-dev build token", user API
+   tokens, My Profile > API Tokens) have no D1 permission (Cloudflare's default for Workers Builds: Workers
+   Scripts, KV, R2 only). He adds Account > D1 > Edit to both; then the deploy commands (Worker > Settings >
+   Build, or PATCH the triggers by API: live 7d78d6d4-0728-4141-8a1b-43ec43441cac, dev
+   8834efe2-0394-4763-b062-25a83f572101) become
+   `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy` (live) and
+   `npx wrangler d1 migrations apply DB --remote --env dev && npx wrangler deploy --env dev` (dev). Dev first,
+   check its build log says 0001 was applied; change live's only once main has migrations/ (after he puts this
+   live), or its build would fail for want of the folder. A failed build leaves the running site as it was.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

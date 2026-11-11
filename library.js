@@ -2,7 +2,7 @@
 
    One item for each thing uploaded: a photo, or a video (one or several versions, a set). Each has a code, 8 hex
    digits made when it's created, and one folder in R2, media/<code>/, holding everything that belongs to it
-   (paths.js has the layout). Its name is the Library's own (the `library` table, db/schema.sql), shown and
+   (paths.js has the layout). Its name is the Library's own (the `library` table, migrations/), shown and
    changed freely: the folder never changes, so History and Cloudflare's cached copies never break, and the code
    in the Library is what to look for in R2.
 

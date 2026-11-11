@@ -83,7 +83,7 @@ async function notFound(env, url, mode = 'published') {
    then starts a fresh sign-in by itself (silently, if the sign-in address still has a good session). A marker
    cookie, kept for a minute, means a second failure shows a page instead of going round again, so a mistake in
    the settings (ACCESS_TEAM, ACCESS_AUD) can't loop. Requests from the editor's script (the API, images) get a
-   401, which edit/editor.js turns into a "Sign in again" link, so nothing typed is lost. */
+   401, which edit/server.js turns into a "Sign in again" link, so nothing typed is lost. */
 const RETRY = 'signin_retry';
 function signInAgain(request, url) {
   const page = request.method === 'GET' && !url.pathname.startsWith('/edit/api/') && !url.pathname.startsWith('/media/')
