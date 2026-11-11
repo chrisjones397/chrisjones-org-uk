@@ -98,14 +98,17 @@ Files (all at the top level unless said):
 
 - **index.html**: the home page, in order: Hero (`.hero`, forest video) / gallery section (`#gallery`,
   `.invite`) / contact (`#contact`) / profile with the head animation (`.face-section`, three windows tall) /
-  footer. **gallery/index.html**: the gallery page, every painting as a grid. **templates/header.html** (the one
-  header) and **templates/404.html**: not published themselves; bundled into the Worker as text.
+  footer. **gallery/index.html**: the gallery page, every painting, floating (class gallery-3d, chosen by its head
+  script: floating unless the visitor chose the grid, remembered in localStorage gallery-view, ?view= sets it; a
+  painting's address always floating) or as a grid; the grid stays in the page, visually hidden, under the
+  floating view. **templates/header.html** (the one header, including the gallery's view switch) and
+  **templates/404.html**: not published themselves; bundled into the Worker as text.
 - **site.css**: every style, once, linked by every page (scoped by `body.page`, `.gallery-page`, `.notfound`).
   Never reintroduce copies of shared markup or styles.
 - **worker.js** (server): runs first (wrangler.jsonc run_worker_first) for /, /gallery, /gallery/*, /media/*,
   /edit, /edit/*, and for any address with no file (not_found_handling "none"). Pages:
-  `/` home; `/gallery/` the gallery page; `/gallery/<name>/` the home page with that painting brought forward
-  (its title, og:image from `preview`, canonical, `<base href="/">`); an address missing its last / is sent on
+  `/` home; `/gallery/` the gallery page; `/gallery/<name>/` the gallery page with that painting brought forward
+  (its title, og:image from `preview`, canonical); an address missing its last / is sent on
   to the one with it; anything else gets templates/404.html with status 404. `/media/<code>/<file>`: Library
   files (libraryFile), to visitors only if a published, not hidden entry's `media` is that code (cached a year),
   never an original; videos answer range requests (206/416). Everything but chrisjones.org.uk and www gets
@@ -114,17 +117,25 @@ Files (all at the top level unless said):
   header partial (with an icon per ticked contact link), `data-text="key"` and `data-paragraphs="key"` (entries
   t-<key>; a block's own <p>s are replaced only when the database has text for it), `data-background` sections
   (bgTag: an <img> or <video class="section-bg">, focus, `--shade`), the contact links (`data-links`), the gallery
-  data JSON and invitation wall (homeRewriter), the grid (gridRewriter). homePreview() gives the home page's
+  data JSON (home: the starred paintings, `c.home`, all of them if none is starred; gallery page: all, with
+  `groups`, where each genre starts) and the invitation wall (homeRewriter), the grid (gridRewriter, each item
+  id="p-<name>"). homePreview() gives the home page's
   og:image (the Hero's photo, or its video's last frame, nearest above 1200 pixels).
 - **paths.js**, **links.js** (shared by server, page and editor, published): the R2 layout, and the contact
   sites (Email, Instagram, Bluesky, Facebook, Threads, X, LinkedIn, TikTok, YouTube, Mastodon: pattern, address,
   icon). The email address is written backwards in data-addr; index.html's script turns it round and copies it.
-- **gallery.js** (Three.js, vendored in face/vendor/): the floating wall in the gallery section. The section is as
+- **gallery.js** (Three.js, vendored in face/vendor/): the floating wall, on the home page (#gallery, the starred
+  paintings) and the gallery page (section .wall, all, genre titles as text in the section, aria-hidden). The
+  stage says where it is: data-page (where sending a painting back returns to), data-title. The section is as
   tall as the wall; the view is sticky while the page scrolls through and paintings rise past at different depths.
   Click brings a painting forward (`painting-forward` on the section) and pushes /gallery/<name>/ (no reload);
   click again, Escape, scrolling or Back sends it back. Arrangement from entry settings-gallery (size, spacing,
-  spread, depth, nearness, drift, seed); `?tune` shows sliders. index.html's head script decides at once whether
-  WebGL runs (class gallery-3d), else the invitation wall stands in.
+  spread, depth, nearness, drift, seed); `?tune` shows sliders. Each page's head script decides at once whether
+  WebGL runs (class gallery-3d; no-float when it can't), else the invitation wall (home) or grid stands in.
+- **wall.js**: where each painting hangs (arrange), plain arithmetic, no drawing. Pairs are judged over the whole
+  stretch of scrolling while both are in view (pair: grazing or near misses in either direction, the nearer
+  hiding over half the further, edges lined up), as nearer ones slide past further ones. Can be run in node to
+  check a layout: the check used on 11 Nov 2026 compared old and new at six window sizes with the live paintings.
 - **motion.js**: title drift, profile text spring, parallax, directional snapping (glide on to the next resting
   place in the direction of travel, never back; free inside the gallery and profile; any input cancels).
 - **pause.js**: the header's pause button and shared state (window.pauser); shown only while something moves by
@@ -133,7 +144,11 @@ Files (all at the top level unless said):
   pixels across), sets its own poster, plays muted once or looping; reduced-motion or Save-Data visitors get the
   last frame or a fade first to last.
 - **glass.js**: the header's thick glass over pictures passing under it (not the head animation; over the
-  gallery only with `?glass=N`, as it made phones stutter). **header.js**: phones slim the header on scrolling down.
+  gallery only with `?glass=N`, as it made phones stutter). **header.js**: phones slim the header on scrolling
+  down; the gallery's view switch (two symbols just under the header, right edge under the menu's, measured as
+  --switch-right; gallery page: always, current view lit, switches in place with a 'gallery-view' event; home: while
+  #gallery crosses the window's middle, links to /gallery/?view=floating or grid; hidden with no-float). Symbols
+  in the header are spaced by --icon-gap (14px), the pause button included.
 - **face/**: the head animation (face.js, WebGL), driven by scrolling through .face-section. Its build scripts
   aren't in the repository.
 
@@ -157,7 +172,8 @@ Files (all at the top level unless said):
   measured), details (made by the server: "Oil on canvas, 60 x 90 cm, 2020", "(est.)" after a shown estimate),
   section (genre), order, wide, white_paper (a drawing on white paper: reopening starts with "Find the paper"'s
   spots), w, h, widths, media, rendition, ext, preview, process (the darkroom's choices; paintings moved from git
-  have none), hidden. A measured size drives the squared-up shape (unless "Square up to its measured proportions"
+  have none), home (starred: on the home page's wall; only when true; a star in the editor's Gallery tab, a
+  draft change like any other), hidden. A measured size drives the squared-up shape (unless "Square up to its measured proportions"
   is unticked); not measured, the photo's perspective gives the shape and the size only the scale.
 - **Background entry** bg-<section> (hero, contact, footer: BACKGROUNDS in editor.js and edit/editor.js;
   index.html marks them data-background): type photo (rendition, widths, w, h) or video (versions, frames, play
@@ -240,10 +256,21 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    Tested locally (wrangler dev, Playwright): every address above, painting brought forward from its address and
    sent back, menu link from a painting's address, the editor and its API at /edit/, the tick's placement, the
    pill. Not tested on a phone or Safari.
-2. **Gallery, public**: placement fixed in both directions (no near overlaps); the two view links ("View the
-   floating gallery" under the header on the gallery page, "View as a list" in the corner of the wall) in one
-   consistent place; genres settled. Decision: the home page wall shows a selection; the full gallery is its own
-   page (/gallery/, floating or grid, by genre). He isn't sure the floating gallery should separate genres.
+2. **Gallery, public: built 11 Nov 2026 (on dev, not yet live).** Placement judged in both directions over the
+   scrolling (wall.js; at six window sizes with the live paintings, grazes went from up to all the time two are
+   in view to at most a quarter of it, edges lined up from up to 10 pairs to none; the wall about a tenth longer).
+   His decisions: a star per painting chooses the home page's wall (and the no-3D stand-ins; the old
+   settings-invitation entry and its code are gone; deleted from dev's database, still in live's, harmless, to
+   delete when this goes live); /gallery/ floating by default, one wall with genre titles passing; the view switch
+   as two symbols just under the header, right-aligned under the menu's symbols (the gap before the pause
+   button evened up for it). A painting's address is now the gallery page with it brought forward. On dev's
+   database the five former invitation paintings are starred. Still for him: "Featured" is a genre holding only
+   Green Background with Seven Figures; move that painting to a real genre and remove Featured (dev and live),
+   and star paintings on live once it's live (until then live's home wall shows every painting).
+   Tested locally (wrangler dev, Playwright, no pictures as R2 isn't local): the gallery page floating with genre
+   titles, switching to the grid and back, remembered on reload, a painting's address brought forward and
+   Escape back to /gallery/, the switch's alignment (computer and phone sizes), the home page's switch showing
+   only over the wall. Not tested: real phones, Safari, the editor's star (built, not clicked).
 3. **Hero**: first a half-height Hero on upright phones (CSS only: a 4:3 video then shows about three quarters
    of its width, keeping the fern against the dark trees). Then one re-render from painted-forest-tools: shorter,
    passes merged (keep it to one render, few stills). An upright version only if half-height isn't enough. Later

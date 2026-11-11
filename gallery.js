@@ -1,5 +1,6 @@
-/* The floating wall: the home page's gallery section. The paintings hang down a tall wall of quiet grey, at
-   different depths, each at a size that follows (softly) its real size, in the gallery's order.
+/* The floating wall, in two places: the home page's gallery section (the starred paintings) and the gallery page
+   (every painting, genre after genre, each opened by its title). The paintings hang down a tall wall of quiet
+   grey, at different depths, each at a size that follows (softly) its real size, in the gallery's order.
 
    There is nothing to switch on and nothing takes over the page: ordinary scrolling (a mouse's wheel, a
    trackpad, a finger, the keys or the scrollbar) carries you down the wall, so every way of moving through the
@@ -14,11 +15,13 @@
 
    The list of paintings and the settings come from the database: worker.js writes them into the page
    (the "gallery-data" block; site.js galleryData). Visitors who have asked for reduced motion, or whose browser has no WebGL, get
-   the few paintings hung around the words that are already in the page. */
+   the few paintings hung around the words that are already in the page (home), or the grid (gallery page).
+   The stage says which page it's on: data-page, the page's own address (where sending a painting back returns
+   to), and data-title, the page's title. */
 import * as THREE from './face/vendor/three.module.min.js';
 import { arrange } from './wall.js';
 
-const { settings, paintings: data } = JSON.parse(document.getElementById('gallery-data').textContent);
+const { settings, paintings: data, groups = [] } = JSON.parse(document.getElementById('gallery-data').textContent);
 // The arrangement, from the database's gallery settings (entry settings-gallery; all 1 as first built). Adding ?tune to the page's
 // address shows sliders for trying them out live; see tuner() at the end.
 const DEFAULTS = { size: 1, spacing: 1, spread: 1, depth: 1, nearness: 0.5, drift: 1, seed: 1 };
@@ -39,7 +42,15 @@ function webgl() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); }
   catch (e) { return false; }
 }
-if (stage && data.length && !reduce && webgl()) start();
+// It runs once the page has chosen the floating view (class gallery-3d on <html>, set by the page's head script);
+// on the gallery page a visitor can choose it later (the view switch says so with a 'gallery-view' event).
+let started = false;
+const maybeStart = () => {
+  if (started || !document.documentElement.classList.contains('gallery-3d')) return;
+  started = true;
+  start();
+};
+if (stage && data.length && !reduce && webgl()) { maybeStart(); addEventListener('gallery-view', maybeStart); }
 
 // A painting's height in the space. Its real size counts, but softened (by a square root), so an A5 sketch
 // isn't dwarfed by a 60 x 90 canvas: real sizes 1 : 0.24 become about 1 : 0.5 here.
@@ -96,6 +107,8 @@ function start() {
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, fog: true });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.userData = { p, h, w: h * p.w / p.h, r: rank[i] };
+    const g = groups.find((x) => x.from === i);
+    if (g) mesh.userData.title = g.title;          // the first of a genre: its title hangs above it
     scene.add(mesh);
     return mesh;
   });
@@ -112,7 +125,7 @@ function start() {
     const viewH0 = 2 * D0 * viewTan;                           // the view's height at the middle depth
     perPx = viewH0 / H;                                         // ...so one pixel of scrolling is this far
     shuffle();
-    const wall = arrange(planes.map((m) => m.userData), P, { aspect: camera.aspect, D0, MID, RANGE, viewH0 });
+    const wall = arrange(planes.map((m) => m.userData), P, { aspect: camera.aspect, D0, MID, RANGE, viewH0, titleBand: TITLE_PX * perPx });
     scale = wall.scale;
     planes.forEach((m, i) => {
       const u = m.userData, at = wall.items[i];
@@ -121,7 +134,21 @@ function start() {
     });
     travelPx = Math.ceil(-wall.end / perPx);                    // until the last painting is in the middle
     section.style.height = `${H + travelPx}px`;
+    // The genres' titles hang at the middle depth, so they move exactly with the page: each simply stands in the
+    // section, as text, where the wall puts it (in the section, H/2 - y/perPx down, whatever the scrolling).
+    titleEls.forEach((el) => el.remove());
+    titleEls = wall.titles.map((t) => {
+      const el = document.createElement('p');
+      el.className = 'genre-title';
+      el.setAttribute('aria-hidden', 'true');             // the grid, kept in the page for screen readers, has them
+      el.textContent = t.text;
+      el.style.top = `${H / 2 - t.y / perPx}px`;
+      section.append(el);
+      return el;
+    });
   }
+  const TITLE_PX = 110;                                         // the room a genre's title takes, in pixels
+  let titleEls = [];
   layout();
   let lastW = innerWidth;
   // A phone's browser bars showing or hiding change the window's height while scrolling; that mustn't stretch
@@ -157,9 +184,9 @@ function start() {
   // (without loading anything), and the browser's Back sends it back again. That address, opened from a link,
   // is this same page with that painting brought forward (worker.js serves it, with a <base href="/"> so the
   // page's files are found). So a painting's address always shows the same thing, and nothing reloads.
-  const SITE_TITLE = 'Christopher Jones - Fine Art';
-  const homeURL = new URL('./', document.baseURI).href;
-  const pageURL = (m) => new URL(`gallery/${m.userData.p.name}/`, document.baseURI).href;
+  const SITE_TITLE = stage.dataset.title || document.title;
+  const homeURL = new URL(stage.dataset.page || './', document.baseURI).href;
+  const pageURL = (m) => new URL(`/gallery/${m.userData.p.name}/`, location.origin).href;
   const named = (name) => planes.find((x) => x.userData.p.name === name) || null;
   let focus = null, leaving = [], focusAt = 0, pushed = false;
   const opened = location.href.split('#')[0] !== homeURL && named((location.pathname.match(/^\/gallery\/([a-z0-9-]+)\/?$/) || [])[1]);
@@ -200,7 +227,7 @@ function start() {
     focusAt = scrollY;
     sharpen(m);
     section.classList.add('painting-forward');   // the heading steps back with the other paintings
-    document.title = `${m.userData.p.title} - ${SITE_TITLE}`;
+    document.title = `${m.userData.p.title} - Christopher Jones - Fine Art`;   // as worker.js names its address
   }
   function backward() {
     if (!focus) return;
@@ -234,6 +261,7 @@ function start() {
   if (opened) { forward(opened); opened.userData.k = 1; }
 
   addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  addEventListener('gallery-view', () => { if (!document.documentElement.classList.contains('gallery-3d')) close(); });
   addEventListener('scroll', () => { if (focus && Math.abs(scrollY - focusAt) > 40) close(); }, { passive: true });
   // The menu's links (Gallery, Contact, Profile) and the name go to places on this page. While a painting's
   // address is showing they'd otherwise load the home page afresh, so they're followed here instead.
@@ -329,7 +357,7 @@ function start() {
   const ease = (k) => k * k * (3 - 2 * k);
   renderer.setAnimationLoop(() => {
     const r = stage.getBoundingClientRect();
-    if (!first && (r.bottom < 0 || r.top > innerHeight)) return;   // out of sight: nothing to draw
+    if (!first && (r.bottom < 0 || r.top > innerHeight || !stage.clientWidth)) return;   // out of sight (or the grid chosen): nothing to draw
     const t = clock.getElapsedTime(), dt = Math.min(t - lastT, 0.05); lastT = t;
     if (!(window.pauser && pauser.paused)) driftT += dt;
     px += (mx - px) * 0.05;

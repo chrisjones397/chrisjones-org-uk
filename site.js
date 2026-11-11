@@ -57,7 +57,10 @@ export async function load(env, mode) {
   for (const p of paintings.sort(byOrder)) if (sec[p.section]) sec[p.section].paintings.push(p);
   const ordered = sections.flatMap((s) => s.paintings);
   const byName = Object.fromEntries(ordered.map((p) => [p.name, p]));
-  return { mode, sections, paintings: ordered, byName, texts, settings, backgrounds, links, changes };
+  // The home page's selection: the starred paintings (home), in the gallery's order; none starred, all of them
+  const starred = ordered.filter((p) => p.home);
+  const home = starred.length ? starred : ordered;
+  return { mode, sections, paintings: ordered, home, byName, texts, settings, backgrounds, links, changes };
 }
 
 const file = (p, w, prefix = '') => `${prefix}${paintingAt(p, w)}`;
@@ -139,16 +142,24 @@ export function homePreview(c) {
   return { src: f.last(w), w, h: Math.round(v.h * w / v.w) };
 }
 
-export function galleryData(c) {
-  const items = c.paintings.map((p) => ({ name: p.name, title: p.title, details: p.details, wide: p.wide,
+/* The floating wall's data (gallery.js): on the home page the starred paintings; on the gallery page every painting,
+   with where each genre starts (groups: its title and the index of its first painting). */
+export function galleryData(c, whole) {
+  const list = whole ? c.paintings : c.home;
+  const groups = [];
+  if (whole) {
+    let at = 0;
+    for (const s of c.sections) { if (s.paintings.length) groups.push({ title: s.title, from: at }); at += s.paintings.length; }
+  }
+  const items = list.map((p) => ({ name: p.name, title: p.title, details: p.details, wide: p.wide,
     w: p.w, h: p.h, widths: p.widths, cm: p.cm, at: paintingPattern(p) }));
   // inside <script>, so no "<" may appear as itself
-  return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items }).replace(/</g, '\\u003c');
+  return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items, groups }).replace(/</g, '\\u003c');
 }
 
+/* Without the floating wall (no WebGL, or reduced motion): the first few starred paintings hung round the words */
 function inviteHtml(c) {
-  const wanted = ((c.settings.invitation || {}).paintings || []).map((n) => c.byName[n]).filter(Boolean);
-  const chosen = (wanted.length ? wanted : c.paintings).slice(0, INVITE_COUNT);
+  const chosen = c.home.slice(0, INVITE_COUNT);
   const ind = '          ';
   return chosen.map((p) => `\n        <a class="invite-pic" href="gallery/${p.name}/" tabindex="-1">`
     + `\n${ind}${imgTag(p, '', '(max-width: 700px) 40vw, 24vw', ind)}\n        </a>`).join('') + '\n      ';
@@ -160,7 +171,7 @@ function gridHtml(c, prefix) {
     return head + s.paintings.map((p) => {
       const kind = p.wide ? 'entire' : (p.h > p.w ? 'portrait' : 'landscape');
       const details = p.details ? `\n            <p>${shown(p.details)}</p>` : '';
-      return `          <div class="${kind}">\n            <a href="${prefix}gallery/${p.name}/">\n              `
+      return `          <div class="${kind}" id="p-${p.name}">\n            <a href="${prefix}gallery/${p.name}/">\n              `
         + `${imgTag(p, prefix, p.wide ? SIZES_WIDE : SIZES_GRID, '              ')}\n            </a>\n`
         + `            <p>${shown(p.title)}</p>${details}\n          </div>\n`;
     }).join('');
@@ -207,5 +218,7 @@ export function homeRewriter(c) {
 }
 
 export function gridRewriter(c) {
-  return rewriter(c).on('.gallery-page .wrapper', { element(el) { el.setInnerContent(gridHtml(c, '/'), { html: true }); } });
+  return rewriter(c)
+    .on('script#gallery-data', { element(el) { el.setInnerContent(galleryData(c, true), { html: true }); } })
+    .on('.gallery-page .wrapper', { element(el) { el.setInnerContent(gridHtml(c, '/'), { html: true }); } });
 }

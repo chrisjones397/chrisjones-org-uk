@@ -203,17 +203,14 @@ export function normalise(id, kind, d) {
       w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
       media: d.media, rendition: d.rendition,
       ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
-      ...(d.process != null ? { process: processOf(d.process) } : {}), ...hide(d),
+      ...(d.process != null ? { process: processOf(d.process) } : {}),
+      ...(d.home === true ? { home: true } : {}), ...hide(d),   // home: starred, on the home page's wall; only when true
     };
   }
   if (kind === 'background') return backgroundOf(id, d);
   if (kind === 'text') return { text: str(d.text, 5000, 'Text') };
   if (kind === 'links') return linksOf(d);
   if (id === 'settings-gallery') return Object.fromEntries(GALLERY_SETTINGS.filter((k) => k in d).map((k) => [k, num(d[k], k)]));
-  if (id === 'settings-invitation') {
-    if (!Array.isArray(d.paintings) || d.paintings.length > 12) throw new Bad('Bad invitation list');
-    return { paintings: d.paintings.map((n) => str(n, 100, 'A painting name')) };
-  }
   throw new Bad('Unknown kind of content');
 }
 

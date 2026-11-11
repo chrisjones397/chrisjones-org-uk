@@ -70,6 +70,9 @@
   .badge.hiding, .badge.showing { color: var(--dim); }
   button.eye { display: inline-flex; align-items: center; justify-content: center; padding: 0.3rem 0.45rem; }
   button.eye.off { color: var(--dim); }
+  button.star { display: inline-flex; align-items: center; justify-content: center; padding: 0.3rem 0.45rem; color: var(--dim); }
+  button.star.on { color: inherit; }
+  button.star.on svg { fill: currentColor; }   /* filled: on the home page */
   /* The saved tick (one saving rule): on the right inside a text field, or just after anything else; it fades */
   @keyframes saved-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
   @keyframes saved-field { 0%, 70% { background-size: 16px 16px; } 100% { background-size: 0 0; } }

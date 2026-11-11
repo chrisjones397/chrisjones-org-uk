@@ -11,10 +11,11 @@
 
    Pages filled in from the database (site.js does the filling):
      /                    the home page (its gallery section is #gallery)
-     /gallery/            the gallery page: every painting as a grid
-     /gallery/<name>/     the home page with that painting brought forward in the floating gallery: one page
-                          and one view however you arrive. Its title and link-preview details are the painting's,
-                          with <base href="/"> so the page's own files are found from the top folder.
+     /gallery/            the gallery page: every painting, floating genre after genre, or as a grid
+     /gallery/<name>/     the gallery page with that painting brought forward in the floating view. Its title
+                          and link-preview details are the painting's. (The home page's wall puts this address
+                          in the address bar too, without loading anything, when one of its paintings is brought
+                          forward.)
      anything else        templates/404.html, with status 404
    Every page gets the site's header (templates/header.html) as it's served. An address missing only its last /
    is sent on to the one with it (the usual way, so each page has one address).
@@ -61,7 +62,7 @@ export default {
     const m = path.match(/^\/gallery(?:\/([a-z0-9-]+))?(\/?)$/);
     if (m) {
       if (!m[2]) return Response.redirect(`${url.origin}${path}/${url.search}`, 301);
-      return m[1] ? home(env, url, mode, editor, m[1]) : galleryPage(env, url, mode, editor);
+      return galleryPage(env, url, mode, editor, m[1]);
     }
     // Reached only where there's no file (or under the run_worker_first addresses above): try the files once more
     const res = await env.ASSETS.fetch(request);
@@ -128,27 +129,27 @@ function finish(rw, c, url, editor) {
   return rw;
 }
 
-async function home(env, url, mode, editor, name) {
+async function home(env, url, mode, editor) {
+  const c = await load(env, mode);
+  const page = await env.ASSETS.fetch(new URL('/', url));
+  const rw = finish(homeRewriter(c), c, url, editor);
+  ogImage(rw, url, homePreview(c));                  // the Hero's background (site.js homePreview)
+  return respond(rw.transform(page), editor);
+}
+
+/* The gallery page: every painting, floating (genre after genre) or as a grid. At a painting's address it's the
+   same page with that painting brought forward (gallery.js), named in its title, description and link preview. */
+async function galleryPage(env, url, mode, editor, name) {
   const c = await load(env, mode);
   const p = name && c.byName[name];
   if (name && !p) return notFound(env, url, mode);
-  const page = await env.ASSETS.fetch(new URL('/', url));
-  const rw = finish(homeRewriter(c), c, url, editor);
-  // The picture in link previews: the painting shown, or else the Hero's background (site.js homePreview).
-  const pic = p ? { src: `/${p.preview.src}`, w: p.preview.w, h: p.preview.h } : homePreview(c);
-  if (pic) {
-    rw.on('head', { element(el) {
-      el.append(`<meta property="og:image" content="${esc(url.origin + pic.src)}">`
-        + `<meta property="og:image:width" content="${pic.w}"><meta property="og:image:height" content="${pic.h}">`, { html: true });
-    } });
-  }
+  const page = await env.ASSETS.fetch(new URL('/gallery/index.html', url));
+  const rw = finish(gridRewriter(c), c, url, editor);
   if (p) {
+    ogImage(rw, url, { src: `/${p.preview.src}`, w: p.preview.w, h: p.preview.h });
     const here = `${url.origin}/gallery/${p.name}/`;
     const set = (value) => ({ element(el) { el.setAttribute('content', value); } });
-    rw.on('head', { element(el) {
-      el.prepend('<base href="/">', { html: true });
-      el.append(`<link rel="canonical" href="${esc(here)}">`, { html: true });
-    } })
+    rw.on('link[rel="canonical"]', { element(el) { el.setAttribute('href', here); } })
       .on('title', { element(el) { el.setInnerContent(`${p.title} - ${SITE}`); } })
       .on('meta[name="description"]', set(`${p.title}, by Christopher Jones.`))
       .on('meta[property="og:title"]', set(p.title))
@@ -158,10 +159,13 @@ async function home(env, url, mode, editor, name) {
   return respond(rw.transform(page), editor);
 }
 
-async function galleryPage(env, url, mode, editor) {
-  const c = await load(env, mode);
-  const page = await env.ASSETS.fetch(new URL('/gallery/index.html', url));
-  return respond(finish(gridRewriter(c), c, url, editor).transform(page), editor);
+/* The picture in link previews (og:image), when there is one */
+function ogImage(rw, url, pic) {
+  if (!pic) return;
+  rw.on('head', { element(el) {
+    el.append(`<meta property="og:image" content="${esc(url.origin + pic.src)}">`
+      + `<meta property="og:image:width" content="${pic.w}"><meta property="og:image:height" content="${pic.h}">`, { html: true });
+  } });
 }
 
 /* The editor's pill on its preview of the site, styled like the editor's own floating pills (edit/index.html):

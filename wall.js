@@ -14,7 +14,12 @@
    the paintings look, evened out left and right of those around it); never grazes a neighbour, in either
    direction (overlaps are welcome, but only clear ones; a near miss, or a sliver of overlap, looks unintended;
    the longer it lasts while scrolling, the worse); never hides most of a further painting behind a nearer one
-   for long; doesn't line its edges up with a neighbour's; doesn't sit straight below the one before. */
+   for long; doesn't line its edges up with a neighbour's; doesn't sit straight below the one before.
+
+   On the gallery page the genres follow one another down the wall, each opened by its title: an item with a
+   title gets a band of its own above it (view.titleBand high, as it looks), with a little extra room before it
+   so the break between genres reads. The titles hang at the middle depth, so they move exactly with the page
+   (gallery.js puts them in the page as text, over the drawing). */
 
 export function arrange(items, P, view) {
   const { aspect, D0, MID, RANGE, viewH0 } = view;
@@ -22,22 +27,30 @@ export function arrange(items, P, view) {
   const narrow = aspect < 0.9;
   const scale = Math.min(1, half / 4) * P.size;
   const mix = Math.min(Math.max(P.nearness, 0), 1);
-  const placed = [], out = [];
-  let y = 0, lastH = 0;
+  const placed = [], out = [], titles = [];
+  let y = 0, lastH = 0, any = false;
   items.forEach((u, i) => {
     const d = Math.max(MID + ((1 - mix) * u.f + mix * u.r - 0.5) * RANGE * P.depth, 4);
     const sw = u.w * scale, sh = u.h * scale;
     const seen = sh * D0 / d, seenW = sw * D0 / d;
     const room = Math.max(half * 0.95 - seenW / 2, 0);
     const reach = Math.min(room * (narrow ? 0.7 : 1) * P.spread, room);
-    // the first hangs with its top just below the heading; each after it below the last
-    const step = i ? (narrow ? 1.25 : 0.9) * P.spacing * (lastH + seen) / 2 : 0;
-    const y0 = i ? y - step : 0.2 * viewH0 - seen / 2;
+    const gap = (a, b) => (narrow ? 1.25 : 0.9) * P.spacing * (a + b) / 2;
+    if (u.title) {
+      // a genre's title: the first's band starts just below the heading; later ones below the last painting
+      const tb = view.titleBand || 0;
+      y = any ? y - gap(lastH, tb) - 0.1 * viewH0 : 0.2 * viewH0 - tb / 2;
+      titles.push({ text: u.title, y });
+      lastH = tb; any = true;
+    }
+    // the first thing on the wall hangs with its top just below the heading; each after it below the last
+    const step = any ? gap(lastH, seen) : 0;
+    const y0 = any ? y - step : 0.2 * viewH0 - seen / 2;
     let best = null;
-    for (const more of i ? [0, 0.2, 0.4, 0.7] : [0]) {
+    for (const more of any ? [0, 0.2, 0.4, 0.7] : [0]) {
       const yy = y0 - more * step;
-      // the first is the one exception: it's placed as it looks when the section arrives (c = 0), not at its depth
-      const wy = i ? yy : yy * d / D0;
+      // the very first is the one exception: placed as it looks when the section arrives (c = 0), not at its depth
+      const wy = any ? yy : yy * d / D0;
       for (let k = -1; k <= 1.0001; k += 0.05) {
         const sx = k * reach;
         const me = { sx, y: wy, d, w: seenW, h: seen };
@@ -54,10 +67,10 @@ export function arrange(items, P, view) {
       }
     }
     placed.push(best.me);
-    y = best.yy; lastH = seen;
+    y = best.yy; lastH = seen; any = true;
     out.push({ d, sw, sh, x: best.me.sx * d / D0, y: best.me.y, cy: best.me.y, score: best.score });
   });
-  return { scale, items: out, end: out.length ? out[out.length - 1].cy : 0 };
+  return { scale, items: out, titles, end: out.length ? out[out.length - 1].cy : 0 };
 }
 
 /* How badly two paintings sit together, over the scrolling while both are in view: the share of that time they

@@ -22,5 +22,16 @@
       </ul>
     </nav>
   </div>
+  <!-- The gallery's two views, floating and grid: just under the header, their right edge under the menu's
+       (header.js measures it). Shown on the gallery page, the current view lit, and on the home page while its
+       gallery is in view (leading to the whole gallery in either view). header.js shows them and switches views. -->
+  <nav class="view-switch" aria-label="Views of the gallery" hidden>
+    <a href="/gallery/?view=floating" class="nav-link nav-icon" data-view="floating" title="The gallery, floating" aria-label="The gallery, floating">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8"><path d="M2.5 7.5h8.5v6.5H2.5zM14 3.5h7.5v5.5H14zM11 15.5h7v5H11z"/></svg>
+    </a>
+    <a href="/gallery/?view=grid" class="nav-link nav-icon" data-view="grid" title="The gallery as a grid" aria-label="The gallery as a grid">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8"><path d="M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z"/></svg>
+    </a>
+  </nav>
   <p class="copied-tip" id="copied-tip" role="status" aria-live="polite">Email address copied</p>
 </header>

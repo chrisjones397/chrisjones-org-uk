@@ -6,8 +6,8 @@ pictures come from a database and file storage, changed in the editor at **admin
 ## Addresses
 
 - **chrisjones.org.uk/**: the home page: the Hero (the forest), the gallery section, contact, profile.
-- **/gallery/**: the gallery page, every painting as a grid.
-- **/gallery/<name>/**: a painting: the home page with that painting brought forward in the floating gallery.
+- **/gallery/**: the gallery page, every painting, floating genre after genre or as a grid (two symbols under the header switch).
+- **/gallery/<name>/**: a painting: the gallery page with that painting brought forward.
 - **/media/<code>/...**: pictures and videos from storage (only what's published).
 - **admin.chrisjones.org.uk**: the whole site again, showing drafts, with a pill at the bottom; **/edit/** there
   is the editor.

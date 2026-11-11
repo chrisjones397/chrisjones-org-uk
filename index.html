@@ -47,13 +47,16 @@
     /* Will the floating gallery run here? Decided straight away, so the gallery section's stand-in paintings
        never show first and then give way to it (gallery.js decides the same way). If it hasn't appeared
        within a few seconds of the page loading, the stand-ins come back. */
+    /* (no-float: there's no floating view here, so the header's view switch stays hidden; header.js) */
     (function () {
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      try { var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return; }
-      catch (e) { return; }
-      var h = document.documentElement; h.classList.add('gallery-3d');
+      var h = document.documentElement;
+      function none() { h.classList.remove('gallery-3d'); h.classList.add('no-float'); }
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return none();
+      try { var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return none(); }
+      catch (e) { return none(); }
+      h.classList.add('gallery-3d');
       addEventListener('load', function () {
-        setTimeout(function () { if (!document.querySelector('.gallery-live')) h.classList.remove('gallery-3d'); }, 8000);
+        setTimeout(function () { if (!document.querySelector('.gallery-live')) none(); }, 8000);
       });
     })();
   </script>
@@ -74,15 +77,15 @@
       </div>
     </section>
 
-    <!-- The gallery: an invitation, with a few paintings hung around it -->
+    <!-- The gallery: the starred paintings floating (gallery.js), or without 3D an invitation with a few of them hung
+         around it. The header's view switch leads to the whole gallery (/gallery/) while this is in view. -->
     <section id="gallery" class="invite">
       <!-- worker.js fills in the paintings hung round the words (.invite-wall) and the gallery's data, from the database -->
       <div class="invite-wall" aria-hidden="true">
       </div>
-      <div id="float-stage" class="float-stage float-section" data-base="">
+      <div id="float-stage" class="float-stage float-section" data-base="" data-page="./" data-title="Christopher Jones - Fine Art">
         <div class="float-text">
           <div id="float-caption" class="float-caption"><a class="t" href="gallery/" title="Open this painting's page"></a><p class="d"></p></div>
-          <a class="float-list" href="gallery/">View as a list</a>
         </div>
       </div>
       <script type="application/json" id="gallery-data">{"settings": {}, "paintings": []}</script>
@@ -91,7 +94,6 @@
         <h2 class="invite-title" data-text="gallery-title">Gallery</h2>
         <div class="words-paras" data-paragraphs="gallery"></div>
         <a class="invite-button" href="gallery/" data-text="gallery-button">See the paintings</a>
-        <p class="invite-alt"><a href="gallery/">View as a list</a></p>
       </div>
     </section>
 

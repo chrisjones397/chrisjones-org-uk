@@ -189,7 +189,7 @@ const label = (e) => {
   if (e.kind === 'text') return (TEXTS.find((t) => t[0] === e.id) || [0, e.id])[1].replace(/ \(.*/, '');
   if (e.kind === 'links') return 'Contact links';
   if (e.kind === 'background') return `${(PAGE.find((p) => p.bg === e.id.slice(3)) || { name: e.id.slice(3) }).name} background picture`;
-  return e.id === 'settings-gallery' ? 'Gallery settings' : 'Gallery invitation';
+  return e.id === 'settings-gallery' ? 'Gallery settings' : e.id;
 };
 
 // ---- the views ---------------------------------------------------------------------------------------------
@@ -778,6 +778,7 @@ function paintingRow(e, items, i, secs) {
     badge(e),
     gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
       : h('span', { class: 'move' },
+        starButton(e),
         hideButton(e, 'this painting'),
         h('button', { title: 'Move up', disabled: i === 0, onclick: () => movePainting(items, i, -1) }, '↑'),
         h('button', { title: 'Move down', disabled: i === items.length - 1, onclick: () => movePainting(items, i, 1) }, '↓'),
@@ -807,6 +808,21 @@ function paintingRow(e, items, i, secs) {
   carry(editFields.get(e.id), f);
   editFields.set(e.id, f);
   return [row, form];
+}
+
+/* The star: a starred painting hangs on the home page's wall (and stands in there for visitors without 3D); the
+   gallery page always has every painting. A change like any other: saved as a draft at once, published from Review. */
+function starButton(e) {
+  const on = !!current(e).home, key = `${e.id}:home`;
+  return h('button', { class: 'star' + (on ? ' on' : ''), 'data-k': key, 'aria-pressed': String(on),
+    title: on ? 'On the home page: tap to keep it to the gallery page only' : 'Gallery page only: tap to put it on the home page too',
+    'aria-label': on ? 'Take off the home page' : 'Put on the home page',
+    onclick: () => save(() => {
+      const x = byId(e.id);
+      if (!x || x.draft == null) return null;
+      const { home, ...rest } = draftOf(x);
+      return [{ id: e.id, kind: 'painting', data: home ? rest : { ...rest, home: true } }];
+    }, null, key) }, glyph(GLYPHS.star));
 }
 
 /* Save a painting's Edit form: built when its turn in the queue comes, from the latest draft and the form's fields,
@@ -1438,7 +1454,7 @@ async function keepOriginal(file, name, known, say, grp = 'painting') {
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For reduced motion', file: 'Files', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text', hidden: 'Hidden from visitors', media: 'Picture', rendition: 'Picture' };
+const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For reduced motion', file: 'Files', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text', home: 'On the home page', hidden: 'Hidden from visitors', media: 'Picture', rendition: 'Picture' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
@@ -1553,6 +1569,7 @@ const glyph = (d, size = 18) => {
 const GLYPHS = {
   bin: 'M3.5 5.5h13M8 5.5V3.5h4v2M5 5.5l1 11h8l1-11M8.5 8.5v5.5M11.5 8.5v5.5',
   tick: 'M4 10.5l4 4L16 6',
+  star: 'M10 2.8l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5-4.5 2.5 1-5L2.8 8l5-.6z',             // on the home page (filled when so)
   eye: 'M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10zM10 7.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z',   // on the site
   hidden: 'M2.5 8.5c2 2.7 4.6 4.1 7.5 4.1s5.5-1.4 7.5-4.1M5.2 11.4l-1.5 1.9M10 12.6v2.4M14.8 11.4l1.5 1.9',       // a closed eye: hidden
   play: 'M7 5v10l8-5z',

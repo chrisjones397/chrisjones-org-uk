@@ -10,21 +10,69 @@
   <title>Gallery - Christopher Jones - Fine Art</title>
   <meta name="description" content="Paintings in oil, watercolour, and pastel by Christopher Jones.">
   <link rel="canonical" href="https://chrisjones.org.uk/gallery/">
+  <!-- Link previews; at a painting's address worker.js makes them the painting's, with its picture -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Christopher Jones - Fine Art">
+  <meta property="og:title" content="Gallery - Christopher Jones - Fine Art">
+  <meta property="og:description" content="Paintings in oil, watercolour, and pastel">
+  <meta property="og:url" content="https://chrisjones.org.uk/gallery/">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+  <script>
+    /* Which view: floating (class gallery-3d) or the grid. Decided straight away, so the page never shows one and
+       then swaps. Floating unless this visitor chose the grid (remembered in this browser; ?view= from the home
+       page's switch chooses too), or there's no floating view here (no WebGL, or reduced motion asked for: class
+       no-float, and the grid). A painting's address always opens floating, with the painting brought forward
+       (gallery.js); without the floating view, the grid at that painting. If the floating view hasn't appeared
+       within a few seconds of the page loading, the grid takes its place. */
+    (function () {
+      var h = document.documentElement, view = new URLSearchParams(location.search).get('view'), chosen = null;
+      try {
+        if (view === 'grid' || view === 'floating') localStorage.setItem('gallery-view', view);
+        chosen = localStorage.getItem('gallery-view');
+      } catch (e) { chosen = view; }
+      if (view) history.replaceState(null, '', location.pathname + location.hash);
+      var painting = location.pathname.match(/^\/gallery\/([a-z0-9-]+)\/$/);
+      var can = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+      try { var c = document.createElement('canvas'); can = can && !!(c.getContext('webgl2') || c.getContext('webgl')); }
+      catch (e) { can = false; }
+      function none() {
+        h.classList.remove('gallery-3d'); h.classList.add('no-float');
+        dispatchEvent(new CustomEvent('gallery-view'));
+        var at = painting && document.getElementById('p-' + painting[1]);
+        if (at) at.scrollIntoView();
+      }
+      if (!can) { h.classList.add('no-float'); if (painting) addEventListener('DOMContentLoaded', none); return; }
+      if (painting || chosen !== 'grid') h.classList.add('gallery-3d');
+      addEventListener('load', function () {
+        setTimeout(function () { if (h.classList.contains('gallery-3d') && !document.querySelector('.gallery-live')) none(); }, 8000);
+      });
+    })();
+  </script>
   <link rel="stylesheet" href="/site.css">
-  <!-- Every painting as a plain grid, for anyone who'd rather not float. worker.js fills in the grid
-       (.wrapper) from the database as the page is served (site.js gridRewriter), and the header. -->
+  <script src="/pause.js"></script>         <!-- the header's pause button (the wall's drift): see the file -->
+  <!-- Every painting, floating genre after genre (gallery.js) or as a grid. worker.js fills in the grid (.wrapper)
+       and the floating wall's data from the database as the page is served (site.js gridRewriter), and the header.
+       The grid stays in the page under the floating view, out of sight but there for screen readers and search
+       engines, as the floating view is a drawing. -->
 </head>
 <body class="page">
 
   <header data-partial="header"></header>
 
   <main id="main-content" class="gallery-page">
+    <h1 class="gallery-title">Gallery</h1>
+    <section class="wall">
+      <div id="float-stage" class="float-stage float-section" data-base="/" data-page="/gallery/" data-title="Gallery - Christopher Jones - Fine Art">
+        <div class="float-text">
+          <div id="float-caption" class="float-caption"><a class="t" href="/gallery/" title="This painting's address"></a><p class="d"></p></div>
+        </div>
+      </div>
+      <script type="application/json" id="gallery-data">{"settings": {}, "paintings": []}</script>
+    </section>
     <div class="gallery-block">
-      <h1>Gallery</h1>
-      <p class="float-link"><a href="/#gallery">View the floating gallery</a></p>
       <div class="wrapper">
       </div>
     </div>
@@ -34,5 +82,7 @@
     <div class="footer-words" data-paragraphs="footer"><p>&copy;2026 Christopher Jones</p></div>
   </footer>
 
+  <script type="module" src="/gallery.js"></script>
+  <script src="/header.js"></script>
 </body>
 </html>
