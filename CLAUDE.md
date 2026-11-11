@@ -273,17 +273,21 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    titles, switching to the grid and back, remembered on reload, a painting's address brought forward and
    Escape back to /gallery/, the switch's alignment (computer and phone sizes), the home page's switch showing
    only over the wall. Not tested: real phones, Safari, the editor's star (built, not clicked).
-3. **Hero: parked 11 Nov 2026, design to decide.** A half-height Hero on upright phones (commit dcd48c2: .hero
-   clamp(half the window, 75vw, the whole window), the gallery heading and snapping following the Hero's height)
-   was tried on dev and reverted: the shorter video still running under the see-through header looked odd. Needs
-   design decisions first (how the header meets a shorter Hero). He found https://hidokmeh.com/ slick (not its
-   busy scrolling) and wonders about a paintbrush or palette-knife mark in place of their double-chevron logo:
-   ask for screenshots when this resumes, as fetching the page gives only its text. Keep it simple. Screenshots seen 11 Nov: their gold 3D mark tumbles between sections (with momentum, shimmering) inside a solid inset header bar; agreed that's too much movement for this site, but the inset bar suits it. On dev (commit 3108612): the header as a floating bar (--bar-gap 14px, 8px on phones; rounded 14px; shadow; max 1240px) with the half-height Hero back, for him to judge. Still to decide: a small still mark (brush or palette knife, flat outline like the other symbols; perhaps one glint on load or pointing), then the re-render. Re-render done 11 Nov 2026 (painted-forest-tools f7371e0, paint8.py): v9, the same 13,829 strokes
-   painted in one sweep from top left to bottom right, finer brushes trailing, 11.6 s (was 20); 3840x2880 11.3 MB,
-   2560x1920 5.3 MB, 1536x1152 2.4 MB, given to him to upload as one Library video item and choose for the Hero
-   (dev's Hero was af55b314, the 20 s v8; live's Hero is a photo, 078633f1, his choice). An upright version only if half-height isn't enough. Later
-   idea of his: a reveal by calculated brushstrokes from the photo to his own real painting of it (strokes take
-   their colour from a photo of the painting, so the end frame is his work). A filmed timelapse is far off.
+3. **Hero: parked 11 Nov 2026, design to decide.** Tried on dev and taken off again, so dev looks like live:
+   - Half-height Hero on upright phones (.hero clamp(half the window, 75vw, the whole window); the gallery heading
+     and snapping follow the Hero's height), first under the old see-through header (looked odd), then with the
+     header as a floating bar (inset --bar-gap 14px, 8px on phones; rounded 14px; shadow; max 1240px), commit
+     3108612, inspired by https://hidokmeh.com/ (its inset solid bar; not its tumbling gold 3D logo, agreed too much
+     movement). Removed by 3f600c2; to bring both back: `git revert 3f600c2`. His to decide after sleeping on it, along
+     with a small still mark in the header (paintbrush or palette knife, flat outline like the other symbols;
+     perhaps one glint on load or pointing). Ask for screenshots of references: fetching a page gives only text.
+   - Video v9 rendered (painted-forest-tools f7371e0, paint8.py): the same 13,829 strokes in one sweep from top
+     left to bottom right, finer brushes trailing, 11.6 s (was 20); 3840x2880 11.3 MB, 2560x1920 5.3 MB, 1536x1152
+     2.4 MB. He has the files but isn't keen: quicker but not lighter, and he doesn't like the sweep. His thought
+     for next time: two passes instead of four (rather than one sweep). Not uploaded; dev's Hero is still v8
+     (af55b314, 20 s); live's Hero is a photo (078633f1), his choice.
+   - Later: an upright version only if needed; his reveal idea (strokes from the photo to his own real painting
+     of it, colours from a photo of the painting); a filmed timelapse is far off.
 4. **Uploads restructure**, with migration files and edit/editor.js split into modules. Three layers: Library
    item (file plus alt text, credit), Recipe (several per item; the painting's process moves here; photos of flat
    things squared up, scenes straightened and cropped; videos only crops/focus per shape and stills), uses
@@ -292,6 +296,10 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    used, "Replace photo… From the Library…"); paintings dragged to reorder and between genres; crop before any
    resizing (upload keeps only the original; sizes are made by a recipe). Also wanted: one original shared by
    several paintings (pentaptych parts), "Delete for good" from History too, a clear Review of background changes.
+   In slices, each its own chat, each ending in a working state on dev: (1) migration files and edit/editor.js split
+   into modules, nothing changing for him (no design decisions); (2) Library item and Recipe tables, paintings'
+   process moved into Recipes; (3) the Library the only upload, the Gallery picking from it; (4) dragging to
+   reorder and between genres, and the smaller extras. He starts slice 1 next (11 Nov 2026), on Fable.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
