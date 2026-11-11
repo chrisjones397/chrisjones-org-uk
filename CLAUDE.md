@@ -273,8 +273,13 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    titles, switching to the grid and back, remembered on reload, a painting's address brought forward and
    Escape back to /gallery/, the switch's alignment (computer and phone sizes), the home page's switch showing
    only over the wall. Not tested: real phones, Safari, the editor's star (built, not clicked).
-3. **Hero**: first a half-height Hero on upright phones (CSS only: a 4:3 video then shows about three quarters
-   of its width, keeping the fern against the dark trees). Then one re-render from painted-forest-tools: shorter,
+3. **Hero**: first a half-height Hero on upright phones: on dev 11 Nov 2026, for him to check on his phone.
+   site.css .hero: clamp(half the window, 75vw, the whole window), i.e. as tall as the 4:3 video needs to show its
+   whole width (upright phone 390 x 844: 422 tall, about 70% of the width; upright tablet: the whole width;
+   computers and sideways phones: the whole window). motion.js: the gallery heading's rise is measured over the
+   Hero's height; snapping now needs 15% of the window scrolled on from the last resting place (same as before
+   for full-window sections; stops a nudge at the top sending the page to the gallery). Tested: heights at four
+   sizes (Chromium); not the snapping or the heading on a real phone. Then one re-render from painted-forest-tools: shorter,
    passes merged (keep it to one render, few stills). An upright version only if half-height isn't enough. Later
    idea of his: a reveal by calculated brushstrokes from the photo to his own real painting of it (strokes take
    their colour from a photo of the painting, so the end frame is his work). A filmed timelapse is far off.
