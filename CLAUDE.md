@@ -278,7 +278,7 @@ site; a draft rendition of a published item can be fetched by guessing its addre
    was tried on dev and reverted: the shorter video still running under the see-through header looked odd. Needs
    design decisions first (how the header meets a shorter Hero). He found https://hidokmeh.com/ slick (not its
    busy scrolling) and wonders about a paintbrush or palette-knife mark in place of their double-chevron logo:
-   ask for screenshots when this resumes, as fetching the page gives only its text. Keep it simple. Then one re-render from painted-forest-tools: shorter,
+   ask for screenshots when this resumes, as fetching the page gives only its text. Keep it simple. Screenshots seen 11 Nov: their gold 3D mark tumbles between sections (with momentum, shimmering) inside a solid inset header bar; agreed that's too much movement for this site, but the inset bar suits it. On dev (commit 3108612): the header as a floating bar (--bar-gap 14px, 8px on phones; rounded 14px; shadow; max 1240px) with the half-height Hero back, for him to judge. Still to decide: a small still mark (brush or palette knife, flat outline like the other symbols; perhaps one glint on load or pointing), then the re-render. Then one re-render from painted-forest-tools: shorter,
    passes merged (keep it to one render, few stills). An upright version only if half-height isn't enough. Later
    idea of his: a reveal by calculated brushstrokes from the photo to his own real painting of it (strokes take
    their colour from a photo of the painting, so the end frame is his work). A filmed timelapse is far off.
