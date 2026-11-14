@@ -265,12 +265,14 @@ both (repo_name chrisjones-org-uk). Always Use HTTPS, minimum TLS 1.2, DNSSEC, E
 Gmail). The domain's address records belong to the Workers' custom domains (including a wildcard) and can't be
 edited by hand.
 
-## Paper experiment (14 Nov 2026, on dev only)
+## Paper and the gallery views (14 Nov 2026): live
 
-A white page with charcoal words: one block at the end of site.css (its own commit, "Paper (experiment)"), over the
-grey design; --page is the page colour, read by gallery.js and face.js. Words over pictures (.has-bg) stay white.
-To drop it: `git revert` that commit. To put the gallery work live without it, fast-forward main to the commit
-before it: `git merge --ff-only dc20bcf` in place of `dev`.
+Put live by him on 14 Nov 2026 (main at 70a5541): the fixed view as default, focus.js, the sideways header, the
+pause button always shown, the invitation wall by area, and paper: a white page with charcoal words, one block at
+the end of site.css (commit 7f4cff2) over the grey design; --page is the page colour, read by gallery.js and
+face.js. Words over pictures (.has-bg) stay white. To go back to grey: `git revert 7f4cff2`.
+The home button's words (entry t-gallery-button) were staged as a draft "Enter" on both databases for him to
+publish through Review (dev's said "Enter gallery", live's "See the paintings").
 
 ## The plan (agreed 10 Nov 2026 after the whole site review; each step in a new chat)
 
