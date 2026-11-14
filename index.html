@@ -44,9 +44,10 @@
     addEventListener('load', function () {
       setTimeout(function () { document.documentElement.classList.add('smooth'); }, 300);
     });
-    /* Will the floating gallery run here? Decided straight away, so the gallery section's stand-in paintings
-       never show first and then give way to it (gallery.js decides the same way). If it hasn't appeared
-       within a few seconds of the page loading, the stand-ins come back. */
+    /* Will the floating gallery run here? Only if this visitor chose it on the gallery page; otherwise the
+       paintings hang still round the words, with the button to the whole gallery. Decided straight away, so
+       the stand-ins never show first and then give way to it (gallery.js decides the same way). If it hasn't
+       appeared within a few seconds of the page loading, the stand-ins come back. */
     /* (no-float: there's no floating view here, so the header's view switch stays hidden; header.js) */
     (function () {
       var h = document.documentElement;
@@ -54,6 +55,9 @@
       if (matchMedia('(prefers-reduced-motion: reduce)').matches) return none();
       try { var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return none(); }
       catch (e) { return none(); }
+      var chosen = null;                       // floating only for visitors who chose it (the gallery's view switch)
+      try { chosen = localStorage.getItem('gallery-view'); } catch (e) { /* not kept: the still paintings */ }
+      if (chosen !== 'floating') return;
       h.classList.add('gallery-3d');
       addEventListener('load', function () {
         setTimeout(function () { if (!document.querySelector('.gallery-live')) none(); }, 8000);

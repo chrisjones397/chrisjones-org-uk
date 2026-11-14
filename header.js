@@ -1,9 +1,11 @@
 /* Phones: the header starts full size, then slims down to the logo bar once you scroll down,
-   and opens out again as soon as you scroll back up (or reach the top). Computers are unaffected. */
+   and opens out again as soon as you scroll back up (or reach the top). Phones held sideways (short windows):
+   the header slides right out of the way instead (site.css), as every pixel of height counts there.
+   Computers are unaffected. */
 (function () {
   const header = document.querySelector('.header');
   if (!header) return;
-  const phone = matchMedia('(max-width: 720px)');
+  const phone = matchMedia('(max-width: 720px), (orientation: landscape) and (max-height: 540px)');
   const TOP = 40;      // within this many pixels of the top, the header is always full size
   const UP = 12;       // scrolling up by this much opens it again
 

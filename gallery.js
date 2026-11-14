@@ -32,7 +32,7 @@ if (TUNE) try { Object.assign(P, JSON.parse(localStorage.getItem('gallery-tune')
 const SIZE = 3.6;           // a 60 x 90 cm painting is about 2.9 high; smaller ones less, but not in proportion
 const D0 = 12;              // paintings this far away move exactly with the page
 const MID = 13, RANGE = 8;  // they hang from 9 to 17 away (RANGE times the depth setting)
-const BG = 0x646464;        // the page colour, rgb(100, 100, 100)
+const BG = getComputedStyle(document.body).backgroundColor;   // the page's colour (--page in site.css)
 
 const stage = document.getElementById('float-stage');
 const BASE = (stage && stage.dataset.base) ?? '';           // the way from this page to the site's top folder

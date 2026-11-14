@@ -9,6 +9,7 @@
 :root {
   --icon-gap: 14px;   /* between the header's symbols, the pause button and the gallery's view switch alike */
   --header-height: 180px; /* room kept above a section when a menu link jumps to it (see scroll-padding-top) */
+  --page: rgb(100, 100, 100);   /* the page's colour; the floating gallery and the head animation read it too */
 }
 html {
   scrollbar-gutter: stable;
@@ -28,7 +29,7 @@ html.smooth { scroll-behavior: smooth; }
 body, html {
   color: #fff;
   font-family: "Inter", sans-serif;
-  background-color: rgb(100, 100, 100);
+  background-color: var(--page);
 }
 /* Text, the same everywhere: one soft shadow behind all the text below the header, so it reads the same
    over the video, the paintings, the pictures and plain grey alike; the header has its own lighter one.
@@ -348,7 +349,16 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 /* While a painting is brought forward, everything else steps back: the other paintings dim (gallery.js)
    and the heading fades, so the painting never sits under it */
 .painting-forward .invite-title { opacity: 0; }
-.gallery-3d .invite-button { display: none; }   /* the header's view switch leads to the whole gallery */
+/* floating: the button to the whole gallery waits at the end of the wall, met as the last paintings rise past */
+.gallery-3d .invite-button {
+  position: absolute;
+  bottom: calc(var(--vh, 1svh) * 22);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  transition: opacity 0.5s, background 0.3s, color 0.3s;
+}
+.painting-forward .invite-button { opacity: 0; pointer-events: none; }
 .invite-pic {
   position: absolute;
   display: block;
@@ -399,6 +409,15 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 .header {
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
+}
+/* Phones held sideways (short windows): a lower header that slides away while scrolling down and comes back on
+   scrolling up (header.js), and steps aside while a floating painting is brought forward, so it never covers it */
+@media (orientation: landscape) and (max-height: 540px) {
+  .header-block { min-height: 58px; }
+  .header { transition: transform 0.35s ease; }
+  .header.compact, html:has(.painting-forward) .header { transform: translateY(-100%); }
+  .header.compact .view-switch { top: calc(100% + 8px); }
+  .header.no-anim { transition: none; }
 }
 @media (orientation: landscape) and (max-height: 540px) {
   html .gallery-block, html .notfound, html .site-footer, html .float-text, html .contact-words, html .invite-words {
@@ -589,3 +608,74 @@ video.section-bg::-webkit-media-controls-start-playback-button {
   position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden;
   clip-path: inset(50%); white-space: nowrap;   /* the usual visually-hidden pattern */
 }
+
+/* A painting brought forward over the grid (focus.js): over everything, the header included, as large as the
+   window allows with its title and details below; arrows either side (below it on narrow screens) and a cross */
+.focus {
+  --side: 64px;                  /* room each side for the arrows (focus.js reads it to ask for the right size) */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.focus.on { opacity: 1; }
+.focus::backdrop { background: var(--page); opacity: 0.97; }
+.focus-stage {
+  position: absolute;
+  inset: 0;
+  padding: max(16px, env(safe-area-inset-top)) max(var(--side), env(safe-area-inset-right)) 0 max(var(--side), env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+}
+.focus-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 120px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.focus-caption { text-align: center; }
+.focus-caption .t { font-size: 1.25rem; font-weight: 300; }
+.focus-caption .d { font-size: 0.9rem; margin-top: 0.25em; opacity: 0.85; }
+.focus button {
+  position: absolute;
+  background: none;
+  border: 0;
+  padding: 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.focus button[hidden] { display: none; }
+.focus-close { top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); }
+.focus-prev, .focus-next { top: 50%; transform: translateY(-50%); }
+.focus-prev { left: max(8px, env(safe-area-inset-left)); }
+.focus-next { right: max(8px, env(safe-area-inset-right)); }
+@media (max-width: 720px) and (orientation: portrait) {
+  .focus { --side: 12px; }
+  .focus-stage { padding-top: 56px; padding-bottom: 64px; }
+  .focus-img { max-height: calc(100dvh - 210px); }
+  .focus-prev, .focus-next { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); transform: none; }
+  .focus-prev { left: 12px; }
+  .focus-next { right: 12px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .focus-img { max-height: calc(100dvh - 84px); }
+  .focus-stage { gap: 0.4rem; }
+  .focus-caption .t { font-size: 1.05rem; }
+}
+@media (prefers-reduced-motion: reduce) { .focus { transition: none; } }
