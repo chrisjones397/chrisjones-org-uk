@@ -4,9 +4,10 @@
    The choice is remembered across the site and on later visits (localStorage), and applies from the first
    moment of the next page, since this runs in the <head> before anything starts.
 
-   The button shows only while something on the page moves by itself: each such thing tells this script with
-   pauser.moving(name, true or false) (a video that has played once and stopped no longer moves). Visitors who
-   have asked their device to reduce motion get nothing moving in the first place, so no button.
+   The button is always in the header, on every page, as it's a setting for the whole site (14 Nov 2026: it
+   used to show only while something moved, which made the header's symbols shift). It's lit while something on
+   the page moves by itself, dimmed otherwise: each such thing tells this script with pauser.moving(name, true or
+   false) (a video that has played once and stopped no longer moves).
 
    For the other scripts:
      pauser.paused          true while paused
@@ -25,7 +26,7 @@
   function show() {
     if (!button) button = document.getElementById('pause-motion');
     if (!button) return;
-    button.hidden = !movers.size;
+    button.classList.toggle('still', !movers.size);      // nothing moving here just now: dimmed, still works
     button.setAttribute('aria-pressed', String(paused));
     const label = paused ? 'Play moving pictures' : 'Pause moving pictures';
     button.setAttribute('aria-label', label);

@@ -94,7 +94,7 @@ a {
   font: inherit;
   cursor: pointer;
 }
-.pause-button[hidden], .nav-pause:has(> [hidden]) { display: none; }   /* no empty gap in the menu either */
+.pause-button.still:not(:hover):not(:focus-visible) { opacity: 0.5; }   /* nothing moving here: dimmed, but there */
 .pause-button[aria-pressed="true"] .when-playing,
 .pause-button:not([aria-pressed="true"]) .when-paused { display: none; }
 /* The gallery's view switch (floating, grid), just under the header, its right edge under the menu's (header.js
@@ -629,25 +629,32 @@ video.section-bg::-webkit-media-controls-start-playback-button {
   transition: opacity 0.25s ease;
 }
 .focus.on { opacity: 1; }
-.focus::backdrop { background: var(--page); opacity: 0.97; }
+.focus::backdrop { background: var(--page); }   /* solid: nothing of the grid shows through */
+/* the painting is centred in the room above the words, which stay put at the bottom from painting to painting */
 .focus-stage {
+  --top: max(16px, env(safe-area-inset-top));
+  --cap: 96px;                   /* room kept at the bottom for the title and details */
   position: absolute;
   inset: 0;
-  padding: max(16px, env(safe-area-inset-top)) max(var(--side), env(safe-area-inset-right)) 0 max(var(--side), env(safe-area-inset-left));
+  padding: var(--top) max(var(--side), env(safe-area-inset-right)) var(--cap) max(var(--side), env(safe-area-inset-left));
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.8rem;
 }
 .focus-img {
   display: block;
   flex: none;                    /* its size is set by focus.js; max-height says how much room there is */
-  max-height: calc(100dvh - 120px);
+  max-height: calc(100dvh - var(--top) - var(--cap) - 12px);
   object-fit: contain;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
-.focus-caption { text-align: center; }
+.focus-caption {
+  position: absolute;
+  left: max(var(--side), env(safe-area-inset-left));
+  right: max(var(--side), env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  text-align: center;
+}
 .focus-caption .t { font-size: 1.25rem; font-weight: 300; }
 .focus-caption .d { font-size: 0.9rem; margin-top: 0.25em; opacity: 0.85; }
 .focus button {
@@ -665,15 +672,15 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 .focus-next { right: max(8px, env(safe-area-inset-right)); }
 @media (max-width: 720px) and (orientation: portrait) {
   .focus { --side: 12px; }
-  .focus-stage { padding-top: 56px; padding-bottom: 64px; }
-  .focus-img { max-height: calc(100dvh - 210px); }
+  .focus-stage { --top: 56px; --cap: 120px; }
+  .focus-caption { left: 56px; right: 56px; bottom: max(14px, env(safe-area-inset-bottom)); }
   .focus-prev, .focus-next { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); transform: none; }
   .focus-prev { left: 12px; }
   .focus-next { right: 12px; }
 }
 @media (orientation: landscape) and (max-height: 540px) {
-  .focus-img { max-height: calc(100dvh - 84px); }
-  .focus-stage { gap: 0.4rem; }
+  .focus-stage { --top: 10px; --cap: 64px; }
+  .focus-caption { bottom: max(10px, env(safe-area-inset-bottom)); }
   .focus-caption .t { font-size: 1.05rem; }
 }
 @media (prefers-reduced-motion: reduce) { .focus { transition: none; } }
