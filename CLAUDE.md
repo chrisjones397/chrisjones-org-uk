@@ -102,11 +102,14 @@ c288de355d24430da80566f5ec46ceec, dev 22d6bcc2561f461f876a4d479319c793). If it f
 
 Files (all at the top level unless said):
 
+- **Gallery views (14 Nov 2026)**: the grid is the default everywhere; floating is opt-in through the view switch
+  (localStorage gallery-view = floating), on the home page too, where everyone else gets the still invitation wall
+  and "See the paintings". He's considering dropping floating altogether (motion sickness).
 - **index.html**: the home page, in order: Hero (`.hero`, forest video) / gallery section (`#gallery`,
   `.invite`) / contact (`#contact`) / profile with the head animation (`.face-section`, three windows tall) /
-  footer. **gallery/index.html**: the gallery page, every painting, floating (class gallery-3d, chosen by its head
-  script: floating unless the visitor chose the grid, remembered in localStorage gallery-view, ?view= sets it; a
-  painting's address always floating) or as a grid; the grid stays in the page, visually hidden, under the
+  footer. **gallery/index.html**: the gallery page, every painting, as a grid (the default) or floating (class gallery-3d,
+  chosen by its head script: only if the visitor chose floating, remembered in localStorage gallery-view, ?view=
+  sets it); a painting's address opens in that view with the painting brought forward; the grid stays in the page, visually hidden, under the
   floating view. **templates/header.html** (the one header, including the gallery's view switch) and
   **templates/404.html**: not published themselves; bundled into the Worker as text.
 - **site.css**: every style, once, linked by every page (scoped by `body.page`, `.gallery-page`, `.notfound`).
@@ -142,6 +145,9 @@ Files (all at the top level unless said):
   stretch of scrolling while both are in view (pair: grazing or near misses in either direction, the nearer
   hiding over half the further, edges lined up), as nearer ones slide past further ones. Can be run in node to
   check a layout: the check used on 11 Nov 2026 compared old and new at six window sizes with the live paintings.
+- **focus.js**: the grid view's painting brought forward: a <dialog> (showModal, so over the header too) at
+  /gallery/<name>/ (pushState; arrows, swipe, Escape, cross, click beside, Back); the image is the grid's srcset
+  with sizes set to the size shown. Not used in the floating view.
 - **motion.js**: title drift, profile text spring, parallax, directional snapping (glide on to the next resting
   place in the direction of travel, never back; free inside the gallery and profile; any input cancels).
 - **pause.js**: the header's pause button and shared state (window.pauser); shown only while something moves by
@@ -150,7 +156,8 @@ Files (all at the top level unless said):
   pixels across), sets its own poster, plays muted once or looping; reduced-motion or Save-Data visitors get the
   last frame or a fade first to last.
 - **glass.js**: the header's thick glass over pictures passing under it (not the head animation; over the
-  gallery only with `?glass=N`, as it made phones stutter). **header.js**: phones slim the header on scrolling
+  gallery only with `?glass=N`, as it made phones stutter). **header.js**: (phones held sideways, max-height 540px: a 58px
+  header that slides right away on scrolling down, and while a floating painting is forward) phones slim the header on scrolling
   down; the gallery's view switch (two symbols just under the header, right edge under the menu's, measured as
   --switch-right; gallery page: always, current view lit, switches in place with a 'gallery-view' event; home: while
   #gallery crosses the window's middle, links to /gallery/?view=floating or grid; hidden with no-float). Symbols
@@ -248,6 +255,13 @@ secret saved in the dashboard must then be deployed. The Workers' Git connection
 both (repo_name chrisjones-org-uk). Always Use HTTPS, minimum TLS 1.2, DNSSEC, Email Routing (catch-all to his
 Gmail). The domain's address records belong to the Workers' custom domains (including a wildcard) and can't be
 edited by hand.
+
+## Paper experiment (14 Nov 2026, on dev only)
+
+A white page with charcoal words: one block at the end of site.css (its own commit, "Paper (experiment)"), over the
+grey design; --page is the page colour, read by gallery.js and face.js. Words over pictures (.has-bg) stay white.
+To drop it: `git revert` that commit. To put the gallery work live without it, fast-forward main to the commit
+before it: `git merge --ff-only dc20bcf` in place of `dev`.
 
 ## The plan (agreed 10 Nov 2026 after the whole site review; each step in a new chat)
 
