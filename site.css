@@ -679,3 +679,42 @@ video.section-bg::-webkit-media-controls-start-playback-button {
   .focus-caption .t { font-size: 1.05rem; }
 }
 @media (prefers-reduced-motion: reduce) { .focus { transition: none; } }
+
+/* Paper (experiment, 14 Nov 2026): a white page with charcoal words, the same on every page. Everything above is
+   the grey design; this block alone turns it to paper, so deleting it (or reverting its commit) brings the grey
+   back. Words over a picture (the Hero, Get in touch, any section given a background) stay white with their
+   shadow, as dark words can't be relied on to read over a photo. */
+:root {
+  --page: #fff;
+  --ink: rgb(46, 46, 46);                 /* charcoal */
+  --ink-soft: rgba(46, 46, 46, 0.68);     /* links at rest, captions' second lines */
+  --rule: rgba(46, 46, 46, 0.14);         /* hairlines */
+}
+body, html { color: var(--ink); }
+body, .header { --shadow: none; }
+.header {
+  background-color: rgba(255, 255, 255, 0.78);
+  border-bottom-color: var(--rule);
+}
+.site-title, .view-switch [aria-current] { color: var(--ink); }
+.nav-icon { filter: none; }
+.nav-link, .contact-line a, .contact-line #footer-email, .site-footer a, .float-caption .t { color: var(--ink-soft); }
+.nav-link:hover, .nav-link:focus-visible, .contact-line a:hover, .contact-line a:focus-visible,
+.contact-line #footer-email:hover, .contact-line #footer-email:focus-visible,
+.site-footer a:hover, .site-footer a:focus-visible, .float-caption .t:hover, .float-caption .t:focus-visible,
+.site-title:hover, .site-title:focus-visible { color: #000; text-shadow: none; }
+a:hover svg, a:focus-visible svg { filter: none; }
+.site-footer { color: var(--ink-soft); border-top-color: var(--rule); }
+.wrapper > div { border-top-color: var(--rule); }
+.invite-button { border-color: var(--ink-soft); background: rgba(255, 255, 255, 0.6); }
+.invite-button:hover, .invite-button:focus { background: var(--ink); color: #fff; }
+.invite-pic, .focus-img { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16); }
+.wrapper img { box-shadow: 0 3px 14px rgba(0, 0, 0, 0.12); }
+.copied-tip { text-shadow: none; }
+/* over a picture: white words, as in the grey design */
+.has-bg { color: #fff; --shadow: 0 2px 18px rgba(0, 0, 0, 0.45); text-shadow: var(--shadow); }
+.has-bg .contact-line a, .has-bg .contact-line #footer-email, .has-bg a { color: rgba(255, 255, 255, 0.75); }
+.has-bg .contact-line a:hover, .has-bg .contact-line a:focus-visible, .has-bg .contact-line #footer-email:hover,
+.has-bg a:hover, .has-bg a:focus-visible { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, 0.75), var(--shadow); }
+.has-bg a:hover svg, .has-bg a:focus-visible svg { filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.8)); }
+.site-footer.has-bg { border-top-color: transparent; }
