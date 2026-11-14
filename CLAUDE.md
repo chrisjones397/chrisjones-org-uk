@@ -59,6 +59,8 @@ against what's already used (code, database, editor, branches). Add new names he
   In the editor its groupings are **genres** (kind 'section' in the data, for history's sake).
 - **Featured**: the starred paintings (a star in the editor; field `featured`), the home page's wall. Not a genre
   (the Featured genre was removed, 11 Nov 2026).
+- **Floating view** and **Fixed view**: the gallery's two views as visitors see them (the view switch's
+  tooltips, 14 Nov 2026); in the code the fixed view is `grid` (data-view, gallery-view, ?view=).
 - Taken, so not for anything new: **version** (a video's versions; History's versions), **dev** (the branch and
   site), **Treatment**.
 
@@ -146,8 +148,9 @@ Files (all at the top level unless said):
   hiding over half the further, edges lined up), as nearer ones slide past further ones. Can be run in node to
   check a layout: the check used on 11 Nov 2026 compared old and new at six window sizes with the live paintings.
 - **focus.js**: the grid view's painting brought forward: a <dialog> (showModal, so over the header too) at
-  /gallery/<name>/ (pushState; arrows, swipe, Escape, cross, click beside, Back); the image is the grid's srcset
-  with sizes set to the size shown. Not used in the floating view.
+  /gallery/<name>/ (pushState; arrows, swipe, Escape, cross, click beside, Back). The image's size on screen is
+  set from its proportions first (nothing jumps); the file at that size (the grid's srcset) is decoded off-screen
+  and swapped in when ready, the grid's copy standing in meanwhile; the paintings either side are fetched ahead. Not used in the floating view.
 - **motion.js**: title drift, profile text spring, parallax, directional snapping (glide on to the next resting
   place in the direction of travel, never back; free inside the gallery and profile; any input cancels).
 - **pause.js**: the header's pause button and shared state (window.pauser); shown only while something moves by

@@ -36,29 +36,57 @@
   const details = box.querySelector('.focus-caption .d');
   let current = null, pushed = false;
 
-  // The painting, from its square in the grid: the same files, asked for at the size it's shown here
+  // The painting, from its square in the grid. Its size on screen is set here, from its proportions and the room
+  // the styles leave, so nothing moves while its file arrives. The file is fetched at that size (the grid's set of
+  // sizes) and swapped in only once it's ready; until then the grid's own copy stands in, if it has one. The
+  // paintings either side are fetched too, so stepping with the arrows is usually instant.
+  const ready = new Map();                          // painting's id -> its picture, fetched (or on its way)
+  function size(item) {
+    const from = item.querySelector('img');
+    const w = +from.getAttribute('width') || 1, h = +from.getAttribute('height') || 1;
+    const stage = box.querySelector('.focus-stage'), cs = getComputedStyle(stage);
+    const roomW = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const roomH = parseFloat(getComputedStyle(img).maxHeight) || innerHeight - 120;
+    const k = Math.min(roomW / w, roomH / h);
+    return { w: Math.floor(w * k), h: Math.floor(h * k) };
+  }
+  function fetchFor(item, at) {
+    const from = item.querySelector('img');
+    let got = ready.get(item.id);
+    if (!got || got.width < at.w) {               // a larger size than fetched before (the window grew): fetch again
+      const pic = new Image();
+      pic.sizes = `${at.w}px`;
+      pic.srcset = from.getAttribute('srcset') || '';
+      pic.src = from.getAttribute('src');
+      got = { width: at.w, pic, done: pic.decode().then(() => pic.currentSrc || pic.src, () => null) };
+      ready.set(item.id, got);
+    }
+    return got.done;
+  }
   function show(item) {
     current = item;
     const from = item.querySelector('img');
     const ps = item.querySelectorAll(':scope > p');
     title.textContent = ps[0] ? ps[0].textContent : '';
     details.textContent = ps[1] ? ps[1].textContent : '';
-    const w = +from.getAttribute('width') || 1, h = +from.getAttribute('height') || 1;
-    img.width = w; img.height = h;
     img.alt = from.alt;
-    const fit = box.getBoundingClientRect();     // the dialog fills the window: fit in the room the styles leave
-    const roomW = Math.max(fit.width - 2 * parseFloat(getComputedStyle(box).getPropertyValue('--side') || 0), 200);
-    const roomH = Math.max(fit.height - 120, 200);
-    const shownW = Math.min(roomW, roomH * w / h);
-    img.removeAttribute('srcset');
-    img.src = from.currentSrc || from.src;          // already here: shown at once, sharpened when the larger arrives
-    img.sizes = `${Math.ceil(shownW)}px`;
-    img.srcset = from.getAttribute('srcset') || '';
-    const list = items(), at = list.indexOf(item);
-    box.querySelector('.focus-prev').hidden = at <= 0;
-    box.querySelector('.focus-next').hidden = at >= list.length - 1;
+    const at = size(item);
+    img.style.width = `${at.w}px`; img.style.height = `${at.h}px`;
+    let swapped = false;
+    fetchFor(item, at).then((url) => { if (url && current === item) { swapped = true; img.src = url; } });
+    // not already here: the grid's copy at once (blurred a moment, but the right size), or nothing until it arrives
+    queueMicrotask(() => {
+      if (swapped || current !== item) return;
+      if (from.complete && from.naturalWidth) img.src = from.currentSrc || from.src;
+      else img.removeAttribute('src');
+    });
+    const list = items(), i = list.indexOf(item);
+    box.querySelector('.focus-prev').hidden = i <= 0;
+    box.querySelector('.focus-next').hidden = i >= list.length - 1;
+    for (const n of [list[i + 1], list[i - 1]]) if (n) fetchFor(n, size(n));
     document.title = `${title.textContent} - ${SITE}`;
   }
+  addEventListener('resize', () => { if (box.open && current) show(current); });
   const address = (item) => `/gallery/${item.id.slice(2)}/`;
 
   function open(item, how) {          // how: 'push' (clicked), 'replace' (stepping), or nothing (from the address)

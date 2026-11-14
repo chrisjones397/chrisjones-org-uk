@@ -642,10 +642,8 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 }
 .focus-img {
   display: block;
-  max-width: 100%;
+  flex: none;                    /* its size is set by focus.js; max-height says how much room there is */
   max-height: calc(100dvh - 120px);
-  width: auto;
-  height: auto;
   object-fit: contain;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
