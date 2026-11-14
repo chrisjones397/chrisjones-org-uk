@@ -81,8 +81,12 @@
       else img.removeAttribute('src');
     });
     const list = items(), i = list.indexOf(item);
-    box.querySelector('.focus-prev').hidden = i <= 0;
-    box.querySelector('.focus-next').hidden = i >= list.length - 1;
+    const prev = box.querySelector('.focus-prev'), next = box.querySelector('.focus-next');
+    prev.hidden = i <= 0;
+    next.hidden = i >= list.length - 1;
+    // the button just pressed may have gone (the end of the row): the focus moves to the other, not out of the dialog
+    if (prev.hidden && document.activeElement === prev && !next.hidden) next.focus();
+    if (next.hidden && document.activeElement === next && !prev.hidden) prev.focus();
     for (const n of [list[i + 1], list[i - 1]]) if (n) fetchFor(n, size(n));
     document.title = `${title.textContent} - ${SITE}`;
   }
@@ -134,7 +138,10 @@
   box.querySelector('.focus-prev').addEventListener('click', () => step(-1));
   box.querySelector('.focus-next').addEventListener('click', () => step(1));
   box.addEventListener('click', (e) => { if (e.target === box || e.target.classList.contains('focus-stage')) shut(); });
-  box.addEventListener('keydown', (e) => {
+  // the keys are listened for on the whole page, not just the dialog: an arrow button hidden at the end of the row
+  // takes the keyboard focus with it, and the keys must keep working
+  addEventListener('keydown', (e) => {
+    if (!box.open) return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
   });

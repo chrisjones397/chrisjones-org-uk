@@ -161,7 +161,8 @@ export function galleryData(c, whole) {
 function inviteHtml(c) {
   const chosen = c.featured.slice(0, INVITE_COUNT);
   const ind = '          ';
-  return chosen.map((p) => `\n        <a class="invite-pic" href="gallery/${p.name}/" tabindex="-1">`
+  // --k: the square root of its proportions, so each slot gives every painting the same area, whatever its shape
+  return chosen.map((p) => `\n        <a class="invite-pic" href="gallery/${p.name}/" tabindex="-1" style="--k: ${Math.sqrt(p.w / p.h).toFixed(3)}">`
     + `\n${ind}${imgTag(p, '', '(max-width: 700px) 40vw, 24vw', ind)}\n        </a>`).join('') + '\n      ';
 }
 

@@ -106,7 +106,7 @@
     }
   }
   // The gallery invitation's paintings each drift at their own pace, as if hung at different depths.
-  const DEPTHS = [0.25, -0.18, 0.12, 0.35, -0.08];
+  const DEPTHS = [0.22, -0.12, 0.14, -0.06, 0.3];   // 1 above 3, 2 above 4: alike, so they never close up
   const wall = document.querySelector('.invite');
   const hung = wall ? [...wall.querySelectorAll('.invite-pic')] : [];
   function updateWall() {

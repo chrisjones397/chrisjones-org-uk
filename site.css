@@ -359,18 +359,25 @@ video.section-bg::-webkit-media-controls-start-playback-button {
   transition: opacity 0.5s, background 0.3s, color 0.3s;
 }
 .painting-forward .invite-button { opacity: 0; pointer-events: none; }
+/* Each slot is a centre point and a size (--side: the side of a square of the same area), so a tall painting
+   and a wide one take the same room, spreading equally either way from the centre; --k comes from site.js */
 .invite-pic {
+  --w: calc(var(--side) * var(--k, 1));
+  --h: calc(var(--side) / var(--k, 1));
   position: absolute;
   display: block;
+  width: var(--w);
+  left: calc(var(--x) - var(--w) / 2);
+  top: calc(var(--y) - var(--h) / 2);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   transition: opacity 0.3s;
 }
 .invite-pic img { display: block; width: 100%; height: auto; }
-.invite-pic:nth-child(1) { width: 17vw; left: 7vw;  top: 14%; }
-.invite-pic:nth-child(2) { width: 24vw; left: 68vw; top: 15%; }
-.invite-pic:nth-child(3) { width: 19vw; left: 12vw; top: 58%; }
-.invite-pic:nth-child(4) { width: 11vw; left: 80vw; top: 52%; }
-.invite-pic:nth-child(5) { width: 15vw; left: 41vw; top: 74%; }
+.invite-pic:nth-child(1) { --x: 17vw; --y: 34%; --side: min(17vw, 27vh); }
+.invite-pic:nth-child(2) { --x: 81vw; --y: 33%; --side: min(18vw, 28vh); }
+.invite-pic:nth-child(3) { --x: 22vw; --y: 76%; --side: min(15vw, 24vh); }
+.invite-pic:nth-child(4) { --x: 86vw; --y: 77%; --side: min(13vw, 21vh); }
+.invite-pic:nth-child(5) { --x: 52vw; --y: 87%; --side: min(10vw, 15vh); }
 .invite-words {
   position: relative;
   z-index: 2;
@@ -397,9 +404,9 @@ video.section-bg::-webkit-media-controls-start-playback-button {
 }
 .invite-button:hover, .invite-button:focus { background: rgba(255, 255, 255, 0.9); color: rgb(60, 60, 60); }
 @media (max-width: 700px) {        /* phones: three paintings, larger, above and below the words */
-  .invite-pic:nth-child(1) { width: 34vw; left: 6vw;  top: 8%; }
-  .invite-pic:nth-child(2) { width: 46vw; left: 48vw; top: 13%; }
-  .invite-pic:nth-child(3) { width: 40vw; left: 30vw; top: 67%; }
+  .invite-pic:nth-child(1) { --x: 26vw; --y: 24%; --side: min(34vw, 17vh); }
+  .invite-pic:nth-child(2) { --x: 71vw; --y: 27%; --side: min(34vw, 18vh); }
+  .invite-pic:nth-child(3) { --x: 52vw; --y: 79%; --side: min(40vw, 20vh); }
   .invite-pic:nth-child(n+4) { display: none; }
 }
 

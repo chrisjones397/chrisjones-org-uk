@@ -152,6 +152,10 @@ Files (all at the top level unless said):
   set from its proportions first (nothing jumps); the file at that size (the grid's srcset) is decoded off-screen
   and swapped in when ready, the grid's copy standing in meanwhile; the paintings either side are fetched ahead.
   The title and details stay put at the bottom (--cap keeps room for them); the painting is centred above. Not used in the floating view.
+- **The invitation wall** (home, when not floating): up to five Featured paintings in slots (site.css .invite-pic:
+  a centre --x, --y and a size --side, the side of a square of equal area; site.js gives each painting --k, the
+  square root of its proportions), so every shape gets the same area. Hand-placed, no seed (only the floating
+  wall has one). motion.js drifts them at depths chosen so paintings above one another move alike.
 - **motion.js**: title drift, profile text spring, parallax, directional snapping (glide on to the next resting
   place in the direction of travel, never back; free inside the gallery and profile; any input cancels).
 - **pause.js**: the header's pause button and shared state (window.pauser); a site-wide setting, so always in the
