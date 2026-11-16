@@ -192,7 +192,8 @@ Files (all at the top level unless said):
   removed in the draft, published NULL = never published; generated columns draft_rendition and
   published_rendition, indexed: which rendition each names), `releases` (each publish), `revisions` (what each
   entry became, and was, per release). Media, never drafted, with foreign keys: `library` (items: id = code,
-  kind photo/video, name, added; its old columns grp, hash, data are no longer read and go in slice 2 (e)),
+  kind photo/video, name, alt, credit, added; alt and credit exist since slice 2 (e) but nothing reads or edits
+  them yet: the Library's redesign, slice 3, gives them their fields),
   `file` (digest, bytes, type, w, h, seconds), `original`, `recipe`, `rendition`, `rendition_file` (role size,
   preview, first, last, version; width; shape). The layers meet at one point: a document names a rendition by
   id (checked on saving: editor.js linked()). JSON is written with fixed key order (editor.js normalise), so
@@ -210,7 +211,7 @@ Files (all at the top level unless said):
 - **R2**: bucket site-media (live), site-media-dev (dev), binding MEDIA. A file's key is the SHA-256 digest of
   its bytes, nothing else (paths.js); names and meaning live in the database. Uploads: the browser works out the
   digest, asks whether it is stored (GET /edit/api/file), and PUTs it if not; R2 checks the digest itself (put's
-  `sha256`). (Until slice 2 (e) the old copies under media/<code>/... are still in both buckets, unread.)
+  `sha256`). Nothing else is in a bucket.
 - **Artwork document** (kind `artwork`, id p-<name>): name (its address, kept when retitled), title, medium, cm
   [height, width] (centimetres, to a tenth), year, estimated (not measured), size_shown (only when it differs
   from the default: shown when measured), genre (a genre's id), order, wide, rendition (the id of its picture's
@@ -489,7 +490,21 @@ editor redraws the whole view after every change; fonts come from Google, not th
    rendition and every artwork's has sizes; no foreign key faults. Live's Time Travel bookmark from just before:
    000005a1-00000000-00005125-99d084fcaf7e5557f1636c1888701c29. Live's pages were not opened from here.
    Still untested anywhere: a real video upload, "Add a version…" and removing one.
-   Next: (e), in a new chat, once he has looked at live.
+   **(e) DONE 16 Nov 2026 on dev; live to follow when he puts dev live.** Migration 0006 drops old_key,
+   old_part, the Library's columns grp, hash and data (and the index on hash) and adds library.alt and credit
+   (text, '' = not said; no field in the editor yet). digests.js, fill.js, their routes, listAll and partOf are
+   gone. Checked first, on both sites, through the API: every old key's bytes are stored under their digest at
+   the same size, every file row has its object, no object is anything but an old key or a digest, none
+   orphaned. Tested locally (wrangler dev): 0006 on rows in the old shape (keys and cascades intact), a new
+   upload and Library item, the listing, the old routes not found. Dev: build of b32f4a6 applied 0006; then the
+   323 old keys (media/..., 306 megabytes) were deleted from site-media-dev through the API, leaving the 310
+   digest objects. Time Travel bookmark from just before, dev:
+   000001cd-00000000-00005125-cd9657296993ac58a82823678e37d3fc (the database only: deleted files can't come back).
+   **Live still to do**, in this order: put dev live (the build applies 0006); then delete live's 223 old keys
+   (media/..., 154 megabytes) from site-media through the API (DELETE
+   /accounts/{id}/r2/buckets/site-media/objects/{key}, after the same checks: every file row's object present at
+   its size). Until then live's old keys sit unread and harmless. After that, slice 2 is finished and (d) can
+   no longer be undone on live. Next: slice 3 (the Library the only upload, with its redesign), in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
