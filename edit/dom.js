@@ -38,6 +38,7 @@ export const GLYPHS = {
   sizes: 'M2.5 9.5h7v7h-7zM11.5 5.5h6v6h-6zM11.5 14h3v2.5h-3z',                        // a few sizes of one picture
   frames: 'M3 4.5h14v11H3zM7 4.5v11M13 4.5v11',                                     // a strip of frames
   add: 'M10 4v12M4 10h12',
+  store: 'M10 3v9M6.5 8.5 10 12l3.5-3.5M4 15.5h12',                                    // an arrow down into a tray: store (slice 2's one-off)
   compare: 'M2.5 4.5h6.5v11H2.5zM11 4.5h6.5v11H11',                                 // two side by side
   blink: 'M4 3.5h9v9H4zM7 7.5h9v9H7',                                                 // one over the other
   swap: 'M4 7h12l-3-3M16 13H4l3 3',                                                    // arrows both ways

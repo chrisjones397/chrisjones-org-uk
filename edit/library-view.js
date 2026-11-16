@@ -2,7 +2,7 @@
 
 import { h, toast, glyph, GLYPHS, MB } from './dom.js';
 import { state } from './state.js';
-import { call, act, loadLibrary } from './server.js';
+import { call, act, loadLibrary, fetchFor } from './server.js';
 import { render } from './render.js';
 import { photoItem, videoItem } from './uploads.js';
 import { strongest, useMarks } from './uses.js';
@@ -20,6 +20,7 @@ const libPicked = new Set();   // items ticked to compare (two or three)
 export function libraryView() {
   if (!state.library) { loadLibrary(); return [h('h1', {}, 'Library'), h('p', { class: 'muted' }, 'Loading…')]; }
   const out = [h('h1', {}, 'Library')];
+  out.push(digestBar());
   const pick = h('input', { type: 'file', accept: 'image/*,video/mp4,.mp4,.m4v', multiple: true, hidden: true,
     onchange: () => pick.files.length && addToLibrary([...pick.files]) });
   for (const [grp, title] of [['site', 'Site pictures'], ['painting', 'Paintings']]) {
@@ -40,6 +41,43 @@ export function libraryView() {
       h('button', { title: 'Untick them all', 'aria-label': 'Untick them all', onclick: () => { libPicked.clear(); render(); } }, glyph(GLYPHS.close, 16))));
   }
   return out.filter(Boolean);
+}
+
+/* Slice 2's one-off (digests.js on the server; removed in sub-step (e)): store a copy of every file under the
+   digest of its bytes. Shown only while files wait. The browser reads each file and works out its SHA-256; the
+   server makes the copy and storage checks the digest. Safe to stop (close the page) and press again. */
+let digestBusy = '';
+function digestBar() {
+  const n = state.library.waiting;
+  if (!n && !digestBusy) return null;
+  return h('p', { class: 'hint row' },
+    h('button', { disabled: !!digestBusy, 'aria-label': 'Store every file under its digest',
+      title: `One-off: store a copy of each of the ${n} files under its digest (its new key). Nothing is moved or deleted, and the site doesn't change. It can be stopped and pressed again.`,
+      onclick: storeByDigest }, glyph(GLYPHS.store)),
+    h('span', {}, digestBusy || `${n} file${n === 1 ? '' : 's'} to store by digest`));
+}
+async function storeByDigest() {
+  const say = (t) => { digestBusy = t; render(); };
+  const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+  const failed = [];
+  let n = 0;
+  try {
+    say('Listing the files…');
+    const { todo } = await call('GET', 'digest/todo');
+    n = todo.length;
+    for (const [i, f] of todo.entries()) {
+      say(`${i + 1} of ${n} (${MB(f.bytes)})${failed.length ? `, ${failed.length} failed` : ''}`);
+      try {
+        const r = await fetchFor(`/edit/api/digest/file?key=${encodeURIComponent(f.key)}`, {}, 600000);
+        if (!r.ok) throw new Error(`The server answered ${r.status}`);
+        const digest = hex(await crypto.subtle.digest('SHA-256', await r.arrayBuffer()));
+        await call('POST', 'digest/store', { key: f.key, digest });
+      } catch (e) { failed.push(`${f.key}: ${e.message}`); }
+    }
+  } catch (e) { failed.push(e.message); }
+  if (failed.length) { console.warn('Not stored by digest:\n' + failed.join('\n')); toast(`${failed.length} of ${n} not stored (press again; details in the console): ${failed[0]}`, true); }
+  else toast(`All ${n} stored by digest`);
+  digestBusy = ''; state.library = null; render();
 }
 
 /* Photos (each an item) or video files (chosen together: one video's versions, one item) into the Library. */

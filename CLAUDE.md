@@ -379,10 +379,21 @@ editor redraws the whole view after every change; fonts come from Google, not th
    saying which are done, so a cut-off loses at most one. (a) migration 0002, the five media tables, empty: DONE 16 Nov 2026, on dev, not yet live
    (migrations/0002_media_tables.sql; tested on a fresh local database: both migrations apply, and the keys,
    checks, foreign keys and the cascade from a deleted item all behave; no code touches the tables yet);
-   (b) the one-off editor button storing every file under its digest, old keys kept; (c) the tables filled;
+   (b) the one-off editor button storing every file under its digest, old keys kept: BUILT 16 Nov 2026, on dev;
+   he has to press it on admin-dev (and, once live, on admin) before (c). Library tab, top: an arrow-into-a-tray
+   symbol with "N files to store by digest", shown only while files wait. The browser reads each file and works
+   out its SHA-256 (edit/library-view.js storeByDigest); the server copies R2 to R2 under the bare digest with
+   put's `sha256` option, so R2 itself refuses a wrong digest (digests.js; routes digest/todo, digest/file,
+   digest/store in editor.js); migration 0003's table `old_key` (old key, digest, bytes, type) records each, so
+   it can be stopped and pressed again, and (c) fills the tables from it without reading files. Files uploaded
+   after pressing make the button reappear: press again just before (c). (c) must ignore old_key rows whose old
+   key has since been deleted from R2. All of this scaffolding (digests.js, the routes, the button, glyph
+   `store`, old_key) goes in (e). Tested locally (wrangler dev, curl): the list, a wrong digest refused by R2,
+   the right one copied byte for byte and recorded, a second run harmless, the count. Not tested: the button
+   itself in a browser, videos, real R2. (c) the tables filled;
    (d) entries and History rewritten and the code switched over: the one sub-step to do in a single go, after a
    Time Travel bookmark, and not to begin without room to finish; (e) after he has checked dev, then live, the
-   old keys and columns removed. Next: (b).
+   old keys and columns removed. Next: he presses (b)'s button on admin-dev; then (c).
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
