@@ -182,7 +182,9 @@ Files (all at the top level unless said):
 - **D1** (migrations/): `entries` (one row per painting, genre, text, setting, background, links; `draft` and
   `published` JSON side by side; a change = they differ; draft NULL = removed in the draft, published NULL =
   never published), `releases` (each publish), `revisions` (what each entry became, and was, per release),
-  `library` (items: id = code, kind photo/video, grp site/painting, name, hash, data, added). JSON is written with
+  `library` (items: id = code, kind photo/video, grp site/painting, name, hash, data, added); and, from migration
+  0002 (16 Nov 2026), the media layer's five tables, empty and not yet used by any code: `file`, `original`,
+  `recipe`, `rendition`, `rendition_file` (docs/entities.md section 2). JSON is written with
   fixed key order (editor.js normalise), so equal text means no change. Databases: live site-content
   (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb). Query
   through the Cloudflare API connector. dev's database is a sandbox for code: content never goes from dev to live.
@@ -374,11 +376,13 @@ editor redraws the whole view after every change; fonts come from Google, not th
    digest addresses. The glossary above is in line with it.
    **Slice 2 is next, in a new chat, in the sub-steps of the document's section 7.** He worries about a session
    being cut off part-way: commit and push after each sub-step, each a working state on dev, with a line here
-   saying which are done, so a cut-off loses at most one. (a) migration 0002, the five media tables, empty;
+   saying which are done, so a cut-off loses at most one. (a) migration 0002, the five media tables, empty: DONE 16 Nov 2026, on dev, not yet live
+   (migrations/0002_media_tables.sql; tested on a fresh local database: both migrations apply, and the keys,
+   checks, foreign keys and the cascade from a deleted item all behave; no code touches the tables yet);
    (b) the one-off editor button storing every file under its digest, old keys kept; (c) the tables filled;
    (d) entries and History rewritten and the code switched over: the one sub-step to do in a single go, after a
    Time Travel bookmark, and not to begin without room to finish; (e) after he has checked dev, then live, the
-   old keys and columns removed. Nothing has been built yet.
+   old keys and columns removed. Next: (b).
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

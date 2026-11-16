@@ -93,9 +93,11 @@ versions (the set).
 
 | Attribute | Notes |
 |---|---|
-| `item` + `digest` (key) | which item, which File |
+| `digest` (key) | which File |
+| `item_id` | which item |
 
-A given File is the Original of at most one item, so uploading the same photo again finds the existing item.
+A given File is the Original of at most one item (which is why the digest alone is the key), so uploading the
+same photo again finds the existing item.
 
 ### Recipe
 The darkroom settings applied to an item. It is what gets edited. Several per item: a pentaptych photographed
@@ -104,7 +106,7 @@ once is one item with five recipes.
 | Attribute | Notes |
 |---|---|
 | `id` (key) | number |
-| `item` | whose settings |
+| `item_id` | whose settings |
 | `kind` | flat (four corners, squared up), scene (straighten and crop), video (stills only) |
 | `label` | optional, to tell several apart ("left panel") |
 | `settings` | the current choices: white balance (spots, brightness, warmth, starting from the paper or not), corners, shape; or angle and crop |
@@ -123,7 +125,7 @@ changed, never overwritten.
 | Attribute | Notes |
 |---|---|
 | `id` (key) | number; this is what editorial documents name |
-| `recipe` + `n` | which recipe, and its number within it (unique together) |
+| `recipe_id` + `n` | which recipe, and its number within it (unique together) |
 | `settings` | a frozen copy of the recipe's settings at the time, so the result can be made again |
 | `region` | optional: a rectangle within the squared-up picture. Empty means the whole. Used by Details (step 7) |
 | `w`, `h` | pixels of its largest size |
@@ -134,7 +136,7 @@ The files a rendition consists of.
 
 | Attribute | Notes |
 |---|---|
-| `rendition` + `digest` (key) | which rendition, which File |
+| `rendition_id` + `digest` + `role` (key) | which rendition, which File, as what (one file can be both the first and the last frame of a still video) |
 | `role` | size (a picture at one width), preview (for link previews), first or last (a video's frames), version (a video version, passed through) |
 | `width` | pixels across |
 | `shape` | wide or tall (videos) |
@@ -225,7 +227,8 @@ editor allows. Every `..._by` column above holds that email.
 
 ## 7. Getting there from today (slice 2, outline only)
 
-1. Migration 0002 creates the five media tables, empty. Nothing uses them yet.
+1. Migration 0002 creates the five media tables, empty. Nothing uses them yet. **Done 16 Nov 2026**
+   (migrations/0002_media_tables.sql, which is now the exact definition of section 2's tables).
 2. A one-off editor button (as for the last move) walks every stored file: the browser fetches it, works out its
    digest and stores it under the digest. Done in the browser because the free plan gives a Worker 10
    milliseconds of processor time. Old keys stay until step 5.
