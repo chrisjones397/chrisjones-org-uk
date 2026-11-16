@@ -128,7 +128,7 @@ export function plan({ lib, keys, sizes, stored }) {
           }
           recipe.changed = r.made > recipe.changed ? r.made : recipe.changed;
         }
-        if (!c.now || !out.parts.some((p) => p.code === keeper && p.part === name)) out.parts.push({ code: keeper, part: name, rendition: seen.get(key) });
+        if (!out.parts.some((p) => p.code === keeper && p.part === name)) out.parts.push({ code: keeper, part: name, rendition: seen.get(key) });
       }
       if (seen.size) out.recipes.push(recipe);
       continue;
