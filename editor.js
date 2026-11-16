@@ -17,6 +17,7 @@ import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
 import { library, rename, remove, newItem, setData, nextPart, storedPhoto, uploadAllowed } from './library.js';
 import * as digests from './digests.js';
+import { fill, filled } from './fill.js';
 import { CODE, upright } from './paths.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -67,7 +68,7 @@ export async function api(request, env, url, who) {
       if (path === 'history') return json(await history(env));
       if (path === 'original') return await original(env, url.searchParams.get('key') || '');
       if (path === 'stored') return json({ key: await storedPhoto(env, url.searchParams.get('hash') || '') });
-      if (path === 'library') return json({ ...(await library(env)), waiting: await digests.waiting(env) });
+      if (path === 'library') return json({ ...(await library(env)), waiting: await digests.waiting(env), filled: await filled(env) });
       if (path === 'digest/todo') return json(await digests.todo(env));
       if (path === 'digest/file') return await digests.file(env, url.searchParams.get('key') || '');
       if (path === 'library/next') return json(await nextPart(env, url.searchParams.get('id') || '', url.searchParams.get('part') || ''));
@@ -87,6 +88,7 @@ export async function api(request, env, url, who) {
     if (path === 'library/name') return json(await rename(env, String(body.id || ''), body.name));
     if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.part ? String(body.part) : null, body.history === true));
     if (path === 'digest/store') return json(await digests.store(env, String(body.key || ''), String(body.digest || '')));
+    if (path === 'digest/fill') return json(await fill(env, who));
     if (path === 'library/new') return json(await newItem(env, who, body));
     if (path === 'library/data') return json(await setData(env, String(body.id || ''), body.data));
     throw new Bad('Not found', 404);

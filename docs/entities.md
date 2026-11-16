@@ -233,7 +233,8 @@ editor allows. Every `..._by` column above holds that email.
    digest and stores it under the digest. Done in the browser because the free plan gives a Worker 10
    milliseconds of processor time. Old keys stay until step 5.
 3. The tables are filled from the Library's records and the paintings' `process` records. A painting moved from
-   git with no `process` gets a recipe meaning "as supplied".
+   git with no `process` gets a recipe meaning "as supplied". **Built 16 Nov 2026** (fill.js, which states its
+   rules; items that are the very same photo become one item with a recipe for each painting cut from it).
 4. Entries and History are rewritten to the new documents (painting to artwork, section to genre), after a
    Time Travel bookmark, as was done on 11 Nov. Code switches over in the same release.
 5. Once he has checked dev, then live: the old keys and the old columns are removed.

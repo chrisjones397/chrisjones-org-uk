@@ -183,7 +183,7 @@ Files (all at the top level unless said):
   `published` JSON side by side; a change = they differ; draft NULL = removed in the draft, published NULL =
   never published), `releases` (each publish), `revisions` (what each entry became, and was, per release),
   `library` (items: id = code, kind photo/video, grp site/painting, name, hash, data, added); and, from migration
-  0002 (16 Nov 2026), the media layer's five tables, empty and not yet used by any code: `file`, `original`,
+  0002 (16 Nov 2026), the media layer's five tables, filled by fill.js (slice 2 (c)) but not yet read by any code: `file`, `original`,
   `recipe`, `rendition`, `rendition_file` (docs/entities.md section 2). JSON is written with
   fixed key order (editor.js normalise), so equal text means no change. Databases: live site-content
   (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb). Query
@@ -396,7 +396,25 @@ editor redraws the whole view after every change; fonts come from Google, not th
    old keys and columns removed. (b) pressed by him on admin-dev and checked through the API, 16 Nov 2026: all 323
    old keys recorded in old_key, 310 distinct digests (13 files share bytes with another), 310 digest objects in
    R2, every size matching, nothing left over. Live must have (a) and (b) and its button pressed on admin before
-   (d)'s code is ever put live. Next: (c), in a new chat.
+   (d)'s code is ever put live.
+   (c) BUILT 16 Nov 2026, on dev: fill.js (its rules are at its top; plan() is pure and runs in node) and route
+   digest/fill, run by the same Library button, which now shows "Media tables to fill" while `original` is empty
+   and fills after storing; he has to press it on admin-dev. It measures each picture from its first bytes (30
+   files a call), then rebuilds original, recipe, rendition, rendition_file and old_part in one transaction
+   (db.batch), so it can be pressed again; it refuses once any entry is kind artwork or genre. Migration 0004's
+   table `old_part` (code, part, rendition_id) says which rendition each old part became: (d) rewrites entries and
+   History by looking it up (a photo's part is r1...; a video's is fill.js videoPart(): "v:" + version files +
+   "|" + frame folders). Settings format: the process record without `original`, plus white_paper when true; {}
+   = no choices recorded (as supplied). Decisions made here, told to him: items that are the very same photo
+   become one item with a recipe per painting (on dev the six pentaptych items, original 695cdfe4..., become
+   bebc468b with eight recipes, labelled by painting title; the other five Library rows stay until (d), which
+   must delete them and repoint anything naming their codes); sets one painting named over time are one recipe.
+   For (d): History on dev names four items deleted long ago (fbe37810, 98a0c36f, ebd11c20, 31fdf63d: no rows
+   in old_part), so those versions can't be rewritten: drop them from History or leave them unrestorable, his
+   call. Run fill again just before (d) (new uploads, deletions), then never. Tested locally (node on made-up
+   data; wrangler dev with real small files through digest/store then digest/fill: every table read back, a
+   second run giving fresh ids, refusal while files wait). Not tested: the button in a browser, real R2.
+   Next: he presses it on admin-dev, the tables are checked through the API, then (d), in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

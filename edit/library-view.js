@@ -44,17 +44,19 @@ export function libraryView() {
 }
 
 /* Slice 2's one-off (digests.js on the server; removed in sub-step (e)): store a copy of every file under the
-   digest of its bytes. Shown only while files wait. The browser reads each file and works out its SHA-256; the
-   server makes the copy and storage checks the digest. Safe to stop (close the page) and press again. */
+   digest of its bytes, then fill the media tables from what is known (fill.js on the server). Shown only while
+   files wait or the tables are empty. The browser reads each file and works out its SHA-256; the server makes
+   the copy and storage checks the digest. Safe to stop (close the page) and press again. */
 let digestBusy = '';
 function digestBar() {
-  const n = state.library.waiting;
-  if (!n && !digestBusy) return null;
+  const n = state.library.waiting, fillOnly = !n && !state.library.filled;
+  if (!n && !fillOnly && !digestBusy) return null;
   return h('p', { class: 'hint row' },
     h('button', { disabled: !!digestBusy, 'aria-label': 'Store every file under its digest',
-      title: `One-off: store a copy of each of the ${n} files under its digest (its new key). Nothing is moved or deleted, and the site doesn't change. It can be stopped and pressed again.`,
+      title: fillOnly ? 'One-off: fill the media tables (files, originals, recipes, renditions) from the Library\'s records. Nothing is moved or deleted, and the site doesn\'t change. It can be pressed again.'
+        : `One-off: store a copy of each of the ${n} files under its digest (its new key), then fill the media tables. Nothing is moved or deleted, and the site doesn't change. It can be stopped and pressed again.`,
       onclick: storeByDigest }, glyph(GLYPHS.store)),
-    h('span', {}, digestBusy || `${n} file${n === 1 ? '' : 's'} to store by digest`));
+    h('span', {}, digestBusy || (fillOnly ? 'Media tables to fill' : `${n} file${n === 1 ? '' : 's'} to store by digest`)));
 }
 async function storeByDigest() {
   const say = (t) => { digestBusy = t; render(); };
@@ -76,7 +78,14 @@ async function storeByDigest() {
     }
   } catch (e) { failed.push(e.message); }
   if (failed.length) { console.warn('Not stored by digest:\n' + failed.join('\n')); toast(`${failed.length} of ${n} not stored (press again; details in the console): ${failed[0]}`, true); }
-  else toast(`All ${n} stored by digest`);
+  else {
+    try {
+      let r;
+      do { say(r ? `Measuring the pictures: ${r.left} to go` : 'Filling the media tables…'); r = await call('POST', 'digest/fill', {}); } while (!r.done);
+      console.info('Media tables filled', r);
+      toast(`${n ? `All ${n} stored by digest. ` : ''}Media tables filled: ${r.files} files, ${r.originals} originals, ${r.recipes} recipes, ${r.renditions} renditions${r.unplaced ? `; ${r.unplaced} files not placed (see the console)` : ''}`);
+    } catch (e) { toast(`The media tables weren't filled (press again): ${e.message}`, true); }
+  }
   digestBusy = ''; state.library = null; render();
 }
 
