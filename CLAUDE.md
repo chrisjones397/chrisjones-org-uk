@@ -421,8 +421,14 @@ editor redraws the whole view after every change; fonts come from Google, not th
    of sizes and settings; no foreign key faults. The pentaptych item bebc468b has seven recipes (eight sets:
    Part 2's recipe has two renditions). Ids start at 13 on dev; nothing depends on that.
    Live, same day: main at 4ed30c9 has (a) and (b); he pressed (b)'s button on admin (223 old keys, 223 digest
-   objects, nothing else in the bucket). Live still needs (c): put dev live, press the button on admin once
-   ("Media tables to fill"), check through the API. Next: (d), in a new chat.
+   objects, nothing else in the bucket). (c) on live too, 16 Nov 2026: he put dev live (main at 7a22149) and
+   pressed the button on admin; checked through the API: 223 files, all measured; 32 originals; 31 recipes (26
+   flat, 4 scene, 1 video); 31 renditions; 194 rendition files; every digest placed; all 54 current versions
+   and all 133 History versions find their rendition; no foreign key faults; no items merged (item 15688094 has
+   two recipes: an unused site set, scene, and Big Ben Pentaptych Part 3 by Teo, flat).
+   His decision for (d), 16 Nov 2026: drop from dev's History the versions naming the four deleted test items
+   (dev's content is only there to test with; he isn't precious about it). Live's History needs none dropped.
+   Next: (d), in a new chat: fill again first on each site, a Time Travel bookmark, then the rewrite.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
@@ -439,5 +445,15 @@ editor redraws the whole view after every change; fonts come from Google, not th
    turning, triangles building the skin, face to photograph); the swoop is too fast. Live today it's about 1.8
    megabytes; a scrubbed video would be about 20 megabytes a version.
 9. **Users and roles**.
+
+Wanted later, not yet (his notes, 16 Nov 2026):
+- **Refresh dev from live**: a flush that replaces dev's content (database and files) with a copy of live's, so
+  a dev session starts from the same point as live. Content still never goes from dev to live.
+- **Library rows, for the redesign (slice 3 makes the Library the centre)**: thumbnails are too small to see
+  the pictures; the tiles in the Gallery's "From the Library" picker are the size he likes, and he wants the
+  same sizes used throughout from now on (design consistency). The tick boxes are confusing: it isn't clear
+  what the row's left-hand one stands for (it seems it should go with the original). Use the page's width:
+  thumbnail on the left, the list of renditions beside it rather than slightly under it. His thoughts, not a
+  brief: don't treat them as the whole redesign.
 
 Dropped: "change address" forwarding.
