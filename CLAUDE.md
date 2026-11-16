@@ -39,24 +39,27 @@ records of everything built before then, is in the history at commit 4375002 (`g
 One name per idea and one idea per name; the thing edited is named apart from what it produces; check a new word
 against what's already used (code, database, editor, branches). Add new names here before using them.
 
-- **Library item**: one thing uploaded, the file untouched (a photo, or a video's set of versions), plus what's
-  true of the picture itself (alt text, credit). Folder media/<code>/ in R2, code 8 hex digits, never changed.
+- **Library item**: one thing uploaded (a photo, or a video's set of versions), plus what's true of the picture
+  itself (alt text, credit). Its code, 8 hex digits, never changes. Its untouched uploaded files are its
+  **Originals** (a photo has one, a video one per version). (Until slice 2 lands: folder media/<code>/ in R2.)
+- **File** (agreed 16 Nov 2026; built in slice 2): one distinct piece of stored content, known only by the SHA-256
+  digest of its bytes, which is its R2 key and its address /media/<digest>.<ext>. No name, no folder.
 - **Recipe**: the darkroom settings applied to an item (white balance; four-corner squaring up for flat things,
   or straighten and crop for scenes). Several per item. It's what gets edited. (Not built yet: today a painting
   carries its `process` record; the restructure, step 4, moves it.)
 - **Rendition** (r1, r2...): one frozen set of sizes a recipe produced. Never overwritten, so History and caches
-  stay right.
+  stay right. It's what a use names (by id), so a darkroom change reaches visitors only when published.
 - **Media**: images and videos in general (/media/ addresses, R2 binding MEDIA, an entry's `media` field).
-- **Framing**: how media (through a recipe) is cropped and focused for a place on a page: focus point, crops for
+- **Framing**: how media (through a rendition) is cropped and focused for a place on a page: focus point, crops for
   wide and upright screens; for a video, how it plays and what reduced-motion visitors get. Any place, not only
   backgrounds. (Was "treatment".)
-- **Uses**: **Artwork** (a painting in the gallery: title, medium, size, year, genre, detail crops; points at a
-  recipe); **Background** (a section's: points at framings; keeps the shade); **Foreground** (media among the text
+- **Uses**: **Artwork** (a painting in the gallery: title, medium, size, year, genre, detail crops; names a
+  rendition, and through it belongs to a recipe); **Background** (a section's: points at framings; keeps the shade); **Foreground** (media among the text
   of a page, with caption, side, width). Later: portrait, team member.
 - **Hero**: the home page's first section (the forest). The code, database (bg-hero, t-hero) and editor all say
   Hero; never "the opening".
 - **Gallery**: the collection (paintings and drawings), its home page section (#gallery), and its page (/gallery/).
-  In the editor its groupings are **genres** (kind 'section' in the data, for history's sake).
+  In the editor its groupings are **genres** (kind 'section' in the data until slice 2 renames it `genre`, and `painting` to `artwork`).
 - **Featured**: the starred paintings (a star in the editor; field `featured`), the home page's wall. Not a genre
   (the Featured genre was removed, 11 Nov 2026).
 - **Floating view** and **Fixed view**: the gallery's two views as visitors see them (the view switch's
@@ -358,18 +361,24 @@ editor redraws the whole view after every change; fonts come from Google, not th
    entity in the glossary, its attributes, keys and links; storage keyed by content digest, names living in the
    database, never in storage), checked against the design checks above. He agrees it before any table is
    built; the slices then build to it.
-   **Written 16 Nov 2026, proposed, NOT yet agreed: docs/entities.md** (kept off the site by .assetsignore).
+   **Agreed by him 16 Nov 2026: docs/entities.md** (kept off the site by .assetsignore; read it before slice 2).
    Two layers: a media layer of tables with foreign keys (File, keyed by SHA-256 digest, which is also its R2 key
    and its address /media/<digest>.<ext>; Library item; Original; Recipe; Rendition; Rendition file), never
    drafted; and the editorial layer, which stays as draft/published documents in `entries` (Artwork, Genre,
    Detail, Framing, Background as a list of Framings, Foreground, Section, Text, links, settings). They meet at
-   one point: a document names a Rendition by id. It has the bus matrix (which step builds what), the design
+   one point: a document names a Rendition by id. It has the bus matrix (which step builds what) and the design
    checks (departures: uploads pass through the Worker rather than signed addresses straight to R2; sizes are
-   stored rather than resized on request by Cloudflare Images) and an outline of slice 2's move. Six decisions
-   wait for him (its section 8): the two layers; uses naming a Rendition rather than a Recipe; the new names
-   File and Original, and kinds painting to artwork, section to genre; Library groups as a filter on use; sizes
-   staying stored; digest addresses. Once he agrees: mark the document agreed, bring the glossary above into line
-   with it (File, Original, Artwork's link, the R2 layout), then slice 2 builds to it in a new chat.
+   stored rather than resized on request by Cloudflare Images). All six decisions agreed: the two layers; uses
+   naming a Rendition rather than a Recipe (both words keep their meanings); the new names File and Original,
+   kinds painting to artwork and section to genre; Library groups as a filter on use; sizes staying stored;
+   digest addresses. The glossary above is in line with it.
+   **Slice 2 is next, in a new chat, in the sub-steps of the document's section 7.** He worries about a session
+   being cut off part-way: commit and push after each sub-step, each a working state on dev, with a line here
+   saying which are done, so a cut-off loses at most one. (a) migration 0002, the five media tables, empty;
+   (b) the one-off editor button storing every file under its digest, old keys kept; (c) the tables filled;
+   (d) entries and History rewritten and the code switched over: the one sub-step to do in a single go, after a
+   Time Travel bookmark, and not to begin without room to finish; (e) after he has checked dev, then live, the
+   old keys and columns removed. Nothing has been built yet.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

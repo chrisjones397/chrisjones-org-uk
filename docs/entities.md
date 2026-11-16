@@ -1,6 +1,6 @@
 # The entity model
 
-**Status: proposed, 16 Nov 2026. Not agreed yet: no table is built until Christopher agrees it.**
+**Status: agreed by Christopher, 16 Nov 2026 (all six decisions in section 8). Slice 2 builds to it.**
 Written before uploads slice 2 (the plan, step 4, in CLAUDE.md). It covers the whole site, not only that slice,
 so each later slice builds a piece of one design instead of carrying an old shape forward.
 
@@ -42,8 +42,11 @@ published version, goes through Review and Publish, and has History. These stay 
 
 The two layers meet at exactly one point: **an editorial document names a Rendition by its id.** Reprocessing a
 painting makes a new Rendition at once (media layer), but visitors see it only when the Artwork's draft, which
-now names the new Rendition, is published (editorial layer). That is how it behaves today; the model only makes
-the join explicit. (The glossary says an Artwork "points at a recipe". It still belongs to one, but through the
+now names the new Rendition, is published (editorial layer). That is how it behaves today (a painting's entry
+already says `rendition: r2`); the model only makes the join explicit.
+
+Both glossary words keep their meanings: the **Recipe** is the darkroom settings, the thing edited; a
+**Rendition** is one frozen set of resized pictures that a recipe produced. Neither replaces the other. (The glossary says an Artwork "points at a recipe". It still belongs to one, but through the
 Rendition it names: naming the Recipe itself would let a darkroom change reach visitors without being published.)
 
 In Kimball's terms, the media layer is the conformed dimensions, shared by everything, and each use (Artwork,
@@ -114,7 +117,8 @@ recipe. The size itself stays on the Artwork: the Artwork drives the Recipe, nev
 `white_paper` moves here from the painting (it is about how the photo is treated, not about the artwork).
 
 ### Rendition
-One frozen result of running a recipe: r1, r2 and so on. Never changed, never overwritten.
+One frozen set of resized pictures that a recipe produced (the darkroom's output): r1, r2 and so on. Never
+changed, never overwritten.
 
 | Attribute | Notes |
 |---|---|
@@ -234,14 +238,14 @@ editor allows. Every `..._by` column above holds that email.
 Every step before the last can be undone. Sizes today: dev 25 paintings, 46 Library items; live 25 paintings,
 30 Library items.
 
-## 8. For Christopher to decide
+## 8. Decisions (all agreed by Christopher, 16 Nov 2026)
 
-1. **The two layers.** Media as tables that act at once; editorial as drafted documents. (Recommended.)
-2. **Uses name a Rendition**, not a Recipe, so nothing reaches visitors unpublished. (Recommended; a small
-   change to the glossary's wording.)
+1. **The two layers.** Media as tables that act at once; editorial as drafted documents.
+2. **Uses name a Rendition**, not a Recipe, so nothing reaches visitors unpublished. Recipe and Rendition both
+   keep their glossary meanings (his note on agreeing: the two words must not clash).
 3. **Names.** Two new words, **File** and **Original**; the data's kinds renamed to match what the editor says,
    `painting` to `artwork` and `section` to `genre`, which frees "section" to mean only a page section.
-4. **Library groups.** Drop "Site pictures" and "Paintings" as a property of the item; show them as a filter on
-   use instead (an item used both ways appears under both).
-5. **Sizes stay stored** rather than resized by Cloudflare on request, for now. (Recommended; see section 6.)
-6. **Addresses** of the form `/media/<digest>.<ext>`: long and meaningless to read, permanent and exact.
+4. **Library groups.** "Site pictures" and "Paintings" stop being a property of the item and become a filter on
+   use (an item used both ways appears under both).
+5. **Sizes stay stored** rather than resized by Cloudflare on request, for now (see section 6).
+6. **Addresses** of the form `/media/<digest>.<ext>`.
