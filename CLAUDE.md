@@ -393,7 +393,10 @@ editor redraws the whole view after every change; fonts come from Google, not th
    itself in a browser, videos, real R2. (c) the tables filled;
    (d) entries and History rewritten and the code switched over: the one sub-step to do in a single go, after a
    Time Travel bookmark, and not to begin without room to finish; (e) after he has checked dev, then live, the
-   old keys and columns removed. Next: he presses (b)'s button on admin-dev; then (c).
+   old keys and columns removed. (b) pressed by him on admin-dev and checked through the API, 16 Nov 2026: all 323
+   old keys recorded in old_key, 310 distinct digests (13 files share bytes with another), 310 digest objects in
+   R2, every size matching, nothing left over. Live must have (a) and (b) and its button pressed on admin before
+   (d)'s code is ever put live. Next: (c), in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
