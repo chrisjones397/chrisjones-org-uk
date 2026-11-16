@@ -358,6 +358,18 @@ editor redraws the whole view after every change; fonts come from Google, not th
    entity in the glossary, its attributes, keys and links; storage keyed by content digest, names living in the
    database, never in storage), checked against the design checks above. He agrees it before any table is
    built; the slices then build to it.
+   **Written 16 Nov 2026, proposed, NOT yet agreed: docs/entities.md** (kept off the site by .assetsignore).
+   Two layers: a media layer of tables with foreign keys (File, keyed by SHA-256 digest, which is also its R2 key
+   and its address /media/<digest>.<ext>; Library item; Original; Recipe; Rendition; Rendition file), never
+   drafted; and the editorial layer, which stays as draft/published documents in `entries` (Artwork, Genre,
+   Detail, Framing, Background as a list of Framings, Foreground, Section, Text, links, settings). They meet at
+   one point: a document names a Rendition by id. It has the bus matrix (which step builds what), the design
+   checks (departures: uploads pass through the Worker rather than signed addresses straight to R2; sizes are
+   stored rather than resized on request by Cloudflare Images) and an outline of slice 2's move. Six decisions
+   wait for him (its section 8): the two layers; uses naming a Rendition rather than a Recipe; the new names
+   File and Original, and kinds painting to artwork, section to genre; Library groups as a filter on use; sizes
+   staying stored; digest addresses. Once he agrees: mark the document agreed, bring the glossary above into line
+   with it (File, Original, Artwork's link, the R2 layout), then slice 2 builds to it in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

@@ -9,6 +9,7 @@ worker.js
 /library.js
 /dimensions.js
 migrations/
+/docs/
 templates/
 .dev.vars
 .git/
