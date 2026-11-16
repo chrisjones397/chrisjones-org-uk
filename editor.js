@@ -18,8 +18,6 @@ import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
 import { library, rename, remove, newItem, addOriginal, newRendition, haveFile, putFile, original } from './library.js';
 import { renditions, NAMED } from './media.js';
-import * as digests from './digests.js';
-import { fill } from './fill.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -70,9 +68,6 @@ export async function api(request, env, url, who) {
       if (path === 'original') return await original(env, url.searchParams.get('item') || '');
       if (path === 'file') return json(await haveFile(env, url.searchParams.get('digest') || ''));
       if (path === 'library') return json(await library(env));
-      // slice 2's one-off (digests.js, fill.js): no longer offered by the editor; these routes go in sub-step (e)
-      if (path === 'digest/todo') return json(await digests.todo(env));
-      if (path === 'digest/file') return await digests.file(env, url.searchParams.get('key') || '');
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
@@ -88,8 +83,6 @@ export async function api(request, env, url, who) {
     if (path === 'hide') return json(await setHidden(env, who, String(body.id || ''), body.hidden === true));
     if (path === 'library/name') return json(await rename(env, String(body.id || ''), body.name));
     if (path === 'library/delete') return json(await remove(env, url, body));
-    if (path === 'digest/store') return json(await digests.store(env, String(body.key || ''), String(body.digest || '')));
-    if (path === 'digest/fill') return json(await fill(env, who));
     if (path === 'library/new') return json(await newItem(env, who, body));
     if (path === 'library/original') return json(await addOriginal(env, String(body.id || ''), String(body.digest || '')));
     if (path === 'library/rendition') return json(await newRendition(env, who, body));

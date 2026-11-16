@@ -27,26 +27,6 @@ export { Bad };
 const SECTIONS = { hero: 'Hero', contact: 'Contact', footer: 'Footer' };
 const MAX_BYTES = 95 * 1024 * 1024;
 
-/* Scaffolding for slice 2's one-off (digests.js, fill.js), going with them in sub-step (e): every key under a
-   prefix, and which part of an old item folder a file was. */
-export async function listAll(env, prefix) {
-  const out = [];
-  let cursor;
-  do {
-    const page = await env.MEDIA.list({ prefix, limit: 1000, cursor });
-    for (const o of page.objects) out.push({ key: o.key, size: o.size, uploaded: o.uploaded });
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
-  return out;
-}
-export function partOf(rest) {
-  if (/^original\.[a-z0-9]{1,5}$/.test(rest)) return 'original';
-  const dir = /^((?:r|wide-|tall-)\d{1,3})\//.exec(rest);
-  if (dir) return dir[1];
-  const vid = /^(\d{2,5}x\d{2,5}(?:-\d{1,2})?)\.mp4$/.exec(rest);
-  return vid ? vid[1] : 'other';
-}
-
 // ---- what uses what ----------------------------------------------------------------------------------------
 
 /* What one stored version of a document uses: the rendition it names, and how to describe it. */
@@ -217,9 +197,8 @@ export async function newItem(env, who, b) {
   for (let tries = 0; tries < 5; tries++) {
     const id = [...crypto.getRandomValues(new Uint8Array(4))].map((x) => x.toString(16).padStart(2, '0')).join('');
     if (await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(id).first()) continue;
-    // grp is an old column, no longer read (the Library's lists are a filter on use); it goes in sub-step (e)
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO library (id, kind, grp, name, added, added_by) VALUES (?, ?, \'\', ?, ?, ?)').bind(id, b.kind, name, now(), who),
+      env.DB.prepare('INSERT INTO library (id, kind, name, added, added_by) VALUES (?, ?, ?, ?, ?)').bind(id, b.kind, name, now(), who),
       ...digests.map((d) => env.DB.prepare('INSERT INTO original (digest, item_id) VALUES (?, ?)').bind(d, id)),
     ]);
     return { id, shared: false, scene: null };

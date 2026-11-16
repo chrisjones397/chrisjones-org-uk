@@ -8,8 +8,6 @@ worker.js
 /editor.js
 /library.js
 /media.js
-/digests.js
-/fill.js
 /dimensions.js
 migrations/
 /docs/
