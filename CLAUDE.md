@@ -445,7 +445,7 @@ editor redraws the whole view after every change; fonts come from Google, not th
    two recipes: an unused site set, scene, and Big Ben Pentaptych Part 3 by Teo, flat).
    His decision for (d), 16 Nov 2026: drop from dev's History the versions naming the four deleted test items
    (dev's content is only there to test with; he isn't precious about it). Live's History needs none dropped.
-   **(d) BUILT 16 Nov 2026, on dev; not yet live.** Migration 0005 rewrites the entries and History in SQL
+   **(d) DONE 16 Nov 2026, on dev and live.** Migration 0005 rewrites the entries and History in SQL
    (painting to artwork, section to genre; artworks and backgrounds name a rendition id, looked up in old_part;
    keys in normalise()'s order, values carried over as the very text stored, so nothing shows as changed), adds
    the generated columns entries.draft_rendition and published_rendition with indexes, and deletes the Library
@@ -482,7 +482,14 @@ editor redraws the whole view after every change; fonts come from Google, not th
    at the guard (harmlessly). Scaffolding left for (e): digests.js, fill.js and their routes (no longer offered
    by the editor), tables old_key and old_part, library's columns grp, hash and data, the old R2 keys
    (media/...), and digest copies whose file row the fill removed. (e) also adds library.alt and credit.
-   Next: he checks dev, then puts it live and checks live; then (e), in a new chat.
+   He checked dev (nothing looked different, as intended; the new addresses seen) and asked for it to go live:
+   main fast-forwarded to 3be2fa4 by Claude, 16 Nov 2026, 22:15 UTC; live's build succeeded and its database
+   was checked through the API: migration 0005 applied; 25 artworks, 5 genres, 2 backgrounds, nothing waiting in
+   Review; all 100 History versions and 23 publications kept; 30 Library items; every document finds its
+   rendition and every artwork's has sizes; no foreign key faults. Live's Time Travel bookmark from just before:
+   000005a1-00000000-00005125-99d084fcaf7e5557f1636c1888701c29. Live's pages were not opened from here.
+   Still untested anywhere: a real video upload, "Add a version…" and removing one.
+   Next: (e), in a new chat, once he has looked at live.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
