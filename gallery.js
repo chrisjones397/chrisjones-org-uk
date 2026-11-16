@@ -35,7 +35,6 @@ const MID = 13, RANGE = 8;  // they hang from 9 to 17 away (RANGE times the dept
 const BG = getComputedStyle(document.body).backgroundColor;   // the page's colour (--page in site.css)
 
 const stage = document.getElementById('float-stage');
-const BASE = (stage && stage.dataset.base) ?? '';           // the way from this page to the site's top folder
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function webgl() {
@@ -162,10 +161,9 @@ function start() {
   const loader = new THREE.TextureLoader();
   function picture(m, wanted, then) {
     const p = m.userData.p;
-    const w = p.widths.find((x) => x >= wanted) || p.widths[p.widths.length - 1];
+    const [w, src] = p.sizes.find((x) => x[0] >= wanted) || p.sizes[p.sizes.length - 1];   // sizes: [width, address], smallest first
     if (w <= (m.userData.loaded || 0)) return;
     m.userData.loaded = w;
-    const src = `${BASE}${p.at[0]}${w}${p.at[1]}`;   // the address before and after the width: paths.js
     loader.load(src, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();

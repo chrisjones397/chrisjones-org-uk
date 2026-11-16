@@ -1,9 +1,9 @@
-/* A painting in the Gallery view: its row, its Edit form (each field saves itself), its star, and its picture,
-   which is reopened in the darkroom and stores itself. */
+/* A painting (an artwork) in the Gallery view: its row, its Edit form (each field saves itself), its star, and
+   its picture, which is reopened in the darkroom and stores itself as a new rendition of its recipe. */
 
-import { paintingAt } from '/paths.js';
+import { detailsLine } from '/paths.js';
 import { h, toast, glyph, GLYPHS } from './dom.js';
-import { state, byId, draftOf, changed, current, isHidden, paintingsIn, thumb } from './state.js';
+import { state, byId, draftOf, changed, current, isHidden, paintingsIn, thumb, picOf, pictureAt } from './state.js';
 import { fetchFor, call, save, discard, beforeDiscard } from './server.js';
 import { render } from './render.js';
 import { badge, hideButton } from './widgets.js';
@@ -29,7 +29,7 @@ export function paintingRow(e, items, i, secs) {
   const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') + (isHidden(e) ? ' hidden' : '') },
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
     h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
-      h('span', { class: 'd' }, d.details || ' ', sizeNote(d))),
+      h('span', { class: 'd' }, detailsLine(d) || ' ', sizeNote(d))),
     badge(e),
     gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
       : h('span', { class: 'move' },
@@ -46,7 +46,7 @@ export function paintingRow(e, items, i, secs) {
   const form = h('div', { class: 'edit' },
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
     ...detailsFields(f, d, () => { const re = reopened.get(e.id); if (re) re.dr.sizeChanged(); }),
-    h('label', {}, 'Genre'), f.section = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.section }, s.title))),
+    h('label', {}, 'Genre'), f.genre = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.genre }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
     ...pictureFields(e, d, f),
     h('p', { class: 'hint' }, `Address: /gallery/${d.name}/ (stays the same if the title changes)`),
@@ -54,9 +54,9 @@ export function paintingRow(e, items, i, secs) {
       // never published: undoing would take it away altogether, which is what Remove (with its question) is for
       changed(e) && e.published != null ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
       h('button', { class: 'danger', title: 'Take it out of the gallery: its photo stays in the Library',
-        onclick: () => { if (confirm(`Remove "${d.title}" from the gallery? Its photo stays in the Library, and it stays on the site until you publish.`)) { closeEdit(e.id); save([{ id: e.id, kind: 'painting', data: null }], 'Removed in the draft'); } } }, 'Remove')));
+        onclick: () => { if (confirm(`Remove "${d.title}" from the gallery? Its photo stays in the Library, and it stays on the site until you publish.`)) { closeEdit(e.id); save([{ id: e.id, kind: 'artwork', data: null }], 'Removed in the draft'); } } }, 'Remove')));
   for (const [name, el] of [['title', f.title], ['medium', f.medium], ['height', f.height], ['width', f.width], ['year', f.year],
-    ['section', f.section], ['wide', f.wide], ['measured', f.measured], ['estimated', f.estimated], ['shown', f.shown]]) {
+    ['genre', f.genre], ['wide', f.wide], ['measured', f.measured], ['estimated', f.estimated], ['shown', f.shown]]) {
     el.dataset.k = k(name);
     el.addEventListener('change', () => savePainting(e.id, f, k(name)));
   }
@@ -77,7 +77,7 @@ function starButton(e) {
       const x = byId(e.id);
       if (!x || x.draft == null) return null;
       const { featured, ...rest } = draftOf(x);
-      return [{ id: e.id, kind: 'painting', data: featured ? rest : { ...rest, featured: true } }];
+      return [{ id: e.id, kind: 'artwork', data: featured ? rest : { ...rest, featured: true } }];
     }, null, key) }, glyph(GLYPHS.star));
 }
 
@@ -90,10 +90,10 @@ function savePainting(id, f, key) {
     const d = draftOf(e), det = detailsOf(f), title = f.title.value.trim();
     if (det.error) throw new Error(det.error);
     if (!title) throw new Error('Give it a title');
-    const moved = f.section.value !== d.section;
+    const moved = f.genre.value !== d.genre;
     const { estimated, size_shown, ...rest } = d;    // put back from the form (detailsOf)
-    return [{ id, kind: 'painting', data: { ...rest, title, ...det, wide: f.wide.checked, section: f.section.value,
-      order: moved ? paintingsIn(f.section.value).length : d.order } }];
+    return [{ id, kind: 'artwork', data: { ...rest, title, ...det, wide: f.wide.checked, genre: f.genre.value,
+      order: moved ? paintingsIn(f.genre.value).length : d.order } }];
   }, null, key);
 }
 
@@ -105,10 +105,11 @@ function closeEdit(id) {
 }
 
 /* A painting's picture saves itself too: once the darkroom's choices have rested for a moment (PICTURE_REST), its
-   sizes are made and stored as the photo's next set (r2, r3...) and the draft points at them. A set made for an
-   earlier change in this same sitting, which nothing else can be using, is deleted once replaced, so trying things
-   out doesn't fill the Library. Going back to the choices it opened with (Back to saved) puts back its own
-   pictures, making nothing. A replaced photo is kept as a Library item once, however many changes follow. */
+   sizes are made and stored as its recipe's next rendition (the recipe taking the new settings) and the draft
+   names it. A rendition made for an earlier change in this same sitting, which nothing else can be using, is
+   deleted once replaced, so trying things out doesn't fill the Library. Going back to the choices it opened with
+   (Back to saved) names its own rendition again, making nothing. A replaced photo is kept as a Library item
+   once, with a recipe of its own, however many changes follow. */
 const PICTURE_REST = 1200;
 function pictureChanged(id, re) {
   clearTimeout(re.timer);
@@ -118,39 +119,42 @@ async function storePicture(id, re) {
   if (re.running) { re.again = true; return; }
   const dr = re.dr;
   if (!dr.ready) return;
-  const want = dr.changed() ? JSON.stringify(dr.record('')) + (dr.replacement ? `|${dr.replacement.name}|${dr.replacement.size}` : '') : 'opened';
+  const want = dr.changed() ? JSON.stringify(dr.record()) + (dr.replacement ? `|${dr.replacement.name}|${dr.replacement.size}` : '') : 'opened';
   if (want === re.saved) return;
   re.running = true;
   const say = (t) => dr.say(t);
   try {
     let pic = re.opened;
     if (want !== 'opened') {
-      let orig = dr.original;
+      const e = byId(id), title = e ? current(e).title : 'Painting';
+      const settings = { ...dr.record(), ...(re.paper ? { white_paper: true } : {}) };
+      let at = re;                                       // where the new rendition goes: { item, recipe }
       if (dr.replacement) {
         if (!re.kept || re.kept.file !== dr.replacement) {
-          const e = byId(id);
-          re.kept = { file: dr.replacement, key: (await keepOriginal(dr.replacement, e ? current(e).title : 'Painting', null, say)).key };
+          const { id: item } = await keepOriginal(dr.replacement, title, null, say);
+          re.kept = { file: dr.replacement, item, recipe: item === re.item ? re.recipe : null };
         }
-        orig = re.kept.key;
+        at = re.kept;
       }
-      pic = { ...(await storeImages(orig.slice(6), dr.result(), say)), process: dr.record(orig) };
-      re.made.add(`${pic.media}/${pic.rendition}`);
+      const made = await storeImages(at.item, at.recipe, dr.result(), settings, at.item === re.item ? '' : title, say);
+      at.recipe = made.recipe;
+      pic = { rendition: made.id };
+      re.made.add(made.id);
     }
     let before = null;
     const out = await save(() => {
       const e = byId(id);
       if (!e || e.draft == null) return null;
       before = draftOf(e);
-      const { process, ...rest } = before;             // an older painting opened with no process record
-      return [{ id, kind: 'painting', data: { ...rest, ...pic } }];
+      return [{ id, kind: 'artwork', data: { ...before, ...pic } }];
     }, null, `${id}:picture`);
     if (!out) return;
     re.saved = want;
     say('');
-    const old = before && `${before.media}/${before.rendition}`;
-    if (old && re.made.has(old) && old !== `${pic.media}/${pic.rendition}`) {
+    const old = before && before.rendition;
+    if (old && re.made.has(old) && old !== pic.rendition) {
       re.made.delete(old);
-      call('POST', 'library/delete', { id: before.media, part: before.rendition }).catch(() => { /* still used: it stays */ });
+      call('POST', 'library/delete', { rendition: old }).catch(() => { /* still used: it stays */ });
     }
   } catch (err) {
     say(''); toast(err.message, true);
@@ -160,32 +164,28 @@ async function storePicture(id, re) {
   }
 }
 
-/* Reopening a painting's picture: its darkroom starts with the saved choices summarised, and opening a section
-   reads the original back from R2 and starts from those choices (or, for paintings moved from git, which have
-   none: the whole photo, with "Find the paper"'s spots if it's a drawing on white paper, white_paper). */
+/* Reopening a painting's picture: its darkroom starts with the saved choices summarised (its rendition's
+   settings), and opening a section reads the item's original back from storage and starts from those choices
+   (or, for paintings moved from git, which have none: the whole photo, with "Find the paper"'s spots if it's a
+   drawing on white paper, white_paper). */
 const reopened = new Map();         // painting id -> { dr }, while its Edit form is open
-const pictureOf = (d) => {          // the painting's current picture, at a size fit for comparing
-  const w = d.widths.find((x) => x >= 1024) || d.widths[d.widths.length - 1];
-  return `/${paintingAt(d, w)}`;
-};
 function pictureFields(e, d, f) {
-  if (!state.media) return [];
+  const r = picOf(d);
+  if (!state.media || !r) return [];
   let re = reopened.get(e.id);
   if (!re) {
-    const white = d.white_paper ? 'paper' : 'none';
-    re = { saved: 'opened', made: new Set(), timer: null,
-      opened: { w: d.w, h: d.h, widths: d.widths, media: d.media, rendition: d.rendition, ext: d.ext, preview: d.preview,
-        white_paper: !!d.white_paper, ...(d.process ? { process: d.process } : {}) } };
+    const { white_paper: paper, ...choices } = r.settings || {};
+    const process = choices.white ? choices : null, white = paper ? 'paper' : 'none';
+    re = { saved: 'opened', made: new Set(), timer: null, opened: { rendition: d.rendition }, item: r.item, recipe: r.recipe, paper: !!paper };
     re.dr = darkroom({
       onChange: () => pictureChanged(e.id, re),
-      previous: pictureOf(d),
-      saved: d.process || { white },
-      start: d.process ? { process: d.process } : { white, guess: false },
+      previous: pictureAt(d, 1024),                  // the painting's current picture, at a size fit for comparing
+      saved: process || { white },
+      start: process ? { process } : { white, guess: false },
       fetch: async () => {
-        const key = d.process ? d.process.original : `media/${d.media}`;
-        const r = await fetchFor(`/edit/api/original?key=${encodeURIComponent(key)}`, {}, 120000);
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Couldn't fetch the original (${r.status})`);
-        return { original: r.headers.get('x-original') || key, blob: await r.blob() };
+        const got = await fetchFor(`/edit/api/original?item=${r.item}`, {}, 120000);
+        if (!got.ok) throw new Error((await got.json().catch(() => ({}))).error || `Couldn't fetch the original (${got.status})`);
+        return { blob: await got.blob() };
       },
     });
     reopened.set(e.id, re);
@@ -201,6 +201,6 @@ function movePainting(items, i, dir) {
   if (b < 0 || b >= list.length) return;
   [list[a], list[b]] = [list[b], list[a]];
   const changes = [];
-  list.forEach((e, n) => { const d = draftOf(e); if (d.order !== n) changes.push({ id: e.id, kind: 'painting', data: { ...d, order: n } }); });
+  list.forEach((e, n) => { const d = draftOf(e); if (d.order !== n) changes.push({ id: e.id, kind: 'artwork', data: { ...d, order: n } }); });
   save(changes, 'Moved');
 }

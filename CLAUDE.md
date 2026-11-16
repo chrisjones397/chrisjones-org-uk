@@ -41,15 +41,15 @@ against what's already used (code, database, editor, branches). Add new names he
 
 - **Library item**: one thing uploaded (a photo, or a video's set of versions), plus what's true of the picture
   itself (alt text, credit). Its code, 8 hex digits, never changes. Its untouched uploaded files are its
-  **Originals** (a photo has one, a video one per version). (Until slice 2 lands: folder media/<code>/ in R2.)
-- **File** (agreed 16 Nov 2026; built in slice 2): one distinct piece of stored content, known only by the SHA-256
+  **Originals** (a photo has one, a video one per version).
+- **File** (agreed 16 Nov 2026): one distinct piece of stored content, known only by the SHA-256
   digest of its bytes, which is its R2 key and its address /media/<digest>.<ext>. No name, no folder.
 - **Recipe**: the darkroom settings applied to an item (white balance; four-corner squaring up for flat things,
-  or straighten and crop for scenes). Several per item. It's what gets edited. (Not built yet: today a painting
-  carries its `process` record; the restructure, step 4, moves it.)
+  or straighten and crop for scenes). Several per item. It's what gets edited (table `recipe`; kinds flat, scene,
+  video; scene and video have no settings yet).
 - **Rendition** (r1, r2...): one frozen set of sizes a recipe produced. Never overwritten, so History and caches
   stay right. It's what a use names (by id), so a darkroom change reaches visitors only when published.
-- **Media**: images and videos in general (/media/ addresses, R2 binding MEDIA, an entry's `media` field).
+- **Media**: images and videos in general (/media/ addresses, R2 binding MEDIA, the media layer's tables).
 - **Framing**: how media (through a rendition) is cropped and focused for a place on a page: focus point, crops for
   wide and upright screens; for a video, how it plays and what reduced-motion visitors get. Any place, not only
   backgrounds. (Was "treatment".)
@@ -59,7 +59,8 @@ against what's already used (code, database, editor, branches). Add new names he
 - **Hero**: the home page's first section (the forest). The code, database (bg-hero, t-hero) and editor all say
   Hero; never "the opening".
 - **Gallery**: the collection (paintings and drawings), its home page section (#gallery), and its page (/gallery/).
-  In the editor its groupings are **genres** (kind 'section' in the data until slice 2 renames it `genre`, and `painting` to `artwork`).
+  Its groupings are **genres** (kind `genre` in the data; a painting is kind `artwork`). "Section" means only a
+  section of a page.
 - **Featured**: the starred paintings (a star in the editor; field `featured`), the home page's wall. Not a genre
   (the Featured genre was removed, 11 Nov 2026).
 - **Floating view** and **Fixed view**: the gallery's two views as visitors see them (the view switch's
@@ -123,11 +124,16 @@ Files (all at the top level unless said):
   /edit, /edit/*, and for any address with no file (not_found_handling "none"). Pages:
   `/` home; `/gallery/` the gallery page; `/gallery/<name>/` the gallery page with that painting brought forward
   (its title, og:image from `preview`, canonical); an address missing its last / is sent on
-  to the one with it; anything else gets templates/404.html with status 404. `/media/<code>/<file>`: Library
-  files (libraryFile), to visitors only if a published, not hidden entry's `media` is that code (cached a year),
-  never an original; videos answer range requests (206/416). Everything but chrisjones.org.uk and www gets
+  to the one with it; anything else gets templates/404.html with status 404. `/media/<digest>.<ext>`: a stored
+  file (storedFile), to visitors only if it belongs to a rendition that a published, not hidden document names
+  (cached a year, immutable; never an original, never a draft's rendition), to the signed-in editor any file;
+  the extension must be its type's; videos answer range requests (206/416). Everything but chrisjones.org.uk and www gets
   noindex. Pages are no-cache (no-store on the editor's host).
-- **site.js** (server): load() reads the entries (draft or published) and fills pages with HTMLRewriter: the
+- **media.js** (server): reads renditions with their files (tables rendition, recipe, rendition_file, file): the
+  one description of a rendition ({ id, n, recipe, item, kind, label, settings, w, h, made, files, sizes,
+  preview, versions, frames }), used by site.js, editor.js and library.js. NAMED: those the documents name.
+- **site.js** (server): load() reads the entries (draft or published) and the renditions they name, in one
+  batch (a painting or background carries its rendition as `pic`), and fills pages with HTMLRewriter: the
   header partial (with an icon per ticked contact link), `data-text="key"` and `data-paragraphs="key"` (entries
   t-<key>; a block's own <p>s are replaced only when the database has text for it), `data-background` sections
   (bgTag: an <img> or <video class="section-bg">, focus, `--shade`), the contact links (`data-links`), the gallery
@@ -135,7 +141,9 @@ Files (all at the top level unless said):
   `groups`, where each genre starts) and the invitation wall (homeRewriter), the grid (gridRewriter, each item
   id="p-<name>"). homePreview() gives the home page's
   og:image (the Hero's photo, or its video's last frame, nearest above 1200 pixels).
-- **paths.js**, **links.js** (shared by server, page and editor, published): the R2 layout, and the contact
+- **paths.js**, **links.js** (shared by server, page and editor, published): a file's address (fileUrl), a
+  rendition's files arranged by what they are for (arranged: sizes, preview, versions, frames), sizeFor,
+  framesFor, an artwork's details line (detailsLine: made whenever shown, never stored); and the contact
   sites (Email, Instagram, Bluesky, Facebook, Threads, X, LinkedIn, TikTok, YouTube, Mastodon: pattern, address,
   icon). The email address is written backwards in data-addr; index.html's script turns it round and copies it.
 - **gallery.js** (Three.js, vendored in face/vendor/): the floating wall, on the home page (#gallery, the Featured
@@ -179,13 +187,16 @@ Files (all at the top level unless said):
 
 ## Content: D1, R2 and the editor
 
-- **D1** (migrations/): `entries` (one row per painting, genre, text, setting, background, links; `draft` and
-  `published` JSON side by side; a change = they differ; draft NULL = removed in the draft, published NULL =
-  never published), `releases` (each publish), `revisions` (what each entry became, and was, per release),
-  `library` (items: id = code, kind photo/video, grp site/painting, name, hash, data, added); and, from migration
-  0002 (16 Nov 2026), the media layer's five tables, filled by fill.js (slice 2 (c)) but not yet read by any code: `file`, `original`,
-  `recipe`, `rendition`, `rendition_file` (docs/entities.md section 2). JSON is written with
-  fixed key order (editor.js normalise), so equal text means no change. Databases: live site-content
+- **D1** (migrations/), two layers (docs/entities.md). Editorial: `entries` (one row per artwork, genre, text,
+  setting, background, links; `draft` and `published` JSON side by side; a change = they differ; draft NULL =
+  removed in the draft, published NULL = never published; generated columns draft_rendition and
+  published_rendition, indexed: which rendition each names), `releases` (each publish), `revisions` (what each
+  entry became, and was, per release). Media, never drafted, with foreign keys: `library` (items: id = code,
+  kind photo/video, name, added; its old columns grp, hash, data are no longer read and go in slice 2 (e)),
+  `file` (digest, bytes, type, w, h, seconds), `original`, `recipe`, `rendition`, `rendition_file` (role size,
+  preview, first, last, version; width; shape). The layers meet at one point: a document names a rendition by
+  id (checked on saving: editor.js linked()). JSON is written with fixed key order (editor.js normalise), so
+  equal text means no change. Databases: live site-content
   (92160592-99ad-48c8-84db-e418928d0f46), dev site-content-dev (746fef4b-4f14-402a-b658-3ef2a1576dbb). Query
   through the Cloudflare API connector. dev's database is a sandbox for code: content never goes from dev to live.
   **Migrations** (step 4 slice 1): the tables are made and changed only by numbered files in migrations/ (Wrangler's
@@ -196,21 +207,23 @@ Files (all at the top level unless said):
   no-op on both databases, whose tables were checked identical to it on 11 Nov 2026). The standard way
   (Cloudflare's docs) is to apply them in the deploy command, so the database changes with the code, including
   when he puts dev live: both Workers' deploy commands do. The old db/seed.sql (pre-Library format, unusable) was deleted.
-- **R2**: bucket site-media (live), site-media-dev (dev), binding MEDIA. One folder per Library item (paths.js):
-  a photo's original.<ext> (never shown to visitors) and renditions r1/, r2/ (<width>.<ext>, preview.jpg for
-  paintings); a video's <w>x<h>.mp4 versions (one set) and frames wide-1/, tall-1/ (first-/last-<width>.jpg,
-  once per shape, from that shape's largest version). Entries name the item (`media`) and the parts they use.
-- **Painting entry**: name (its address, kept when retitled), title, medium, cm [height, width] (centimetres,
-  to a tenth), year, estimated (not measured), size_shown (only when it differs from the default: shown when
-  measured), details (made by the server: "Oil on canvas, 60 x 90 cm, 2020", "(est.)" after a shown estimate),
-  section (genre), order, wide, white_paper (a drawing on white paper: reopening starts with "Find the paper"'s
-  spots), w, h, widths, media, rendition, ext, preview, process (the darkroom's choices; paintings moved from git
-  have none), featured (starred: on the home page's wall; only when true; a star in the editor's Gallery tab,
-  a draft change like any other), hidden. A measured size drives the squared-up shape (unless "Square up to its measured proportions"
-  is unticked); not measured, the photo's perspective gives the shape and the size only the scale.
-- **Background entry** bg-<section> (hero, contact, footer: BACKGROUNDS in editor.js, PAGE's bg in edit/state.js;
-  index.html marks them data-background): type photo (rendition, widths, w, h) or video (versions, frames, play
-  once/loop, calm last/fade); both focus and shade.
+- **R2**: bucket site-media (live), site-media-dev (dev), binding MEDIA. A file's key is the SHA-256 digest of
+  its bytes, nothing else (paths.js); names and meaning live in the database. Uploads: the browser works out the
+  digest, asks whether it is stored (GET /edit/api/file), and PUTs it if not; R2 checks the digest itself (put's
+  `sha256`). (Until slice 2 (e) the old copies under media/<code>/... are still in both buckets, unread.)
+- **Artwork document** (kind `artwork`, id p-<name>): name (its address, kept when retitled), title, medium, cm
+  [height, width] (centimetres, to a tenth), year, estimated (not measured), size_shown (only when it differs
+  from the default: shown when measured), genre (a genre's id), order, wide, rendition (the id of its picture's
+  rendition), featured (starred: on the home page's wall; only when true), hidden. Its sizes, link preview and
+  proportions come from the rendition; its darkroom choices are the rendition's settings (white, spots,
+  brightness, warmth, corners, shape, white_paper; {} = as supplied), the recipe holding the current ones. A
+  measured size drives the squared-up shape (unless "Square up to its measured proportions" is unticked); not
+  measured, the photo's perspective gives the shape and the size only the scale.
+- **Genre document** (kind `genre`, id s-<random>): title, order, hidden.
+- **Background document** bg-<section> (hero, contact, footer: BACKGROUNDS in editor.js, PAGE's bg in
+  edit/state.js; index.html marks them data-background): rendition (a photo's, recipe kind scene, or a video's),
+  focus, shade, and play (once/loop) and calm (last/fade) exactly when it is a video. (Step 5 moves focus, play
+  and calm to the Framing.)
 - **The editor** (any host starting "admin": admin.chrisjones.org.uk for live, admin-dev for dev, each wholly
   behind Cloudflare Access, "Site editor" and "Site editor (dev)", team chrisjones-org-uk; editor.js checks the
   Access token too, vars ACCESS_TEAM and ACCESS_AUD). On that host the whole site shows drafts, with a pill at the
@@ -219,13 +232,16 @@ Files (all at the top level unless said):
   ES modules in edit/, listed in order at the top of edit/editor.js, each importing only from those above it:
   dom, state, marks, render, server, widgets, darkroom, uploads, details, picture, add, painting, background,
   uses, compare, the five *-view.js, editor.js which registers the views and starts. Shared state is the one
-  `state` object in state.js, written only by server.js; render() still redraws the whole view. Its API
-  /edit/api/* is in editor.js and library.js). On other hosts /edit is
+  `state` object in state.js (entries, and the renditions they name by id, refreshed with every answer that
+  carries entries), written only by server.js; render() still redraws the whole view. Its API /edit/api/* is in
+  editor.js and library.js: state, save, discard, publish, restore, hide, history; file (GET: stored? PUT:
+  store), library, library/new, library/original, library/rendition, library/name, library/delete, original). On other hosts /edit is
   not found. A rejected token: worker.js signInAgain() clears Access's cookie once and retries, then shows a
   "Couldn't sign you in" page; API calls get 401 and the editor shows a "Sign in again" bar.
   Tabs: Gallery (add a painting, genres and their paintings, Edit forms), Content (a box per page section:
-  heading, paragraphs, background box, contact links), Library (items newest first, Site pictures and Paintings:
-  name edited in place, code, what uses it, a line per part, Delete for good when unused; tick two or three to
+  heading, paragraphs, background box, contact links), Library (items newest first, Site pictures and Paintings,
+  now a filter on what an item is made or used for, so one can be in both: name edited in place, code, what
+  uses it, a line per original and per rendition, Delete for good when unused; tick two or three to
   compare side by side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a
   removal, it undoes it). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
   so switching to a short view doesn't shift the layout.
@@ -242,8 +258,9 @@ Files (all at the top level unless said):
   mirrors it), squared up by a perspective map to the measured shape or the photo's true proportions (Zhang and
   He's method). Before and after side by side; reopening shows previous and new, press and hold to blink, ghosts
   of the saved choices, "Back to as it was", "Replace photo…". Results are JPEG sizes (Safari can't encode WebP),
-  made as the item's next rendition; a picture saves itself 1.2 s after the last change. The same photo is found
-  by its hash and never uploaded twice.
+  recorded as the recipe's next rendition (the recipe taking the new settings); a picture saves itself 1.2 s
+  after the last change, and a trial rendition made earlier in the same sitting is deleted once replaced. The
+  same photo is found by its digest and never stored twice: a second painting from it is a second recipe.
 - **Video uploads**: the browser can't re-encode, so a video is uploaded as made (MP4 only, under 95 megabytes),
   checked first (codec, fast start, sound, length, bit rate, size); first and last frames taken in the browser.
 
@@ -282,12 +299,11 @@ publish through Review (dev's said "Enter gallery", live's "See the paintings").
 
 ## The plan (agreed 10 Nov 2026 after the whole site review; each step in a new chat)
 
-Review findings still open: entries are coupled (a painting carries its file, sizes, preview and darkroom
-settings); the gallery judges gaps only sideways (paintings graze top to bottom, two over half covered on upright
+Review findings still open: the gallery judges gaps only sideways (paintings graze top to bottom, two over half covered on upright
 phones); the wall grows with the collection (18 paintings, about five screens); paintings exist only in the 3D
 drawing on the home page (invisible to search engines and screen readers); the Hero video has about 13,800
 strokes in 20 seconds, the scene covered in four passes; the head animation's build scripts aren't here; the
-editor redraws the whole view after every change; fonts come from Google, not the site; a draft rendition of a published item can be fetched by guessing its address.
+editor redraws the whole view after every change; fonts come from Google, not the site.
 
 1. **Clean start: done 11 Nov 2026, live.** These notes condensed and the README rewritten.
    One Gallery vocabulary: section #gallery (was #paintings), the gallery page /gallery/ (was /gallery/list/,
@@ -429,7 +445,44 @@ editor redraws the whole view after every change; fonts come from Google, not th
    two recipes: an unused site set, scene, and Big Ben Pentaptych Part 3 by Teo, flat).
    His decision for (d), 16 Nov 2026: drop from dev's History the versions naming the four deleted test items
    (dev's content is only there to test with; he isn't precious about it). Live's History needs none dropped.
-   Next: (d), in a new chat: fill again first on each site, a Time Travel bookmark, then the rewrite.
+   **(d) BUILT 16 Nov 2026, on dev; not yet live.** Migration 0005 rewrites the entries and History in SQL
+   (painting to artwork, section to genre; artworks and backgrounds name a rendition id, looked up in old_part;
+   keys in normalise()'s order, values carried over as the very text stored, so nothing shows as changed), adds
+   the generated columns entries.draft_rendition and published_rendition with indexes, and deletes the Library
+   rows merged away in (c). It is applied by the deploy command just before the new code, so data and code
+   switch together (the seconds between the two are the only gap). Its guard: if any current draft or
+   published document can't find its rendition (e.g. something was uploaded after the fill), the migration
+   fails, is rolled back, the build stops and the site stays as it was: then press the Library's fill button
+   again on that site (old code) and build again. History versions whose picture no longer exists are dropped.
+   The code switched over in the same commit: paths.js (addresses by digest, arranged()), media.js (new),
+   site.js, worker.js (storedFile: the per-rendition rule for visitors), gallery.js (sizes as [width, address]),
+   editor.js (documents; linked() checks the rendition a document names), library.js (rewritten: files by
+   digest, items, recipes, renditions, uses by rendition id, Delete for good with a sweep of unreferenced
+   files), and the editor page (uploads.js rewritten; state.renditions; the Library's rows from the tables).
+   Tried first on copies: two scratch D1 databases made from dev's and live's (deleted afterwards) had the
+   migration run on them through the API: every rewritten document equal, as text, to what normalise() gives;
+   dev 43 entries, 127 of 131 History versions kept (4 dropped, as he chose; one publication left empty went;
+   the 5 merged Library rows went); live 41 entries, all 100 History versions, nothing dropped; no foreign key
+   faults; all 25 artworks and both backgrounds on each find a rendition with sizes (dev's Hero: 3 versions,
+   first and last frames); the visitor's file rule uses the indexes. Tested locally (wrangler dev, Playwright,
+   fresh database through all five migrations, made-up photos): add a genre and three paintings (one photo used
+   twice: one item, two recipes), reopen a picture, change it (same recipe, rendition 2) and "Back to as it
+   was" (the trial rendition deleted), Library photos, compare and blink, backgrounds from the Library and from
+   a file (the same photo again makes nothing new), Review and publish, the public pages (grid, focus view,
+   floating view, link previews), files (a published one served, immutable; an original, a hidden painting's
+   file, a wrong extension and an old-style address all 404 to visitors), Hide and show, History's Bring back,
+   Delete for good (refused while used; with History; files gone from storage), and a video background's
+   markup from made-up rows. Not tested: uploading a real video, "Add a version…" and removing one (this
+   browser can't play MP4), the full-screen corner and spot views, real phones, Safari.
+   Time Travel bookmarks from just before: dev 000001c1-00000000-00005125-75cdd908b3555e204a7d1e6802be026f
+   (16 Nov 2026, 16:28 UTC); take live's again just before it goes live. To undo on a site: put its code back
+   (`git revert` the commit, push), then `npx wrangler d1 time-travel restore DB --bookmark=<bookmark>`
+   (`--env dev` for dev); the old files are all still in storage under media/<code>/ until (e).
+   Before putting it live: nothing must have been uploaded on live since its fill (16 Nov), or its build stops
+   at the guard (harmlessly). Scaffolding left for (e): digests.js, fill.js and their routes (no longer offered
+   by the editor), tables old_key and old_part, library's columns grp, hash and data, the old R2 keys
+   (media/...), and digest copies whose file row the fill removed. (e) also adds library.alt and credit.
+   Next: he checks dev, then puts it live and checks live; then (e), in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

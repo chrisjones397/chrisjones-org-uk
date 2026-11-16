@@ -19,7 +19,7 @@
      server.js        talking to the server; the save queue; discard
      widgets.js       the badge and the eye
      darkroom.js      the pixels: white balance, squaring up, the full-screen views (it stands alone)
-     uploads.js       files into storage: originals, sizes, video versions and frames
+     uploads.js       files into storage and the Library: originals, renditions (sizes; video versions and frames)
      details.js       a painting's medium, size and year fields
      picture.js       the darkroom as a form
      add.js           the add-a-painting form

@@ -11,7 +11,7 @@ import { state, current } from './state.js';
    follows the picture's proportions (f.ratio, width over height, set by the darkroom), greyed. Whether visitors
    see the size is a separate tick (size_shown), on by default when measured, off when not. */
 export function detailsFields(f, d, onSize) {
-  const media = [...new Set(state.entries.filter((e) => e.kind === 'painting' && current(e)).map((e) => current(e).medium).filter(Boolean))].sort();
+  const media = [...new Set(state.entries.filter((e) => e.kind === 'artwork' && current(e)).map((e) => current(e).medium).filter(Boolean))].sort();
   const listId = `media-${Math.random().toString(36).slice(2, 8)}`;
   const remembered = (k, dflt) => { try { return localStorage.getItem(k) || dflt; } catch { return dflt; } };
   const isNew = !d.title;
@@ -78,7 +78,7 @@ export function carry(from, to) {
   for (const k of ['measured', 'estimated', 'shown', 'wide']) if (from[k] && to[k]) to[k].checked = from[k].checked;
   for (const k of ['height', 'width']) if (from[k] && to[k]) to[k].classList.toggle('suggested', from[k].classList.contains('suggested'));
   for (const k of ['scaleBy', 'shownTouched', 'ratio']) if (k in from) to[k] = from[k];
-  if (from.section && to.section && [...to.section.options].some((o) => o.value === from.section.value)) to.section.value = from.section.value;
+  if (from.genre && to.genre && [...to.genre.options].some((o) => o.value === from.genre.value)) to.genre.value = from.genre.value;
 }
 
 /* For the editor's rows: the size when the details line doesn't say all there is to know about it. */

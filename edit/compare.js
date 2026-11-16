@@ -7,31 +7,32 @@ import { STATES, strongest } from './uses.js';
    apart underneath: the original's pixels, its weight, when it was added, its name and code. The best (most pixels)
    is marked when comparing. Tap the backdrop, the cross or Escape to close. */
 export function showItems(list) {
-  list = list.map((x) => (x.it ? x : { it: x, part: null }));
-  const renOf = (x) => x.part && x.it.data.renditions[x.part];
+  list = list.map((x) => (x.it ? x : { it: x, ren: null }));
+  const renOf = (x) => x.ren;
+  const origOf = (x) => x.it.originals[0];
   // pixels: a rendition's largest size; an item's original
-  const px = (x) => { const r = renOf(x); if (r) return r.w * r.h; const o = x.it.data && x.it.data.original; return o && o.w ? o.w * o.h : 0; };
+  const px = (x) => { const r = renOf(x); if (r) return r.w * r.h; const o = origOf(x); return o && o.w ? o.w * o.h : 0; };
   const most = list.length > 1 ? Math.max(...list.map(px)) : 0;
   const when = (t) => (t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'not known');
-  const largeOf = (x) => { const r = renOf(x); return r ? `${x.it.id}/${x.part}/${Math.max(...r.widths)}.${r.ext || 'jpg'}` : x.it.large; };
+  const largeOf = (x) => { const r = renOf(x); return r ? r.sizes[r.sizes.length - 1].url : x.it.large; };
   const best = (x) => (most && px(x) === most ? { class: 'lib-best', title: 'The most pixels of these' } : {});
   const facts = (x) => {
     const it = x.it, r = renOf(x);
-    const lines = [h('div', { class: 'lib-cmp-name' }, it.name, x.part ? h('span', { class: 'muted' }, ` · ${x.part}`) : null), h('div', { class: 'lib-cmp-code' }, it.id)];
+    const lines = [h('div', { class: 'lib-cmp-name' }, it.name, r ? h('span', { class: 'muted' }, ` · ${r.name}`) : null), h('div', { class: 'lib-cmp-code' }, it.id)];
     if (r) {
-      const p = it.parts.find((q) => q.part === x.part), u = strongest(p.uses)[0];
-      lines.push(h('div', best(x), glyph(GLYPHS.sizes, 13), ` ${r.widths.length} sizes, up to ${r.w} × ${r.h}`));
-      lines.push(h('div', {}, MB(p.bytes)));
+      const u = strongest(r.uses)[0];
+      lines.push(h('div', best(x), glyph(GLYPHS.sizes, 13), ` ${r.sizes.length} sizes, up to ${r.w} × ${r.h}`));
+      lines.push(h('div', {}, MB(r.bytes)));
       lines.push(h('div', {}, u ? glyph(GLYPHS[STATES[u.state][0]], 13) : null, ` ${u ? STATES[u.state][1] : 'Unused'}`));
-      lines.push(h('div', {}, glyph(GLYPHS.past, 13), ` ${when(p.made)}`));
+      lines.push(h('div', {}, glyph(GLYPHS.past, 13), ` ${when(r.made)}`));
       return h('div', { class: 'lib-cmp-facts' }, ...lines);
     }
-    const o = it.data && it.data.original, orig = it.parts.find((p) => p.part === 'original');
+    const o = origOf(x);
     if (it.kind === 'video') {
-      for (const v of it.parts.filter((p) => /^\d+x\d+/.test(p.part))) lines.push(h('div', {}, glyph(GLYPHS.play, 13), ` ${v.w} × ${v.h}${v.seconds ? `, ${v.seconds} s` : ''}, ${MB(v.bytes)}`));
+      for (const v of it.originals) lines.push(h('div', {}, glyph(GLYPHS.play, 13), ` ${v.w} × ${v.h}${v.seconds ? `, ${v.seconds} s` : ''}, ${MB(v.bytes)}`));
     } else {
       lines.push(h('div', best(x), glyph(GLYPHS.photo, 13), o && o.w ? ` ${o.w} × ${o.h} (${(o.w * o.h / 1e6).toFixed(1)} megapixels)` : ' size not known'));
-      if (orig) lines.push(h('div', {}, `Original ${MB(orig.bytes)}${orig.ext ? ` ${orig.ext.toUpperCase()}` : ''}`));
+      if (o) lines.push(h('div', {}, `Original ${MB(o.bytes)} ${(o.url.split('.').pop() || '').toUpperCase()}`));
     }
     lines.push(h('div', {}, glyph(GLYPHS.past, 13), ` ${when(it.added)}`));
     return h('div', { class: 'lib-cmp-facts' }, ...lines);
@@ -44,7 +45,7 @@ export function showItems(list) {
     list.length === 2 ? h('button', { class: 'lib-mode', title: 'Blink between the two instead', 'aria-label': 'Blink between the two',
       onclick: () => { close(); blinkView(list); } }, glyph(GLYPHS.blink, 20)) : null,
     h('div', { class: `lib-cmp n${list.length}` }, ...list.map((x) => h('figure', {},
-      largeOf(x) ? h('img', { src: `/media/${largeOf(x)}`, alt: x.it.name }) : h('span', { class: 'lib-none' }, glyph(GLYPHS.photo, 40)),
+      largeOf(x) ? h('img', { src: largeOf(x), alt: x.it.name }) : h('span', { class: 'lib-none' }, glyph(GLYPHS.photo, 40)),
       facts(x)))));
   document.body.append(box);
   addEventListener('keydown', onKey);
@@ -56,20 +57,17 @@ export function showItems(list) {
    together, so the same part of each is seen. The two labels in the corner (a coloured dot and a name each, the
    one showing bright) stay put whatever the zoom. Largest size of each, so detail can be checked. */
 export function blinkView(pair) {
-  pair = pair.map((x) => (x.it ? x : { it: x, part: null }));
-  const renOf = (x) => {
-    const rs = (x.it.data && x.it.data.renditions) || {};
-    const part = x.part || Object.keys(rs).sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)))[0];
-    return part && rs[part] ? { part, ...rs[part] } : null;
-  };
-  const srcOf = (x) => { const r = renOf(x); return r ? `/media/${x.it.id}/${r.part}/${Math.max(...r.widths)}.${r.ext || 'jpg'}` : x.it.large && `/media/${x.it.large}`; };
+  pair = pair.map((x) => (x.it ? x : { it: x, ren: null }));
+  // a whole item is seen as its newest picture
+  const renOf = (x) => x.ren || x.it.recipes.flatMap((c) => c.renditions).filter((r) => r.sizes.length).sort((a, b) => b.id - a.id)[0] || null;
+  const srcOf = (x) => { const r = renOf(x); return r ? r.sizes[r.sizes.length - 1].url : x.it.large; };
   const sizeOf = (x) => { const r = renOf(x); return r ? `${r.w} × ${r.h}` : ''; };
   let shown = 0, s = 1, tx = 0, ty = 0, timer = null;
   const imgs = pair.map((x, i) => h('img', { src: srcOf(x), alt: x.it.name, draggable: false, class: i ? 'off' : '' }));
   const inner = h('div', { class: 'blink-inner' }, ...imgs);
   const stage = h('div', { class: 'blink-stage' }, inner);
   const labels = pair.map((x, i) => h('div', { class: `blink-label k${i}` + (i ? '' : ' on') },
-    h('span', { class: 'dot' }), h('span', {}, x.it.name, x.part ? h('b', {}, ` ${x.part}`) : null), h('span', { class: 'muted' }, ` ${sizeOf(x)}`)));
+    h('span', { class: 'dot' }), h('span', {}, x.it.name, x.ren ? h('b', {}, ` ${x.ren.name}`) : null), h('span', { class: 'muted' }, ` ${sizeOf(x)}`)));
   const draw = () => { inner.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`; };
   const show = (i) => { shown = i; imgs.forEach((im, k) => im.classList.toggle('off', k !== i)); labels.forEach((l, k) => l.classList.toggle('on', k === i)); };
   const swap = () => show(1 - shown);

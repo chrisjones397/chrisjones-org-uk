@@ -1,41 +1,81 @@
-/* Getting files into storage (R2), as Library items: a photo's original and the sizes made from it, a painting's
-   picture as its photo's next rendition, a video's versions and their first and last frames. Everything is made
-   here in the browser (edit/darkroom.js does the pixels) and stored through /edit/api/upload. */
+/* Getting files into storage and the Library (library.js on the server; docs/entities.md, section 2).
+   Everything is made here in the browser (edit/darkroom.js does the pixels). A file is stored under the SHA-256
+   digest of its bytes, worked out here and checked by storage itself; bytes already stored are never sent again.
+   Then the Library is told what the files are: an item's original, or a rendition's files (a picture's sizes and
+   link preview; a video's versions and first and last frames). */
 
-import { upright } from '/paths.js';
+import { upright, fileUrl } from '/paths.js';
 import { SOURCE_MAX, scaled, resized } from './darkroom.js';
 import { MB } from './dom.js';
-import { fetchFor, call } from './server.js';
+import { fetchFor, call, known } from './server.js';
 
 export const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
 
 /* Sections with bg can have a photo or video behind them (entries bg-<section>; BACKGROUNDS in editor.js, the
    server, must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
 const BG_WIDTHS = [768, 1024, 1536, 2560, 3840];
-/* A video's first and last frames (paths.js: once per shape): shown while it loads, where it rests, and to
-   visitors who ask for reduced motion. Up to 2560 across and a little more compressed than photos: the video
-   itself takes over on larger screens, and a painted frame at 3840 was 3 to 4 megabytes. */
+/* A video's first and last frames (once per shape): shown while it loads, where it rests, and to visitors who
+   ask for reduced motion. Up to 2560 across and a little more compressed than photos: the video itself takes
+   over on larger screens, and a painted frame at 3840 was 3 to 4 megabytes. */
 const FRAME_WIDTHS = [768, 1024, 1536, 2560], FRAME_QUALITY = 0.8;
 
-/* A photo as a new Library item (or the item it already is, if the same photo is stored): kept as uploaded, with a
-   set of sizes made from it (BG_WIDTHS). Returns what a background uses of it. */
-export async function photoItem(file, name, grp, say) {
-  const src = await photoOf(file, say);
-  const { id } = await keepOriginal(file, name, null, say, grp);
-  const { part } = await call('GET', `library/next?id=${id}&part=r`);
-  const widths = await storeSizes(`media/${id}/${part}/`, src, say);
-  const top = widths[widths.length - 1], hh = Math.round(src.height * top / src.width);
-  await call('POST', 'library/data', { id, data: { renditions: { [part]: { widths, w: top, h: hh, ext: 'jpg' } } } });
-  return { media: id, rendition: part, w: top, h: hh, widths };
+/* The SHA-256 digest of a file's bytes, as 64 hex digits: its name in storage. */
+async function digestOf(blob) {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/* Video files into a Library item (id): each checked (videoFacts), uploaded as made (<w>x<h>.mp4), and frames
-   kept for each shape from its largest version (withFrames). have: what the background had ({ versions, frames }).
-   Returns { versions, frames, notes }; the item's record gets the new versions and frames too. */
-export async function videoItem(id, files, have, say) {
-  const added = [], notes = [], grabbed = new Map();
+/* Store a file under its digest, unless those bytes are stored already; returns the digest. more: a video's
+   size and length (&w=&h=&seconds=), which the server can't read for itself. */
+async function putFile(blob, type, more = '', ms = 120000) {
+  const digest = await digestOf(blob);
+  if ((await call('GET', `file?digest=${digest}`)).have) return digest;
+  const r = await fetchFor(`/edit/api/file?digest=${digest}${more}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, ms);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
+  return digest;
+}
+
+/* Is this photo already in the Library? { file, digest, have (its bytes are stored), item (the code of the item
+   it is the original of, or null), name (that item's) }. */
+export async function storedFor(file) {
+  const digest = await digestOf(file);
+  return { file, digest, ...(await call('GET', `file?digest=${digest}`)) };
+}
+
+/* Keep a photo as a Library item (its original), unless the same photo already is one, for this painting or
+   another: then that item is used. known: storedFor's answer, if already asked. name: the new item's name in
+   the Library. Returns { id: the item's code, shared: whether it was already an item, scene: the id of its
+   newest rendition made as it is, if it has one }. */
+export async function keepOriginal(file, name, known_, say) {
+  let k = known_ && known_.file === file ? known_ : null;
+  if (!k) { say('Checking whether this photo is already stored…'); k = await storedFor(file); }
+  if (!k.have) {
+    say('Keeping the original…');
+    const r = await fetchFor(`/edit/api/file?digest=${k.digest}`, { method: 'PUT', headers: { 'content-type': file.type || 'image/jpeg' }, body: file }, 120000);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
+  }
+  return call('POST', 'library/new', { kind: 'photo', name, originals: [k.digest] });
+}
+
+/* A photo into the Library as it is (a photograph, not a painting: no white balance or corners): its original,
+   and a rendition of sizes (BG_WIDTHS) made from it. If the same photo is already there with such a rendition,
+   that one is used. Returns { rendition: its id }. */
+export async function photoItem(file, name, say) {
+  const src = await photoOf(file, say);
+  const { id, scene } = await keepOriginal(file, name, null, say);
+  if (scene) return { rendition: scene };
+  const files = await storeSizes(src, say);
+  const { rendition } = await call('POST', 'library/rendition', { item: id, kind: 'scene', files });
+  return { rendition: known(rendition).id };
+}
+
+/* Video files into the Library: each checked (videoFacts) and stored as made; a new item (id null), or more
+   versions of an existing one. have: the rendition the versions are added to (its versions and frames are kept),
+   or null. Then a new rendition: every version, with first and last frames for each shape (withFrames).
+   Returns { rendition (as media.js describes it), notes }. */
+export async function videoItem(id, name, files, have, say) {
+  const added = [], notes = [];
   const best = {};    // shape -> the largest so far, whose frames are kept (a 4K frame is about 45 megabytes in memory)
-  for (const v of have.versions) if (!best[upright(v)] || v.w > best[upright(v)].w) best[upright(v)] = v;
+  for (const v of (have ? have.versions : [])) if (!best[upright(v)] || v.w > best[upright(v)].w) best[upright(v)] = v;
   for (const [i, file] of files.entries()) {
     const tell = files.length > 1 ? (t) => say(`Video ${i + 1} of ${files.length}: ${t}`) : say;
     const facts = await videoFacts(file, tell);
@@ -45,35 +85,44 @@ export async function videoItem(id, files, have, say) {
     added.push({ file, facts });
     notes.push(...facts.notes.map((n) => (files.length > 1 ? `${facts.w} × ${facts.h}: ${n}` : n)));
   }
-  const versions = [...have.versions], fresh = [];
+  const versions = have ? have.versions.map((v) => ({ digest: v.digest, w: v.w, h: v.h })) : [], grabbed = new Map(), fresh = [];
   for (const [i, { file, facts }] of added.entries()) {
-    const { part } = await call('GET', `library/next?id=${id}&part=${facts.w}x${facts.h}`);
     say(`Uploading ${files.length > 1 ? `video ${i + 1} of ${files.length}` : 'the video'} (${MB(file.size)})…`);
-    await put(`media/${id}/${part}.mp4`, file, 'video/mp4', 15 * 60000);
-    const v = { file: part, w: facts.w, h: facts.h, bytes: file.size, seconds: Math.round(facts.seconds * 100) / 100 };
-    grabbed.set(v, facts);
-    versions.push(v); fresh.push(v);
+    const digest = await putFile(file, 'video/mp4', `&w=${facts.w}&h=${facts.h}&seconds=${facts.seconds}`, 15 * 60000);
+    if (versions.some((v) => v.digest === digest)) continue;       // the very same file again
+    grabbed.set(digest, facts);
+    versions.push({ digest, w: facts.w, h: facts.h }); fresh.push(digest);
   }
-  const frames = await withFrames(id, versions, have.frames || {}, (v) => grabbed.get(v), say);
-  await call('POST', 'library/data', { id, data: { versions: fresh, frames } });
-  return { versions, frames, notes };
+  if (!id) id = (await call('POST', 'library/new', { kind: 'video', name, originals: fresh })).id;
+  else for (const digest of fresh) await call('POST', 'library/original', { id, digest });
+  return { rendition: await videoRendition(id, versions, have, (v) => grabbed.get(v.digest), say), notes };
 }
 
-/* Frames for each shape the versions have ({ wide, tall }: dir, widths, from), taken from its largest version
-   (paths.js): kept if they already came from it, otherwise made from what was just read from a new file
-   (grabbed), or read back from the stored video, under the next free folder (wide-2...). */
-export async function withFrames(id, versions, frames, grabbed, say) {
-  const out = {};
+/* A new rendition of a video item: these versions ([{ digest, w, h }]), with frames for each shape they have. */
+export async function videoRendition(id, versions, have, grabbed, say) {
+  const frames = await withFrames(versions, have, grabbed, say);
+  const { rendition } = await call('POST', 'library/rendition', { item: id, kind: 'video', ...(have ? { recipe: have.recipe } : {}),
+    files: [...versions.map((v) => ({ digest: v.digest, role: 'version' })), ...frames] });
+  return known(rendition);
+}
+
+/* First and last frames for each shape the versions have, as a rendition's files ([{ digest, role, shape }]),
+   taken from that shape's largest version: kept from the rendition before (have) if its frames came from that
+   same version, otherwise made from what was just read from a new file (grabbed), or read back from the stored
+   video. */
+async function withFrames(versions, have, grabbed, say) {
+  const out = [];
   for (const [shape, up] of [['wide', false], ['tall', true]]) {
     const top = versions.filter((v) => upright(v) === up).sort((a, b) => b.w - a.w)[0];
     if (!top) continue;
-    if (frames[shape] && frames[shape].from === top.file) { out[shape] = frames[shape]; continue; }
+    const was = have && have.versions.filter((v) => upright(v) === up).sort((a, b) => b.w - a.w)[0];
+    const kept = was && was.digest === top.digest ? have.files.filter((f) => (f.role === 'first' || f.role === 'last') && f.shape === shape) : [];
+    if (kept.length) { out.push(...kept.map((f) => ({ digest: f.digest, role: f.role, shape }))); continue; }
     const got = grabbed(top);
-    const src = got && got.first ? got : await framesOf(`/media/${id}/${top.file}.mp4`, say);
-    const { part: dir } = await call('GET', `library/next?id=${id}&part=${shape}`);
-    const widths = await storeSizes(`media/${id}/${dir}/first-`, src.first, say, 'first frame', FRAME_WIDTHS, FRAME_QUALITY);
-    await storeSizes(`media/${id}/${dir}/last-`, src.last, say, 'last frame', FRAME_WIDTHS, FRAME_QUALITY);
-    out[shape] = { dir, widths, from: top.file };
+    const src = got && got.first ? got : await framesOf(fileUrl({ digest: top.digest, type: 'video/mp4' }), say);
+    for (const role of ['first', 'last']) {
+      out.push(...(await storeSizes(src[role], say, `${role} frame`, FRAME_WIDTHS, FRAME_QUALITY)).map((f) => ({ digest: f.digest, role, shape })));
+    }
   }
   return out;
 }
@@ -90,17 +139,16 @@ async function photoOf(blob, say) {
   return src;
 }
 
-/* Make JPEG sizes of a picture (BG_WIDTHS, or list; never larger than the picture) and store them as
-   <prefix><width>.jpg (e.g. media/<code>/r1/1536.jpg); returns the widths. */
-async function storeSizes(prefix, src, say, what = 'sizes', list = BG_WIDTHS, quality) {
+/* Make JPEG sizes of a picture (BG_WIDTHS, or list; never larger than the picture) and store them; returns them
+   as a rendition's files: [{ digest, role: 'size' }]. */
+async function storeSizes(src, say, what = 'sizes', list = BG_WIDTHS, quality) {
   const widths = [...new Set(list.filter((w) => w < src.width).concat(Math.min(src.width, list[list.length - 1])))];
-  let n = 0;
-  for (const w of widths) {
-    say(`Making and uploading the ${what}: ${++n} of ${widths.length}`);
-    try { await put(`${prefix}${w}.jpg`, await resized(src, w, quality), 'image/jpeg'); }
-    catch (e) { if (!/already exists/.test(e.message)) throw e; }   // a version's frames made before: the same picture
+  const out = [];
+  for (const [n, w] of widths.entries()) {
+    say(`Making and uploading the ${what}: ${n + 1} of ${widths.length}`);
+    out.push({ digest: await putFile(await resized(src, w, quality), 'image/jpeg'), role: 'size' });
   }
-  return widths;
+  return out;
 }
 
 /* Check a video before it's uploaded, and take its first and last frames. Refuses only what won't do: not an MP4,
@@ -183,47 +231,18 @@ async function framesOf(src, say) {
   return { w, h: hh, seconds, first, last };
 }
 
-/* Make every size of a painting's picture from the result and store them as the next set of sizes of its photo's
-   Library item (id): media/<code>/r<n>/<width>.jpg and preview.jpg; returns the painting's image fields. A new
-   set each time, so the earlier pictures stay for History. */
-export async function storeImages(id, { out, W, H }, say) {
-  const { part } = await call('GET', `library/next?id=${id}&part=r`);
+/* Make every size of a painting's picture from the darkroom's result, store them, and record them as a new
+   rendition of the photo's Library item (id): the next one of `recipe` (the recipe re-edited, taking these
+   settings), or the first of a new recipe (recipe null; label tells it apart when several things are made from
+   one photo). A new rendition each time, so the earlier pictures stay for History. Returns the rendition. */
+export async function storeImages(id, recipe, { out, W }, settings, label, say) {
   const widths = [...new Set(WIDTHS.filter((w) => w < W).concat(Math.min(W, WIDTHS[WIDTHS.length - 1])))];
-  const jobs = widths.map((w) => [`${w}.jpg`, w]).concat([['preview.jpg', Math.min(PREVIEW, W)]]);
-  let done = 0;
-  for (const [fname, w] of jobs) {
-    say(`Making and uploading image sizes: ${++done} of ${jobs.length}`);
-    await put(`media/${id}/${part}/${fname}`, await resized(out, Math.min(w, out.width)), 'image/jpeg');
+  const jobs = widths.map((w) => ['size', w]).concat([['preview', Math.min(PREVIEW, W)]]);
+  const files = [];
+  for (const [n, [role, w]] of jobs.entries()) {
+    say(`Making and uploading image sizes: ${n + 1} of ${jobs.length}`);
+    files.push({ digest: await putFile(await resized(out, Math.min(w, out.width)), 'image/jpeg'), role });
   }
-  await call('POST', 'library/data', { id, data: { renditions: { [part]: { widths, w: W, h: H, ext: 'jpg' } } } });
-  return { w: W, h: H, widths, media: id, rendition: part, ext: 'jpg',
-    preview: { src: `media/${id}/${part}/preview.jpg`, w: Math.min(PREVIEW, W), h: Math.round(H * Math.min(PREVIEW, W) / W) } };
-}
-
-async function put(key, blob, type, ms = 120000) {
-  const r = await fetchFor(`/edit/api/upload?key=${encodeURIComponent(key)}`, { method: 'PUT', headers: { 'content-type': type }, body: blob }, ms);
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
-  return r.json();
-}
-
-/* Keep a photo as a Library item (its original.<ext>), unless the same photo is already one (found by its content,
-   the first 12 hex digits of its SHA-256), for this painting or another: then that item is used. known: storedFor's
-   answer, if already asked. name: the item's name in the Library. Returns { key: media/<code> (a painting's process
-   record names its original so), id: the code, shared: whether it was already stored }. */
-export async function storedFor(file) {
-  const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))]
-    .map((b) => b.toString(16).padStart(2, '0')).join('');
-  const hash = hex.slice(0, 12);
-  const { key } = await call('GET', `stored?hash=${hash}`);
-  return { file, hash, key };
-}
-export async function keepOriginal(file, name, known, say, grp = 'painting') {
-  if (!known) { say('Checking whether this photo is already stored…'); known = await storedFor(file); }
-  const { hash, key: have } = known;
-  if (have) return { key: have, id: have.slice(6), shared: true };
-  const ext = (file.name.match(/\.([a-z0-9]+)$/i) || [0, 'jpg'])[1].toLowerCase().replace(/^jpeg$/, 'jpg');
-  const { id } = await call('POST', 'library/new', { kind: 'photo', grp, name, hash });
-  say('Keeping the original…');
-  await put(`media/${id}/original.${ext}`, file, file.type || 'image/jpeg');
-  return { key: `media/${id}`, id, shared: false };
+  const { rendition } = await call('POST', 'library/rendition', { item: id, ...(recipe ? { recipe } : { kind: 'flat', label }), settings, files });
+  return known(rendition);
 }

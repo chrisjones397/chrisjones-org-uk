@@ -7,18 +7,19 @@
 
    Content lives in the database (migrations/): each entry has a draft and a published version. Editing
    changes drafts only; publishing copies chosen drafts to published, as one release, keeping a revision of
-   each so any earlier version can be brought back as a draft. Uploaded files go to R2 (binding MEDIA), one folder
-   per Library item (library.js, paths.js).
+   each so any earlier version can be brought back as a draft. Uploaded files go to R2 (binding MEDIA), each
+   under the digest of its bytes, and are recorded in the media layer's tables (library.js, media.js, paths.js).
+   A document (an artwork, a background) names a rendition by its id: the one place the two layers meet.
 
    Every change is a POST (or PUT) with the editor's own address as its Origin, so another site can't make a
    signed-in browser change anything. Text is stored as typed and escaped wherever it's shown (site.js). */
 
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
-import { library, rename, remove, newItem, setData, nextPart, storedPhoto, uploadAllowed } from './library.js';
+import { library, rename, remove, newItem, addOriginal, newRendition, haveFile, putFile, original } from './library.js';
+import { renditions, NAMED } from './media.js';
 import * as digests from './digests.js';
-import { fill, filled } from './fill.js';
-import { CODE, upright } from './paths.js';
+import { fill } from './fill.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -66,16 +67,16 @@ export async function api(request, env, url, who) {
     if (request.method === 'GET') {
       if (path === 'state') return json(await state(env, who));
       if (path === 'history') return json(await history(env));
-      if (path === 'original') return await original(env, url.searchParams.get('key') || '');
-      if (path === 'stored') return json({ key: await storedPhoto(env, url.searchParams.get('hash') || '') });
-      if (path === 'library') return json({ ...(await library(env)), waiting: await digests.waiting(env), filled: await filled(env) });
+      if (path === 'original') return await original(env, url.searchParams.get('item') || '');
+      if (path === 'file') return json(await haveFile(env, url.searchParams.get('digest') || ''));
+      if (path === 'library') return json(await library(env));
+      // slice 2's one-off (digests.js, fill.js): no longer offered by the editor; these routes go in sub-step (e)
       if (path === 'digest/todo') return json(await digests.todo(env));
       if (path === 'digest/file') return await digests.file(env, url.searchParams.get('key') || '');
-      if (path === 'library/next') return json(await nextPart(env, url.searchParams.get('id') || '', url.searchParams.get('part') || ''));
       throw new Bad('Not found', 404);
     }
     if (request.headers.get('origin') !== url.origin) throw new Bad('Changes must come from the editor page', 403);
-    if (request.method === 'PUT' && path === 'upload') return json(await upload(request, env, url));
+    if (request.method === 'PUT' && path === 'file') return json(await putFile(request, env, url, who));
     if (request.method !== 'POST' || !(request.headers.get('content-type') || '').startsWith('application/json')) {
       throw new Bad('Not found', 404);
     }
@@ -86,11 +87,12 @@ export async function api(request, env, url, who) {
     if (path === 'restore') return json(await restore(env, who, body.revision));
     if (path === 'hide') return json(await setHidden(env, who, String(body.id || ''), body.hidden === true));
     if (path === 'library/name') return json(await rename(env, String(body.id || ''), body.name));
-    if (path === 'library/delete') return json(await remove(env, url, String(body.id || ''), body.part ? String(body.part) : null, body.history === true));
+    if (path === 'library/delete') return json(await remove(env, url, body));
     if (path === 'digest/store') return json(await digests.store(env, String(body.key || ''), String(body.digest || '')));
     if (path === 'digest/fill') return json(await fill(env, who));
     if (path === 'library/new') return json(await newItem(env, who, body));
-    if (path === 'library/data') return json(await setData(env, String(body.id || ''), body.data));
+    if (path === 'library/original') return json(await addOriginal(env, String(body.id || ''), String(body.digest || '')));
+    if (path === 'library/rendition') return json(await newRendition(env, who, body));
     throw new Bad('Not found', 404);
   } catch (e) {
     return json({ error: e.message || String(e) }, e.status || 500);
@@ -98,11 +100,18 @@ export async function api(request, env, url, who) {
 }
 
 async function rows(env) {
-  return (await env.DB.prepare('SELECT * FROM entries').all()).results;
+  return (await env.DB.prepare('SELECT id, kind, draft, published, draft_at, draft_by, published_at FROM entries').all()).results;
+}
+
+/* What the editor page keeps in step with the server after every change: the entries, and the renditions their
+   drafts and published versions name (media.js), by id. */
+async function content(env) {
+  const [entries, named] = await Promise.all([rows(env), renditions(env, NAMED.both)]);
+  return { entries, renditions: Object.fromEntries(named) };
 }
 
 async function state(env, who) {
-  return { who, media: !!env.MEDIA, entries: await rows(env) };
+  return { who, media: !!env.MEDIA, ...(await content(env)) };
 }
 
 async function history(env) {
@@ -133,62 +142,29 @@ const PARAGRAPHS = ['t-hero', 't-gallery', 't-contact', 't-profile', 't-footer']
    one needs only its name here and in edit/state.js, and the attribute. */
 const BACKGROUNDS = ['hero', 'contact', 'footer'];
 
-/* How a painting's images were made from its original (edit/darkroom.js): white balance 'none' or 'picks' (from
-   spots), and the four corners it was squared up from, all as fractions of the original's
-   width and height; brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
-   colour kept, 0 to 1) go with any white balance; the corners are in the order the painting's top left, top
-   right, bottom right and bottom left, so they also say which way up it goes (and whether it's mirrored); shape is the size from its details [height, width] when the crop took that shape. Kept so
-   the images can be made again from the original. */
-function processOf(p) {
-  if (typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad processing record');
-  if (typeof p.original !== 'string' || !/^media\/[0-9a-f]{8}$/.test(p.original)) throw new Bad('Bad original');
-  if (!['none', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
-  const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
-  const points = (a, lo, hi, what) => {
-    if (!Array.isArray(a) || a.length < lo || a.length > hi) throw new Bad(`Bad ${what}`);
-    return a.map((q) => { if (!Array.isArray(q) || q.length !== 2) throw new Bad(`Bad ${what}`); return q.map(frac); });
-  };
-  const out = { original: p.original, white: p.white };
-  if (p.white === 'picks') out.spots = points(p.spots, 1, 40, 'white spots');
-  if (p.white !== 'none') {
-    const share = (v, lo, what) => { num(v, what); if (v < lo || v > 1) throw new Bad(`Bad ${what}`); return Math.round(v * 100) / 100; };
-    out.brightness = share(p.brightness ?? 1, 0.5, 'brightness');
-    out.warmth = share(p.warmth ?? 0, 0, 'warmth');
-  }
-  if (p.corners != null) out.corners = points(p.corners, 4, 4, 'corners');
-  if (p.shape != null) {
-    if (!Array.isArray(p.shape) || p.shape.length !== 2 || !p.shape.every((v) => num(v, 'Size') > 0 && v < 10000)) throw new Bad('Bad size');
-    out.shape = p.shape.slice();
-  }
-  return out;
-}
-
-/* Hide (step 1d): a painting, a genre or a section's background can be hidden: off the site (the editor's
+/* Hide (step 1d): an artwork, a genre or a section's background can be hidden: off the site (the editor's
    preview too, as it shows the site as it will be) but kept in the editor. Hiding acts at once (setHidden, slice
    4b): it's the opposite of Publish, not a change waiting for it. Stored only when true, last, so showing it again
    gives back the very same text as before. */
 const hide = (d) => (d.hidden === true ? { hidden: true } : {});
 
+/* A rendition's id, as a document names it. Whether it exists is checked where documents are saved (linked()). */
+const renditionId = (v) => { if (!Number.isInteger(v) || v < 1) throw new Bad('Bad picture'); return v; };
+
 export function normalise(id, kind, d) {
   if (!d || typeof d !== 'object') throw new Bad('Missing content');
-  if (kind === 'section') {
-    const title = str(d.title, 120, 'A section title');
-    if (!title) throw new Bad('A section needs a title');
+  if (kind === 'genre') {
+    const title = str(d.title, 120, 'A genre\'s name');
+    if (!title) throw new Bad('A genre needs a name');
     return { title, order: int(d.order, 'Order'), ...hide(d) };
   }
-  if (kind === 'painting') {
+  if (kind === 'artwork') {
     const title = str(d.title, 200, 'A title');
     if (!title) throw new Bad('A painting needs a title');
     if (!/^[a-z0-9-]{1,100}$/.test(d.name || '')) throw new Bad('Bad painting name');
-    if (!['webp', 'jpg'].includes(d.ext)) throw new Bad('Bad image type');
-    // its images: a set of sizes of a Library item (media, rendition: paths.js)
-    if (!CODE.test(d.media || '') || !/^r\d{1,3}$/.test(d.rendition || '')) throw new Bad('Bad Library item');
-    if (!Array.isArray(d.widths) || !d.widths.length || d.widths.length > 12) throw new Bad('Bad image sizes');
-    const pv = d.preview || {};
-    if (pv.src !== `media/${d.media}/${d.rendition}/preview.jpg`) throw new Bad('Bad preview image');
-    if (!/^s-[a-z0-9-]{1,80}$/.test(d.section || '')) throw new Bad('Bad section');
+    if (!/^s-[a-z0-9-]{1,80}$/.test(d.genre || '')) throw new Bad('Bad genre');
     // Medium, size in centimetres (height, width) and year, kept separately; the details line visitors see is
-    // made from them ("Oil on canvas, 60 x 90 cm, 2020").
+    // made from them whenever it's shown (paths.js detailsLine), never stored.
     const medium = str(d.medium ?? '', 120, 'Medium'), year = str(d.year ?? '', 20, 'Year');
     let cm = null;
     if (d.cm != null) {
@@ -196,20 +172,13 @@ export function normalise(id, kind, d) {
       cm = d.cm.map((v) => { num(v, 'Size'); if (!(v > 0 && v < 10000)) throw new Bad('A size must be more than 0 cm'); return Math.round(v * 10) / 10; });
     }
     // estimated: the size isn't measured (only a scale; the photo gave the shape). size_shown: whether visitors see
-    // the size, kept only when it differs from the default (shown when measured, hidden when not); an estimated
-    // size that is shown is followed by "(est.)".
+    // the size, kept only when it differs from the default (shown when measured, hidden when not).
     const estimated = !!cm && !!d.estimated;
     const shown = !!cm && (d.size_shown == null ? !estimated : !!d.size_shown);
-    const size = cm && shown && `${cm[0]} x ${cm[1]} cm${estimated ? ' (est.)' : ''}`;
-    const details = [medium, size, year].filter(Boolean).join(', ');
     return {
       name: d.name, title, medium, cm, year, ...(estimated ? { estimated: true } : {}),
-      ...(cm && shown !== !estimated ? { size_shown: shown } : {}), details, section: d.section,
-      order: int(d.order, 'Order'), wide: !!d.wide, white_paper: !!d.white_paper,
-      w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: d.widths.map((w) => int(w, 'A size')),
-      media: d.media, rendition: d.rendition,
-      ext: d.ext, preview: { src: pv.src, w: int(pv.w, 'Preview width'), h: int(pv.h, 'Preview height') },
-      ...(d.process != null ? { process: processOf(d.process) } : {}),
+      ...(cm && shown !== !estimated ? { size_shown: shown } : {}), genre: d.genre,
+      order: int(d.order, 'Order'), wide: !!d.wide, rendition: renditionId(d.rendition),
       ...(d.featured === true ? { featured: true } : {}), ...hide(d),   // Featured (starred): on the home page's wall; only when true
     };
   }
@@ -220,53 +189,42 @@ export function normalise(id, kind, d) {
   throw new Bad('Unknown kind of content');
 }
 
-/* A section's background (entries bg-<section>): a Library item, see backgroundItem. */
+/* A section's background (entries bg-<section>): the rendition it shows (a photo's sizes, or a video's versions
+   and frames), its focus (the point kept in view when the screen's shape crops it) and shade; for a video also
+   how it plays (once or loop) and what visitors who ask for reduced motion get (its last frame, or a fade).
+   (Focus, play and calm become the Framing in step 5; the background keeps the shade and gains a list.) */
 function backgroundOf(id, d) {
   if (!BACKGROUNDS.includes(id.slice(3))) throw new Bad('That section can\'t have a background');
-  return { ...backgroundItem(d), ...hide(d) };
-}
-
-/* A background from a Library item (paths.js): what it uses of the item, so visitors see a change only once it's
-   published. A photo: one set of sizes (rendition, widths, w, h). A video: its versions (file <w>x<h>, w, h,
-   bytes, seconds) and frames for each shape it has ({ wide, tall }: dir wide-1..., widths, from: the version
-   they were taken from). Both: focus, shade; a video: play, calm. */
-function backgroundItem(d) {
-  if (!CODE.test(d.media)) throw new Bad('Bad Library item');
   const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('The focus is off the picture'); return Math.round(v * 1000) / 1000; };
   if (!Array.isArray(d.focus) || d.focus.length !== 2) throw new Bad('Bad focus');
   num(d.shade, 'Shade');
   if (d.shade < 0 || d.shade > 0.6) throw new Bad('The shade must be between 0 and 60%');
-  const widths = (a) => {
-    if (!Array.isArray(a) || !a.length || a.length > 12) throw new Bad('Bad image sizes');
-    return a.map((w) => int(w, 'A size'));
-  };
-  const common = { media: d.media, focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100 };
-  if (d.type === 'photo') {
-    if (!/^r\d{1,3}$/.test(d.rendition || '')) throw new Bad('Bad set of sizes');
-    return { type: 'photo', ...common, rendition: d.rendition, w: int(d.w, 'Width'), h: int(d.h, 'Height'), widths: widths(d.widths) };
+  const out = { rendition: renditionId(d.rendition), focus: d.focus.map(frac), shade: Math.round(d.shade * 100) / 100 };
+  if (d.play != null || d.calm != null) {
+    if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
+    if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
+    Object.assign(out, { play: d.play, calm: d.calm });
   }
-  if (d.type !== 'video') throw new Bad('A background is a photo or a video');
-  if (!Array.isArray(d.versions) || !d.versions.length || d.versions.length > 6) throw new Bad('A video needs one to six versions');
-  const files = new Set();
-  const versions = d.versions.map((v) => {
-    if (!/^\d{2,5}x\d{2,5}(?:-\d{1,2})?$/.test(v.file || '') || files.has(v.file)) throw new Bad('Bad version');
-    files.add(v.file);
-    num(v.seconds, 'Length');
-    if (!(v.seconds > 0 && v.seconds < 600)) throw new Bad('A video must be under ten minutes');
-    if (!Number.isInteger(v.bytes) || v.bytes <= 0 || v.bytes > 2e8) throw new Bad('Bad file size');
-    return { file: v.file, w: int(v.w, 'Width'), h: int(v.h, 'Height'), bytes: v.bytes, seconds: Math.round(v.seconds * 100) / 100 };
-  });
-  const frames = {};
-  for (const [shape, up] of [['wide', false], ['tall', true]]) {
-    const f = (d.frames || {})[shape];
-    if (!versions.some((v) => upright(v) === up)) continue;
-    if (!f) throw new Bad(`The video's ${up ? 'upright' : 'level'} versions have no first and last frames`);
-    if (!new RegExp(`^${shape}-\\d{1,3}$`).test(f.dir || '')) throw new Bad('Bad frames');
-    frames[shape] = { dir: f.dir, widths: widths(f.widths), ...(f.from ? { from: String(f.from).slice(0, 20) } : {}) };
+  return { ...out, ...hide(d) };
+}
+
+/* The links inside documents can't be foreign keys (they are inside JSON), so they are checked here, on saving
+   (docs/entities.md, section 3): the rendition a document names must exist and be the right kind of thing: a
+   picture squared up or as it is for an artwork; a picture or a video for a background, with play and calm
+   exactly when it is a video. docs: [{ kind, d }] as normalised. */
+async function linked(env, docs) {
+  const ids = [...new Set(docs.filter((x) => x.d.rendition != null).map((x) => x.d.rendition))];
+  if (!ids.length) return;
+  const { results } = await env.DB.prepare('SELECT r.id, c.kind FROM rendition r JOIN recipe c ON c.id = r.recipe_id WHERE r.id IN (SELECT value FROM json_each(?))')
+    .bind(JSON.stringify(ids)).all();
+  const kindOf = new Map(results.map((r) => [r.id, r.kind]));
+  for (const { kind, d } of docs) {
+    if (d.rendition == null) continue;
+    const k = kindOf.get(d.rendition);
+    if (!k) throw new Bad('Its picture is no longer in the Library');
+    if (kind === 'artwork' && k === 'video') throw new Bad('A painting\'s picture can\'t be a video');
+    if (kind === 'background' && (k === 'video') !== (d.play != null)) throw new Bad(k === 'video' ? 'A video background needs how it plays' : 'Only a video background has a way of playing');
   }
-  if (!['once', 'loop'].includes(d.play)) throw new Bad('Bad way of playing');
-  if (!['last', 'fade'].includes(d.calm)) throw new Bad('Bad choice for reduced motion');
-  return { type: 'video', ...common, versions, frames, play: d.play, calm: d.calm };
 }
 
 /* The contact links (links.js): { <site>: { name, on } } in links.js's order; a ticked one needs a username that
@@ -285,19 +243,19 @@ function linksOf(d) {
   return out;
 }
 
-/* items: [{ id, kind, data }], data null to delete. New paintings are "p-<name>"; new sections "s-<random>". */
+/* items: [{ id, kind, data }], data null to delete. New artworks are "p-<name>"; new genres "s-<random>". */
 async function save(env, who, items) {
   if (!Array.isArray(items) || !items.length || items.length > 200) throw new Bad('Nothing to save');
   const all = await rows(env);
   const byId = Object.fromEntries(all.map((r) => [r.id, r]));
   const names = new Set();
-  for (const r of all) if (r.kind === 'painting') for (const v of [r.draft, r.published]) if (v) names.add(`${JSON.parse(v).name}\u0000${r.id}`);
-  const stmts = [], at = now();
+  for (const r of all) if (r.kind === 'artwork') for (const v of [r.draft, r.published]) if (v) names.add(`${JSON.parse(v).name}\u0000${r.id}`);
+  const stmts = [], docs = [], at = now();
   for (const it of items) {
     if (!/^[a-z0-9-]{1,100}$/.test(it.id || '')) throw new Bad('Bad id');
     const old = byId[it.id];
     if (old && old.kind !== it.kind) throw new Bad('That entry is a different kind');
-    if (!old && !((it.kind === 'painting' && it.id.startsWith('p-')) || (it.kind === 'section' && it.id.startsWith('s-'))
+    if (!old && !((it.kind === 'artwork' && it.id.startsWith('p-')) || (it.kind === 'genre' && it.id.startsWith('s-'))
         || (it.kind === 'text' && PARAGRAPHS.includes(it.id)) || (it.kind === 'links' && it.id === 'links')
         || (it.kind === 'background' && it.id.startsWith('bg-') && BACKGROUNDS.includes(it.id.slice(3))))) {
       throw new Bad('Only paintings, genres, the sections\' paragraphs, background pictures and the contact links can be added');
@@ -309,7 +267,8 @@ async function save(env, who, items) {
       continue;
     }
     const d = normalise(it.id, it.kind, it.data);
-    if (it.kind === 'painting') {
+    docs.push({ kind: it.kind, d });
+    if (it.kind === 'artwork') {
       if (it.id !== `p-${d.name}` && !old) throw new Bad('A new painting\'s id must be p-<name>');
       for (const n of names) {
         const [name, id] = n.split('\u0000');
@@ -320,8 +279,9 @@ async function save(env, who, items) {
       ON CONFLICT(id) DO UPDATE SET draft = excluded.draft, draft_at = excluded.draft_at, draft_by = excluded.draft_by`)
       .bind(it.id, it.kind, JSON.stringify(d), at, who));
   }
+  await linked(env, docs);
   if (stmts.length) await env.DB.batch(stmts);
-  return { entries: await rows(env) };
+  return content(env);
 }
 
 /* Put the chosen drafts back to their published versions (a never-published entry goes altogether). */
@@ -337,12 +297,12 @@ async function discard(env, ids) {
       : env.DB.prepare('UPDATE entries SET draft = published, draft_at = published_at, draft_by = NULL WHERE id = ?').bind(id));
   }
   if (stmts.length) await env.DB.batch(stmts);
-  return { entries: await rows(env) };
+  return content(env);
 }
 
 /* Publish the chosen changes (ids), or every change (ids null), as one release. Anything a chosen change
-   can't do without comes too, and is listed in the answer: a painting's new section, and the paintings
-   still published in a section being deleted. */
+   can't do without comes too, and is listed in the answer: an artwork's new genre, and the artworks
+   still published in a genre being deleted. */
 async function publish(env, who, ids, note) {
   const all = await rows(env);
   const byId = Object.fromEntries(all.map((r) => [r.id, r]));
@@ -355,12 +315,12 @@ async function publish(env, who, ids, note) {
     for (const id of [...chosen]) {
       const r = byId[id];
       const need = [];
-      if (r.kind === 'painting' && r.draft) {
-        const s = JSON.parse(r.draft).section;
-        if (byId[s] && byId[s].published === null) need.push(s);      // a section not yet published
+      if (r.kind === 'artwork' && r.draft) {
+        const s = JSON.parse(r.draft).genre;
+        if (byId[s] && byId[s].published === null) need.push(s);      // a genre not yet published
       }
-      if (r.kind === 'section' && r.draft === null) {
-        for (const p of all) if (p.kind === 'painting' && p.published && JSON.parse(p.published).section === id) need.push(p.id);
+      if (r.kind === 'genre' && r.draft === null) {
+        for (const p of all) if (p.kind === 'artwork' && p.published && JSON.parse(p.published).genre === id) need.push(p.id);
       }
       for (const n of need) {
         const d = byId[n];
@@ -382,13 +342,13 @@ async function publish(env, who, ids, note) {
       : env.DB.prepare('UPDATE entries SET published = draft, published_at = ? WHERE id = ?').bind(at, id));
   }
   await env.DB.batch(stmts);   // one transaction: all of it is published, or none
-  return { published: [...chosen], added, entries: await rows(env) };
+  return { published: [...chosen], added, ...(await content(env)) };
 }
 
 /* Hide or show again at once (slice 4b): the published version and the draft both change, straight away, as a
    release of its own in History (so it can be brought back); any other change waiting in the draft stays waiting.
    Only something already on the site can be hidden: a never-published thing isn't seen by visitors anyway. */
-const HIDEABLE = ['painting', 'section', 'background'];
+const HIDEABLE = ['artwork', 'genre', 'background'];
 async function setHidden(env, who, id, hidden) {
   const r = await env.DB.prepare('SELECT * FROM entries WHERE id = ?').bind(id).first();
   if (!r) throw new Bad('No such entry', 404);
@@ -401,21 +361,21 @@ async function setHidden(env, who, id, hidden) {
     return JSON.stringify(normalise(id, r.kind, d));
   };
   const published = flip(r.published);
-  if (published === r.published) return { entries: await rows(env) };
+  if (published === r.published) return content(env);
   let draft = r.draft;
   if (draft !== null) {
     try { draft = r.draft === r.published ? published : flip(r.draft); }
     catch { /* a draft that no longer passes the checks keeps waiting as it is */ }
   }
   const at = now(), d = JSON.parse(r.published);
-  const what = r.kind === 'section' ? `the genre ${d.title}` : r.kind === 'painting' ? d.title : `the ${id.slice(3)} background`;
+  const what = r.kind === 'genre' ? `the genre ${d.title}` : r.kind === 'artwork' ? d.title : `the ${id.slice(3)} background`;
   await env.DB.batch([
     env.DB.prepare('INSERT INTO releases (at, by, note) VALUES (?, ?, ?)').bind(at, who, `${hidden ? 'Hidden' : 'Shown again'}: ${what}`),
     env.DB.prepare('INSERT INTO revisions (release_id, entry_id, kind, data, previous) VALUES ((SELECT MAX(id) FROM releases), ?, ?, ?, ?)')
       .bind(id, r.kind, published, r.published),
     env.DB.prepare('UPDATE entries SET published = ?, published_at = ?, draft = ? WHERE id = ?').bind(published, at, draft, id),
   ]);
-  return { entries: await rows(env) };
+  return content(env);
 }
 
 /* Bring back an earlier version (a revision) as the draft. For a removal, that means undoing it: what it was just
@@ -427,53 +387,17 @@ async function restore(env, who, revision) {
   const data = v.data ?? v.previous;
   if (data === null) throw new Bad('There is nothing in that version to bring back');
   const d = JSON.parse(data);
-  if (d.media && !(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(d.media).first())) {
+  if (d.rendition != null && !(await env.DB.prepare('SELECT 1 FROM rendition WHERE id = ?').bind(d.rendition).first())) {
     throw new Bad('Its picture has been deleted for good from the Library, so that version can\'t come back');
   }
-  if (v.kind === 'painting') {
-    const sec = await env.DB.prepare('SELECT draft FROM entries WHERE id = ?').bind(d.section).first();
+  if (v.kind === 'artwork') {
+    const sec = await env.DB.prepare('SELECT draft FROM entries WHERE id = ?').bind(d.genre).first();
     if (!sec || !sec.draft) throw new Bad('That version\'s genre no longer exists: bring the genre back first');
   }
   await env.DB.prepare(`INSERT INTO entries (id, kind, draft, published, draft_at, draft_by) VALUES (?, ?, ?, NULL, ?, ?)
     ON CONFLICT(id) DO UPDATE SET draft = excluded.draft, draft_at = excluded.draft_at, draft_by = excluded.draft_by`)
     .bind(v.entry_id, v.kind, data, now(), who).run();
-  return { entries: await rows(env) };
-}
-
-/* GET /edit/api/original?key=media/<code>: a Library item's original photo (original.<ext>), for reopening a
-   painting's picture in the editor. Only ever to the signed-in editor (this API); visitors never get originals.
-   x-original says what the darkroom records as the original (media/<code>). */
-async function original(env, key) {
-  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
-  const item = /^media\/([0-9a-f]{8})$/.exec(key);
-  if (!item) throw new Bad('Bad file name');
-  const found = (await env.MEDIA.list({ prefix: `media/${item[1]}/original.`, limit: 1 })).objects[0];
-  const obj = found && await env.MEDIA.get(found.key);
-  if (!obj) throw new Bad('The original photo isn\'t in storage', 404);
-  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType || 'application/octet-stream',
-    'x-original': key, 'cache-control': 'private, no-store' } });
-}
-
-/* PUT /edit/api/upload?key=media/<code>/<file> */
-async function upload(request, env, url) {
-  if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on yet', 503);
-  return uploadItem(request, env, url.searchParams.get('key') || '');
-}
-
-/* PUT /edit/api/upload?key=media/<code>/<file>: a file of a Library item (library.js uploadAllowed has the
-   names it may have), stored as sent, streamed through. Never overwrites. */
-async function uploadItem(request, env, key) {
-  if (!(await uploadAllowed(env, key))) throw new Bad('Bad file name');
-  const video = key.endsWith('.mp4');
-  const type = request.headers.get('content-type') || '';
-  if (video ? type !== 'video/mp4' : !/^image\/[a-z0-9.+-]+$/.test(type)) throw new Bad(video ? 'Only MP4 videos can be uploaded' : 'Only images can be uploaded');
-  const size = Number(request.headers.get('content-length') || 0);
-  if (!size || size > 95 * 1024 * 1024) throw new Bad('Files must be under 95 megabytes');
-  if (await env.MEDIA.head(key)) throw new Bad('A file by that name already exists', 409);
-  const { readable, writable } = new FixedLengthStream(size);
-  const piping = request.body.pipeTo(writable);
-  await Promise.all([env.MEDIA.put(key, readable, { httpMetadata: { contentType: video ? 'video/mp4' : type } }), piping]);
-  return { key };
+  return content(env);
 }
 
 export { slug };

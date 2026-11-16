@@ -11,12 +11,13 @@
      - the contact section's links (data-links), from the same entry.
    mode 'published' is what visitors see; mode 'draft' is the editor's preview (admin.chrisjones.org.uk).
 
-   Where paintings' and backgrounds' files are: paths.js (one folder in R2 per Library item, served by
-   worker.js at /media/<code>/...). */
+   A painting (an artwork) or a background names a rendition by its id; its pictures come from the media layer
+   (media.js: the rendition's files, each at /media/<digest>.<ext>, paths.js; worker.js serves them). */
 
 import header from './templates/header.html';   // .html files are imported as text (Wrangler's default rules)
 import { ticked, icon } from './links.js';
-import { paintingAt, paintingPattern, photoAt, versionAt, framesFor } from './paths.js';
+import { sizeFor, framesFor, detailsLine } from './paths.js';
+import { renditionsQuery, renditionsFrom, NAMED } from './media.js';
 
 const PARTIALS = { header };
 const INVITE_COUNT = 5;
@@ -31,11 +32,14 @@ export function slug(title) {
     .replace(/[#,.'’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-/* Everything one version of the site shows: sections in order, each with its paintings in order. */
+/* Everything one version of the site shows: genres in order, each with its paintings in order. A painting or a
+   background comes with its rendition as `pic` (media.js); one whose rendition is missing is left out. */
 export async function load(env, mode) {
-  const { results } = await env.DB.prepare('SELECT id, kind, draft, published FROM entries').all();
+  const [entries, files] = await env.DB.batch([
+    env.DB.prepare('SELECT id, kind, draft, published FROM entries'), renditionsQuery(env, NAMED[mode])]);
+  const results = entries.results, pics = renditionsFrom(files.results);
   const pick = (r) => (mode === 'draft' ? r.draft : r.published);
-  const sections = [], paintings = [], texts = {}, settings = {}, backgrounds = {};
+  const genres = [], paintings = [], texts = {}, settings = {}, backgrounds = {};
   let links = null;
   let changes = 0;
   for (const r of results) {
@@ -44,31 +48,29 @@ export async function load(env, mode) {
     if (raw == null) continue;
     const d = JSON.parse(raw);
     if (d.hidden) continue;                          // hidden: off the site, kept in the editor
-    if (r.kind === 'section') sections.push({ id: r.id, ...d, paintings: [] });
-    else if (r.kind === 'painting') paintings.push({ id: r.id, ...d });
+    const pic = d.rendition == null ? null : pics.get(d.rendition);
+    if (r.kind === 'genre') genres.push({ id: r.id, ...d, paintings: [] });
+    else if (r.kind === 'artwork') { if (pic && pic.sizes.length) paintings.push({ id: r.id, ...d, pic, w: pic.w, h: pic.h, details: detailsLine(d) }); }
     else if (r.kind === 'text') texts[r.id.slice(2)] = d.text;
     else if (r.kind === 'settings') settings[r.id.slice(9)] = d;
-    else if (r.kind === 'background') backgrounds[r.id.slice(3)] = d;
+    else if (r.kind === 'background') { if (pic && (pic.kind === 'video' ? pic.versions.length : pic.sizes.length)) backgrounds[r.id.slice(3)] = { ...d, pic }; }
     else if (r.kind === 'links') links = d;
   }
   const byOrder = (a, b) => a.order - b.order || a.title.localeCompare(b.title);
-  sections.sort(byOrder);
-  const sec = Object.fromEntries(sections.map((s) => [s.id, s]));
-  for (const p of paintings.sort(byOrder)) if (sec[p.section]) sec[p.section].paintings.push(p);
-  const ordered = sections.flatMap((s) => s.paintings);
+  genres.sort(byOrder);
+  const sec = Object.fromEntries(genres.map((s) => [s.id, s]));
+  for (const p of paintings.sort(byOrder)) if (sec[p.genre]) sec[p.genre].paintings.push(p);
+  const ordered = genres.flatMap((s) => s.paintings);
   const byName = Object.fromEntries(ordered.map((p) => [p.name, p]));
   // Featured: the starred paintings, the home page's selection, in the gallery's order; none starred, all of them
   const starred = ordered.filter((p) => p.featured);
   const featured = starred.length ? starred : ordered;
-  return { mode, sections, paintings: ordered, featured, byName, texts, settings, backgrounds, links, changes };
+  return { mode, genres, paintings: ordered, featured, byName, texts, settings, backgrounds, links, changes };
 }
 
-const file = (p, w, prefix = '') => `${prefix}${paintingAt(p, w)}`;
-
-function imgTag(p, prefix, sizes, indent) {
-  const srcset = p.widths.map((w) => `${file(p, w, prefix)} ${w}w`).join(`,\n${indent}        `);
-  const srcW = p.widths.find((w) => w >= 480) || p.widths[p.widths.length - 1];
-  return `<img src="${file(p, srcW, prefix)}"\n${indent}     srcset="${srcset}"\n${indent}     sizes="${sizes}"\n`
+function imgTag(p, sizes, indent) {
+  const srcset = p.pic.sizes.map((s) => `${s.url} ${s.width}w`).join(`,\n${indent}        `);
+  return `<img src="${sizeFor(p.pic.sizes, 480).url}"\n${indent}     srcset="${srcset}"\n${indent}     sizes="${sizes}"\n`
     + `${indent}     width="${p.w}" height="${p.h}" alt="${esc(p.title)}" loading="lazy">`;
 }
 
@@ -78,20 +80,19 @@ function imgTag(p, prefix, sizes, indent) {
    A video's versions are <source>s, the browser taking the first that matches: portrait versions first, for
    screens held upright, then by width, each needing a screen that shows more pixels across (window width x pixel
    density) than the next smaller version has. Each source carries its shape's first and last frames (data-first,
-   data-last; paths.js), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
+   data-last; paths.js framesFor), and the poster starts as the largest landscape version's first frame; backgrounds.js swaps in
    the frames of the version chosen, starts it, and gives visitors who ask for reduced motion or less data the
    still (calm: last frame, or a fade from first to last) instead. */
-const srcsetOf = (urlAt, widths) => widths.map((w) => `${urlAt(w)} ${w}w`).join(', ');
-const near = (widths, want) => widths.find((w) => w >= want) || widths[widths.length - 1];
+const srcsetOf = (list) => list.map((s) => `${s.url} ${s.width}w`).join(', ');
 function bgTag(b) {
   const pos = `object-position: ${(b.focus[0] * 100).toFixed(1)}% ${(b.focus[1] * 100).toFixed(1)}%`;
-  if (b.type !== 'video') {
-    const widths = b.widths;
-    return `<img class="section-bg" src="${photoAt(b, near(widths, 1536))}" srcset="${srcsetOf((w) => photoAt(b, w), widths)}" sizes="100vw"`
-      + ` width="${b.w}" height="${b.h}" alt="" loading="lazy" decoding="async" style="${pos}">`;
+  const r = b.pic;
+  if (r.kind !== 'video') {
+    return `<img class="section-bg" src="${sizeFor(r.sizes, 1536).url}" srcset="${srcsetOf(r.sizes)}" sizes="100vw"`
+      + ` width="${r.w}" height="${r.h}" alt="" loading="lazy" decoding="async" style="${pos}">`;
   }
-  const portrait = b.versions.filter((v) => v.h > v.w).sort((x, y) => y.w - x.w);
-  const landscape = b.versions.filter((v) => v.h <= v.w).sort((x, y) => y.w - x.w);
+  const portrait = r.versions.filter((v) => v.h > v.w).sort((x, y) => y.w - x.w);
+  const landscape = r.versions.filter((v) => v.h <= v.w).sort((x, y) => y.w - x.w);
   const needs = (n) => [1, 2, 3].map((d) => `(min-width: ${Math.floor(n / d) + 1}px)${d > 1 ? ` and (min-resolution: ${d}dppx)` : ''}`);
   const media = (group, i, upright) => {
     const next = group[i + 1];
@@ -100,14 +101,15 @@ function bgTag(b) {
     return wide ? wide.join(', ') : null;
   };
   const frames = (v) => {     // its shape's frames (paths.js), at about the version's own width
-    const f = framesFor(b, v), w = near(f.widths, Math.min(v.w, 1920));
-    return ` data-first="${f.first(w)}" data-last="${f.last(w)}"`
-      + ` data-first-set="${srcsetOf(f.first, f.widths)}" data-last-set="${srcsetOf(f.last, f.widths)}"`;
+    const f = framesFor(r, v), w = Math.min(v.w, 1920);
+    if (!f) return '';
+    return ` data-first="${sizeFor(f.first, w).url}" data-last="${sizeFor(f.last, w).url}"`
+      + ` data-first-set="${srcsetOf(f.first)}" data-last-set="${srcsetOf(f.last)}"`;
   };
   const sources = [...portrait.map((v, i) => [v, media(portrait, i, true)]), ...landscape.map((v, i) => [v, media(landscape, i, false)])]
-    .map(([v, m]) => `\n        <source src="${versionAt(b, v)}" type="video/mp4"${m ? ` media="${m}"` : ''}${frames(v)}>`).join('');
-  const lead = framesFor(b, landscape[0] || portrait[0]);
-  return `<video class="section-bg" poster="${lead.first(near(lead.widths, 1536))}" muted playsinline preload="metadata"`
+    .map(([v, m]) => `\n        <source src="${v.url}" type="video/mp4"${m ? ` media="${m}"` : ''}${frames(v)}>`).join('');
+  const lead = framesFor(r, landscape[0] || portrait[0]);
+  return `<video class="section-bg"${lead ? ` poster="${sizeFor(lead.first, 1536).url}"` : ''} muted playsinline preload="metadata"`
     + ` disablepictureinpicture disableremoteplayback x-webkit-airplay="deny" aria-hidden="true"`
     + ` data-play="${b.play}" data-calm="${b.calm}" style="${pos}">${sources}\n      </video>`
     + '<script>window.bgVideo && bgVideo(document.currentScript.previousElementSibling)</script>';
@@ -136,10 +138,12 @@ function headerLinks(links) {
 export function homePreview(c) {
   const b = c.backgrounds && c.backgrounds.hero;
   if (!b) return null;
-  if (b.type !== 'video') { const w = near(b.widths, 1200); return { src: photoAt(b, w), w, h: Math.round(b.h * w / b.w) }; }
-  const v = b.versions.filter((x) => x.h <= x.w).sort((x, y) => y.w - x.w)[0] || b.versions[0];
-  const f = framesFor(b, v), w = near(f.widths, 1200);
-  return { src: f.last(w), w, h: Math.round(v.h * w / v.w) };
+  const r = b.pic;
+  if (r.kind !== 'video') { const s = sizeFor(r.sizes, 1200); return s ? { src: s.url, w: s.width, h: Math.round(r.h * s.width / r.w) } : null; }
+  const v = r.versions.filter((x) => x.h <= x.w)[0] || r.versions[0], f = v && framesFor(r, v);
+  if (!f || !f.last.length) return null;
+  const s = sizeFor(f.last, 1200);
+  return { src: s.url, w: s.width, h: Math.round(v.h * s.width / v.w) };
 }
 
 /* The floating wall's data (gallery.js): on the home page the Featured paintings; on the gallery page every painting,
@@ -149,10 +153,10 @@ export function galleryData(c, whole) {
   const groups = [];
   if (whole) {
     let at = 0;
-    for (const s of c.sections) { if (s.paintings.length) groups.push({ title: s.title, from: at }); at += s.paintings.length; }
+    for (const s of c.genres) { if (s.paintings.length) groups.push({ title: s.title, from: at }); at += s.paintings.length; }
   }
   const items = list.map((p) => ({ name: p.name, title: p.title, details: p.details, wide: p.wide,
-    w: p.w, h: p.h, widths: p.widths, cm: p.cm, at: paintingPattern(p) }));
+    w: p.w, h: p.h, sizes: p.pic.sizes.map((s) => [s.width, s.url]), cm: p.cm }));
   // inside <script>, so no "<" may appear as itself
   return JSON.stringify({ settings: c.settings.gallery || {}, paintings: items, groups }).replace(/</g, '\\u003c');
 }
@@ -163,17 +167,17 @@ function inviteHtml(c) {
   const ind = '          ';
   // --k: the square root of its proportions, so each slot gives every painting the same area, whatever its shape
   return chosen.map((p) => `\n        <a class="invite-pic" href="gallery/${p.name}/" tabindex="-1" style="--k: ${Math.sqrt(p.w / p.h).toFixed(3)}">`
-    + `\n${ind}${imgTag(p, '', '(max-width: 700px) 40vw, 24vw', ind)}\n        </a>`).join('') + '\n      ';
+    + `\n${ind}${imgTag(p, '(max-width: 700px) 40vw, 24vw', ind)}\n        </a>`).join('') + '\n      ';
 }
 
 function gridHtml(c, prefix) {
-  return c.sections.filter((s) => s.paintings.length).map((s) => {
+  return c.genres.filter((s) => s.paintings.length).map((s) => {
     const head = `\n          <div class="entire"><h3 id="${slug(s.title)}">${shown(s.title)}</h3></div>\n`;
     return head + s.paintings.map((p) => {
       const kind = p.wide ? 'entire' : (p.h > p.w ? 'portrait' : 'landscape');
       const details = p.details ? `\n            <p>${shown(p.details)}</p>` : '';
       return `          <div class="${kind}" id="p-${p.name}">\n            <a href="${prefix}gallery/${p.name}/">\n              `
-        + `${imgTag(p, prefix, p.wide ? SIZES_WIDE : SIZES_GRID, '              ')}\n            </a>\n`
+        + `${imgTag(p, p.wide ? SIZES_WIDE : SIZES_GRID, '              ')}\n            </a>\n`
         + `            <p>${shown(p.title)}</p>${details}\n          </div>\n`;
     }).join('');
   }).join('') + '      ';

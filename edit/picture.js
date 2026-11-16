@@ -16,7 +16,7 @@ import { WIDTHS } from './uploads.js';
    of the page; the form it sits in gives it the details fields (height, width, measured or not) with attach().
    opts, for reopening: previous (address of the painting's current picture), saved (its choices, as summarised
    before the original is read), start (load()'s options for those choices) and fetch (resolves with the
-   original's { blob, original key }).
+   original's { blob }).
    Reopening also offers "Replace photo…", for a better photo or a higher-resolution copy: if its proportions match
    the old original's (the same photo), the corners and white spots carry over (they're fractions of the photo);
    otherwise only the sliders are kept, the corners are guessed afresh and the spots cleared. It says which. The
@@ -39,7 +39,7 @@ function cornersText(r) {
 export function darkroom(opts = {}) {
   const reopen = !!opts.fetch;
   const g = {};
-  let F = {}, p = null, baseline = '', saved = null, startWith = {}, original = null, fetching = null;
+  let F = {}, p = null, baseline = '', saved = null, startWith = {}, fetching = null;
   let replacement = null, oldBlob = null, ghost = null;     // ghost: the saved choices that still apply to the photo shown
   let timer;
   const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
@@ -105,7 +105,7 @@ export function darkroom(opts = {}) {
       g.status.textContent = 'Fetching the original…';
       try {
         const got = await opts.fetch();
-        original = got.original; oldBlob = got.blob;
+        oldBlob = got.blob;
         if (!(await load(got.blob, opts.start))) throw new Error('This browser can\'t read the original');
       } catch (err) {
         g.status.textContent = ''; g.whiteBox.open = g.cornerBox.open = false; toast(err.message, true);
@@ -121,7 +121,7 @@ export function darkroom(opts = {}) {
     g.replaceBtn.disabled = true;
     try {
       if (!p && !replacement) await need();
-      const before = p ? { W: p.W, H: p.H, rec: record('') } : null;
+      const before = p ? { W: p.W, H: p.H, rec: record() } : null;
       const was = before ? before.rec : (opts.start.process || { white: opts.saved.white });
       const sliders = was.white && was.white !== 'none' ? { brightness: was.brightness ?? 1, warmth: was.warmth ?? 0 } : {};
       let same = false;
@@ -180,7 +180,7 @@ export function darkroom(opts = {}) {
     if (!reopen) g.whiteBox.open = g.cornerBox.open = true;          // adding: both open
     await update();
     if (replacing) return true;                                      // the saved choices stay as they were
-    baseline = JSON.stringify(record(''));
+    baseline = JSON.stringify(record());
     if (reopen) { saved = ghost = JSON.parse(baseline); ghosts(); }
     g.back.hidden = true;
     return true;
@@ -288,7 +288,7 @@ export function darkroom(opts = {}) {
       F.ratio = ratio; F.follow();
     }
     const shape = shapeLine();
-    const now = record('');
+    const now = record();
     g.whiteSum.textContent = whiteText(now); g.cornerSum.textContent = cornersText(now);
     g.back.hidden = replacement ? !oldBlob : !saved || JSON.stringify(now) === baseline;
     await busy('Working…');
@@ -328,11 +328,11 @@ export function darkroom(opts = {}) {
     if (opts.onChange) opts.onChange();             // reopened: the painting's form stores the picture once it rests
   }
 
-  /* The choices, as saved with the painting (editor.js processOf on the server). */
-  function record(original) {
+  /* The choices, as kept in the recipe's settings (library.js settingsOf on the server). */
+  function record() {
     const shape = shapeLine();
     const w = white();
-    return { original, white: w,
+    return { white: w,
       ...(w === 'picks' ? { spots: p.spots } : {}),
       ...(w !== 'none' ? how() : {}),
       ...(p.corners ? { corners: p.corners } : {}), ...(shape ? { shape } : {}) };
@@ -343,10 +343,9 @@ export function darkroom(opts = {}) {
     sizeChanged() { if (p) later(update); else shapeLine(); },
     get ready() { return !!(p && p.out); },
     get white() { return white(); },
-    get original() { return original; },
     get replacement() { return replacement; },        // a new photo, to be stored as the original on saving
     result() { return { out: p.out, W: p.outW, H: p.outH }; },
-    changed() { return !!p && (!!replacement || JSON.stringify(record('')) !== baseline); },   // since it was loaded
+    changed() { return !!p && (!!replacement || JSON.stringify(record()) !== baseline); },   // since it was loaded
     say(text) { g.status.textContent = text; },
   };
 }

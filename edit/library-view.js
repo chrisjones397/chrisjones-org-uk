@@ -2,29 +2,29 @@
 
 import { h, toast, glyph, GLYPHS, MB } from './dom.js';
 import { state } from './state.js';
-import { call, act, loadLibrary, fetchFor } from './server.js';
+import { call, act, loadLibrary } from './server.js';
 import { render } from './render.js';
 import { photoItem, videoItem } from './uploads.js';
 import { strongest, useMarks } from './uses.js';
 import { showItems, blinkView } from './compare.js';
 
-/* Every item in storage (library.js on the server), as Site pictures and Paintings. Each row: its picture, its name
-   (the Library's own: saved as soon as it's changed, with a tick), its code (its folder in R2, media/<code>/: tap to
-   copy), what uses it, then a line for each part (the original, each set of sizes, each video version, each set of
-   frames) with its weight, and a bin for a part nothing uses. The bin on the right deletes the whole item, only
-   when no draft or published page uses it. Photos and videos for the site can be added here; paintings come in
-   through the Gallery (their pictures are prepared in the darkroom). */
+/* Every item in the Library (library.js on the server), as Site pictures and Paintings: two lists that are a
+   filter on what an item is made or used for, so an item used both ways is in both. Each row: its picture, its
+   name (the Library's own: saved as soon as it's changed, with a tick), its code (tap to copy), what uses it,
+   then a line for each original and each rendition (a recipe's result: a picture's sizes, or a video's versions
+   and frames) with its weight, and a bin for a rendition nothing uses. The bin on the right deletes the whole
+   item, only when no draft or published page uses it. Photos and videos for the site can be added here;
+   paintings come in through the Gallery (their pictures are prepared in the darkroom). */
 let libBusy = '';
 const libPicked = new Set();   // items ticked to compare (two or three)
 
 export function libraryView() {
   if (!state.library) { loadLibrary(); return [h('h1', {}, 'Library'), h('p', { class: 'muted' }, 'Loading…')]; }
   const out = [h('h1', {}, 'Library')];
-  out.push(digestBar());
   const pick = h('input', { type: 'file', accept: 'image/*,video/mp4,.mp4,.m4v', multiple: true, hidden: true,
     onchange: () => pick.files.length && addToLibrary([...pick.files]) });
   for (const [grp, title] of [['site', 'Site pictures'], ['painting', 'Paintings']]) {
-    const items = state.library.items.filter((it) => it.grp === grp).sort((a, b) => b.added.localeCompare(a.added));
+    const items = state.library.items.filter((it) => it[grp]).sort((a, b) => b.added.localeCompare(a.added));
     const total = items.reduce((n, it) => n + it.bytes, 0);
     out.push(h('h2', { class: 'row' }, title, h('span', { class: 'muted', style: 'font-size:0.85rem' }, `${items.length} · ${MB(total)}`),
       grp === 'site' ? h('button', { class: 'lib-add', disabled: !!libBusy, title: 'Add photos, or the versions of one video, to the Library', 'aria-label': 'Add to the Library',
@@ -43,66 +43,24 @@ export function libraryView() {
   return out.filter(Boolean);
 }
 
-/* Slice 2's one-off (digests.js on the server; removed in sub-step (e)): store a copy of every file under the
-   digest of its bytes, then fill the media tables from what is known (fill.js on the server). Shown only while
-   files wait or the tables are empty. The browser reads each file and works out its SHA-256; the server makes
-   the copy and storage checks the digest. Safe to stop (close the page) and press again. */
-let digestBusy = '';
-function digestBar() {
-  const n = state.library.waiting, fillOnly = !n && !state.library.filled;
-  if (!n && !fillOnly && !digestBusy) return null;
-  return h('p', { class: 'hint row' },
-    h('button', { disabled: !!digestBusy, 'aria-label': 'Store every file under its digest',
-      title: fillOnly ? 'One-off: fill the media tables (files, originals, recipes, renditions) from the Library\'s records. Nothing is moved or deleted, and the site doesn\'t change. It can be pressed again.'
-        : `One-off: store a copy of each of the ${n} files under its digest (its new key), then fill the media tables. Nothing is moved or deleted, and the site doesn't change. It can be stopped and pressed again.`,
-      onclick: storeByDigest }, glyph(GLYPHS.store)),
-    h('span', {}, digestBusy || (fillOnly ? 'Media tables to fill' : `${n} file${n === 1 ? '' : 's'} to store by digest`)));
-}
-async function storeByDigest() {
-  const say = (t) => { digestBusy = t; render(); };
-  const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
-  const failed = [];
-  let n = 0;
-  try {
-    say('Listing the files…');
-    const { todo } = await call('GET', 'digest/todo');
-    n = todo.length;
-    for (const [i, f] of todo.entries()) {
-      say(`${i + 1} of ${n} (${MB(f.bytes)})${failed.length ? `, ${failed.length} failed` : ''}`);
-      try {
-        const r = await fetchFor(`/edit/api/digest/file?key=${encodeURIComponent(f.key)}`, {}, 600000);
-        if (!r.ok) throw new Error(`The server answered ${r.status}`);
-        const digest = hex(await crypto.subtle.digest('SHA-256', await r.arrayBuffer()));
-        await call('POST', 'digest/store', { key: f.key, digest });
-      } catch (e) { failed.push(`${f.key}: ${e.message}`); }
-    }
-  } catch (e) { failed.push(e.message); }
-  if (failed.length) { console.warn('Not stored by digest:\n' + failed.join('\n')); toast(`${failed.length} of ${n} not stored (press again; details in the console): ${failed[0]}`, true); }
-  else {
-    try {
-      let r;
-      do { say(r ? `Measuring the pictures: ${r.left} to go` : 'Filling the media tables…'); r = await call('POST', 'digest/fill', {}); } while (!r.done);
-      console.info('Media tables filled', r);
-      toast(`${n ? `All ${n} stored by digest. ` : ''}Media tables filled: ${r.files} files, ${r.originals} originals, ${r.recipes} recipes, ${r.renditions} renditions${r.unplaced ? `; ${r.unplaced} files not placed (see the console)` : ''}`);
-    } catch (e) { toast(`The media tables weren't filled (press again): ${e.message}`, true); }
-  }
-  digestBusy = ''; state.library = null; render();
-}
-
 /* Photos (each an item) or video files (chosen together: one video's versions, one item) into the Library. */
 async function addToLibrary(files) {
   const say = (t) => { libBusy = t; render(); };
   const videos = files.filter((f) => /\.(mp4|m4v)$/i.test(f.name) || f.type === 'video/mp4'), photos = files.filter((f) => !videos.includes(f));
   const nameOf = (f) => f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
   try {
-    for (const [i, f] of photos.entries()) await photoItem(f, nameOf(f), 'site', (t) => say(photos.length > 1 ? `Photo ${i + 1} of ${photos.length}: ${t}` : t));
-    if (videos.length) {
-      const { id } = await call('POST', 'library/new', { kind: 'video', grp: 'site', name: nameOf(videos[0]) });
-      await videoItem(id, videos, { versions: [], frames: {} }, say);
-    }
+    for (const [i, f] of photos.entries()) await photoItem(f, nameOf(f), (t) => say(photos.length > 1 ? `Photo ${i + 1} of ${photos.length}: ${t}` : t));
+    if (videos.length) await videoItem(null, nameOf(videos[0]), videos, null, say);
     toast('Added to the Library');
   } catch (e) { toast(e.message, true); }
   libBusy = ''; state.library = null; render();
+}
+
+/* An item's renditions, each with the name it goes by in its row: r1, r2... within its recipe, after the recipe's
+   label when the item has several recipes ("Part 2 r1"), or "Recipe 2" when they have none. */
+export function renditionsOf(it) {
+  return it.recipes.flatMap((c, i) => c.renditions.map((r) => ({ ...r,
+    name: `${it.recipes.length > 1 ? `${c.label || `Recipe ${i + 1}`} ` : ''}r${r.n}` })));
 }
 
 function libraryRow(it) {
@@ -110,7 +68,7 @@ function libraryRow(it) {
   const live = uses.filter((u) => u.state !== 'history');
   const pastOnly = !live.length && uses.length > 0;
   const pic = it.thumb
-    ? h('img', { src: `/media/${it.thumb}`, alt: '', loading: 'lazy' })
+    ? h('img', { src: it.thumb, alt: '', loading: 'lazy' })
     : h('span', { class: 'lib-none', title: 'No picture to show' }, glyph(GLYPHS.photo, 28));
   const tick = pickTick(it.id, it.name);
   const saved = h('span', { class: 'lib-saved', title: 'Name saved', hidden: true }, glyph(GLYPHS.tick));
@@ -123,7 +81,7 @@ function libraryRow(it) {
       catch (e) { toast(e.message, true); ev.target.value = it.name; }
     } });
   const copied = h('span', { class: 'lib-saved', title: 'Copied', hidden: true }, glyph(GLYPHS.tick, 14));
-  const codeChip = h('button', { class: 'lib-code', title: `Its folder in storage: media/${it.id}/ (tap to copy the code)`,
+  const codeChip = h('button', { class: 'lib-code', title: 'Its code in the Library, which never changes (tap to copy)',
     onclick: () => { navigator.clipboard?.writeText(it.id).then(() => { copied.hidden = false; setTimeout(() => { copied.hidden = true; }, 1500); }); } }, it.id);
   const bin = h('button', { class: 'lib-bin danger', disabled: live.length > 0,
     title: live.length ? `In use: ${[...new Set(live.map((u) => u.label))].join(', ')}` : 'Delete for good',
@@ -138,48 +96,52 @@ function libraryRow(it) {
         h('span', { class: 'd' }, codeChip, copied, uses.length ? useMarks(uses, it.name)
           : h('span', { class: 'badge gone', title: 'Nothing uses it' }, 'Unused'))),
       bin),
-    h('div', { class: 'lib-parts' }, ...it.parts.map((p) => partLine(it, p))));
+    h('div', { class: 'lib-parts' }, ...it.originals.map((o) => originalLine(it, o)), ...renditionsOf(it).map((r) => renditionLine(it, r))));
 }
 
-/* A tick box to compare: an item (key its code) or one of its renditions (key <code>/<part>); three at most. */
+/* A tick box to compare: an item (key its code) or one of its renditions (key <code>/<rendition id>); three at most. */
 function pickTick(key, what) {
   const picked = libPicked.has(key), full = !picked && libPicked.size >= 3;
   return h('label', { class: 'lib-tick' + (picked ? ' on' : ''), title: full ? 'Three are ticked already: untick one to compare this' : picked ? 'Ticked to compare' : 'Tick two or three to compare them side by side' },
     h('input', { type: 'checkbox', checked: picked, disabled: full, 'aria-label': `Compare ${what}`,
       onchange: (ev) => { if (ev.target.checked) libPicked.add(key); else libPicked.delete(key); render(); } }));
 }
-/* The ticked things, as { it, part } (part null for a whole item). */
+/* The ticked things, as { it, ren } (ren null for a whole item). */
 function pickedList() {
   return [...libPicked].map((key) => {
-    const [code, part] = key.split('/');
+    const [code, rid] = key.split('/');
     const it = state.library.items.find((x) => x.id === code);
-    return it && (!part || it.parts.some((p) => p.part === part)) ? { it, part: part || null, key } : null;
+    const ren = it && rid ? renditionsOf(it).find((r) => String(r.id) === rid) : null;
+    return it && (!rid || ren) ? { it, ren, key } : null;
   }).filter(Boolean);
 }
 
-/* A part of an item, on a line of its own: what it is, as a symbol and its size, its weight, its users' marks,
-   and a bin when nothing (not even History) uses it. */
-function partLine(it, p) {
-  let icon, what;
-  if (p.part === 'original') { icon = glyph(GLYPHS.photo, 16); what = `Original${p.w ? `, ${p.w} × ${p.h}` : ''}${p.ext ? ` (${p.ext.toUpperCase()})` : ''}`; }
-  else if (/^r\d+$/.test(p.part)) {
-    const n = p.sizes || p.files, day = p.made ? new Date(p.made).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-    icon = glyph(GLYPHS.sizes, 16);
-    what = `${p.part}: ${n} size${n === 1 ? '' : 's'}${p.w ? `, up to ${p.w} × ${p.h}` : ''}${day ? `, ${day}` : ''}`;
-  }
-  else if (/^\d+x\d+/.test(p.part)) { icon = shapeOf(p, it.parts); what = `${p.w} × ${p.h}${p.seconds ? `, ${p.seconds} seconds` : ''}`; }
-  else if (/^(wide|tall)-/.test(p.part)) { icon = glyph(GLYPHS.frames, 16); what = `First and last frames, ${p.part.startsWith('tall') ? 'upright' : 'wide'}`; }
-  else { icon = glyph(GLYPHS.photo, 16); what = `${p.files} other file${p.files === 1 ? '' : 's'}`; }
-  const uses = strongest(p.uses);
-  const ren = /^r\d+$/.test(p.part) && it.data && it.data.renditions && it.data.renditions[p.part];
-  return h('div', { class: 'lib-part', title: `${p.part}${p.files > 1 ? `/ (${p.files} files)` : ''}` },
-    ren ? pickTick(`${it.id}/${p.part}`, `${it.name}, ${p.part}`) : h('span', { class: 'lib-tick-space' }),
-    h('span', { class: 'lib-part-icon' }, icon), h('span', { class: 'lib-part-what' }, what),
+/* An original, on a line of its own: a photo as uploaded, or one of a video's versions. */
+function originalLine(it, o) {
+  const video = o.type === 'video/mp4', ext = (o.url.split('.').pop() || '').toUpperCase();
+  return h('div', { class: 'lib-part', title: video ? 'A version of the video, as uploaded' : 'The photo as uploaded: never shown to visitors' },
+    h('span', { class: 'lib-tick-space' }),
+    h('span', { class: 'lib-part-icon' }, video ? shapeOf(o, it.originals) : glyph(GLYPHS.photo, 16)),
+    h('span', { class: 'lib-part-what' }, video ? `${o.w} × ${o.h}${o.seconds ? `, ${o.seconds} seconds` : ''}` : `Original${o.w ? `, ${o.w} × ${o.h}` : ''} (${ext})`),
+    h('span', { class: 'lib-part-uses' }), h('span', { class: 'lib-size' }, MB(o.bytes)), h('span', { class: 'lib-bin-space' }));
+}
+
+/* A rendition, on a line of its own: what it is, as a symbol and its size, its weight, its users' marks, and a
+   bin when nothing (not even History) uses it. */
+function renditionLine(it, r) {
+  const day = r.made ? new Date(r.made).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+  const video = r.kind === 'video', n = video ? r.versions.length : r.sizes.length;
+  const what = video ? `${r.name}: ${n} version${n === 1 ? '' : 's'} with first and last frames${day ? `, ${day}` : ''}`
+    : `${r.name}: ${n} size${n === 1 ? '' : 's'}, up to ${r.w} × ${r.h}${day ? `, ${day}` : ''}`;
+  const uses = strongest(r.uses);
+  return h('div', { class: 'lib-part', title: `${r.kind === 'flat' ? 'Squared up in the darkroom' : video ? 'The video as shown' : 'The photo as it is'} (${r.files.length} files)` },
+    video ? h('span', { class: 'lib-tick-space' }) : pickTick(`${it.id}/${r.id}`, `${it.name}, ${r.name}`),
+    h('span', { class: 'lib-part-icon' }, glyph(video ? GLYPHS.frames : GLYPHS.sizes, 16)), h('span', { class: 'lib-part-what' }, what),
     h('span', { class: 'lib-part-uses' }, ...useMarks(uses, it.name).map((m) => { m.lastChild && m.lastChild.nodeType === 3 && m.lastChild.remove(); return m; })),
-    h('span', { class: 'lib-size' }, MB(p.bytes)),
-    p.part !== 'original' && !p.uses.length && it.parts.length > 1
-      ? h('button', { class: 'lib-bin small danger', title: 'Delete this part for good', 'aria-label': 'Delete this part for good',
-        onclick: () => deletePart(it, p) }, glyph(GLYPHS.bin, 14))
+    h('span', { class: 'lib-size' }, MB(r.bytes)),
+    !r.uses.length
+      ? h('button', { class: 'lib-bin small danger', title: 'Delete this rendition for good', 'aria-label': 'Delete this rendition for good',
+        onclick: () => deleteRendition(it, r) }, glyph(GLYPHS.bin, 14))
       : h('span', { class: 'lib-bin-space' }));
 }
 /* A video version as a small outline of its shape, sized against the item's largest. */
@@ -190,9 +152,9 @@ function shapeOf(p, parts) {
   return h('span', { class: 'lib-ver', title: p.h > p.w ? 'For phones held upright' : 'For wide screens', style: `width:${w.toFixed(1)}px;height:${hh.toFixed(1)}px` });
 }
 
-function deletePart(it, p) {
-  if (!confirm(`Delete this part of "${it.name}" for good (${MB(p.bytes)})? This can't be undone.`)) return;
-  act(async () => { const out = await call('POST', 'library/delete', { id: it.id, part: p.part }); state.library = null; return out; }, 'Deleted for good');
+function deleteRendition(it, r) {
+  if (!confirm(`Delete ${r.name} of "${it.name}" for good (${MB(r.bytes)})? This can't be undone.`)) return;
+  act(async () => { const out = await call('POST', 'library/delete', { rendition: r.id }); state.library = null; return out; }, 'Deleted for good');
 }
 
 function deleteForGood(it, pastOnly) {

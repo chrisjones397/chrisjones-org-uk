@@ -20,7 +20,7 @@ export function historyView() {
       ...r.revisions.map((v) => {
         const d = parse(v.data), p = parse(v.previous);
         const what = d || p || {};
-        const name = v.kind === 'painting' ? what.title : v.kind === 'section' ? `Genre: ${what.title}` : label({ id: v.entry_id, kind: v.kind, draft: v.data, published: v.previous });
+        const name = v.kind === 'artwork' ? what.title : v.kind === 'genre' ? `Genre: ${what.title}` : label({ id: v.entry_id, kind: v.kind, draft: v.data, published: v.previous });
         const kind = !p ? 'new' : !d ? 'gone' : unhidden(v.data) === unhidden(v.previous) ? (d.hidden ? 'hiding' : 'showing') : 'changed';
         const mine = byId(v.entry_id);
         // Bring back a removal = undo it (what it was before); "as now" when the draft already is that

@@ -32,6 +32,7 @@ export async function call(method, path, body) {
   const data = await r.json().catch(() => ({ error: `The server answered ${r.status}` }));
   if (!r.ok) throw new Error(data.error || `The server answered ${r.status}`);
   if (data.entries) state.entries = data.entries;
+  if (data.renditions) state.renditions = data.renditions;
   return data;
 }
 export async function act(fn, done) {
@@ -78,6 +79,9 @@ export const discard = (ids) => {
   for (const fn of beforeDiscard) fn(ids);
   return act(() => call('POST', 'discard', { ids }), 'Back to the published version');
 };
+
+/* A rendition just made (library/rendition's answer), so a draft can name it straight away. */
+export function known(r) { state.renditions[r.id] = r; return r; }
 
 export function loadLibrary() {
   return call('GET', 'library').then((d) => { state.library = d; render(); }).catch((e) => toast(e.message, true));

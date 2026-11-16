@@ -8,7 +8,7 @@ pictures come from a database and file storage, changed in the editor at **admin
 - **chrisjones.org.uk/**: the home page: the Hero (the forest), the gallery section, contact, profile.
 - **/gallery/**: the gallery page, every painting, floating genre after genre or as a grid (two symbols under the header switch).
 - **/gallery/<name>/**: a painting: the gallery page with that painting brought forward.
-- **/media/<code>/...**: pictures and videos from storage (only what's published).
+- **/media/<digest>.<ext>**: pictures and videos from storage (only what's published).
 - **admin.chrisjones.org.uk**: the whole site again, showing drafts, with a pill at the bottom; **/edit/** there
   is the editor.
 
@@ -45,9 +45,10 @@ the editor.
 - **Content** (paintings' details, genres, page text, settings): Cloudflare D1, a database: site-content (live)
   and site-content-dev (dev). The tables are made and changed by the numbered files in `migrations/`, applied in order, each once.
 - **Files** (photos, videos and the sizes made from them): Cloudflare R2, file storage: site-media (live) and
-  site-media-dev (dev). One folder per Library item, `media/<code>/`: the original as uploaded (never shown to
-  visitors), each set of sizes made from it (`r1/`, `r2/`...), a video's versions and its first and last frames.
-  The code never changes, so renaming an item in the Library breaks nothing.
+  site-media-dev (dev). Each file is stored under the SHA-256 digest of its bytes and nothing else, so the same
+  content is stored once and an address can never come to mean something different. What a file is (an item's
+  original as uploaded, never shown to visitors; one size of a picture; a video version; a first or last frame)
+  is recorded in the database, as is every name. `docs/entities.md` describes the whole model.
 - **The site's code**: this repository. Nothing is built: the repository is the site as it's served, plus the
   Worker's code. Each shared piece is kept once: styles in `site.css`; the header in `templates/header.html`,
   which `worker.js` puts into every page as it's served; "page not found" in `templates/404.html`.

@@ -1,10 +1,11 @@
 /* What the editor knows, shared by all its modules, and how to read it. Only server.js (and the start, in
    editor.js) writes to state; everything else reads it. */
 
-import { paintingAt } from '/paths.js';
+import { sizeFor } from '/paths.js';
 
 export const state = {
-  entries: [],        // every entry (painting, genre, text, setting, background, links), draft and published
+  entries: [],        // every entry (artwork, genre, text, setting, background, links), draft and published
+  renditions: {},     // the renditions those entries name, by id (media.js on the server: sizes, versions, frames, settings)
   media: false,       // whether file storage (R2) is switched on for this site
   who: '',            // who is signed in
   history: null,      // History's releases, once asked for (null: ask again)
@@ -38,15 +39,18 @@ export const STATUS = { new: 'New', changed: 'Changed', gone: 'Removed', hiding:
 /* Hidden: what visitors see (hiding acts at once, so the published version says). */
 export const isHidden = (e) => !!(e && e.published && liveOf(e).hidden);
 export const current = (e) => draftOf(e) || liveOf(e);
-export const sections = () => state.entries.filter((e) => e.kind === 'section' && e.draft != null)
+export const genres = () => state.entries.filter((e) => e.kind === 'genre' && e.draft != null)
   .map((e) => ({ id: e.id, ...draftOf(e) })).sort((a, b) => a.order - b.order);
-export const paintingsIn = (sid) => state.entries.filter((e) => e.kind === 'painting' && current(e).section === sid)
+export const paintingsIn = (gid) => state.entries.filter((e) => e.kind === 'artwork' && current(e).genre === gid)
   .sort((a, b) => current(a).order - current(b).order);
-export const thumb = (d) => `/${paintingAt(d, d.widths[0])}`;
+/* The rendition a document names (null if it isn't known here), and a picture of it about `want` pixels across. */
+export const picOf = (d) => (d && d.rendition != null && state.renditions[d.rendition]) || null;
+export const pictureAt = (d, want) => { const r = picOf(d), s = r && r.sizes.length ? sizeFor(r.sizes, want) : null; return s ? s.url : ''; };
+export const thumb = (d) => pictureAt(d, 0);
 export const label = (e) => {
   const d = current(e) || {};
-  if (e.kind === 'painting') return d.title;
-  if (e.kind === 'section') return `Genre: ${d.title}`;
+  if (e.kind === 'artwork') return d.title;
+  if (e.kind === 'genre') return `Genre: ${d.title}`;
   if (e.kind === 'text') return (TEXTS.find((t) => t[0] === e.id) || [0, e.id])[1].replace(/ \(.*/, '');
   if (e.kind === 'links') return 'Contact links';
   if (e.kind === 'background') return `${(PAGE.find((p) => p.bg === e.id.slice(3)) || { name: e.id.slice(3) }).name} background picture`;

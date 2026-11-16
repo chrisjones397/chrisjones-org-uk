@@ -1,29 +1,34 @@
-/* The library (step 1d): every file the site keeps in R2, as items, for the editor's Library tab.
+/* The Library: the media layer, written and listed (docs/entities.md, section 2). Server only; media.js reads
+   renditions for everyone.
 
-   One item for each thing uploaded: a photo, or a video (one or several versions, a set). Each has a code, 8 hex
-   digits made when it's created, and one folder in R2, media/<code>/, holding everything that belongs to it
-   (paths.js has the layout). Its name is the Library's own (the `library` table, migrations/), shown and
-   changed freely: the folder never changes, so History and Cloudflare's cached copies never break, and the code
-   in the Library is what to look for in R2.
+   A Library item is one thing uploaded: a photo, or a video (one or several versions, a set). Its code, 8 hex
+   digits, never changes; its name is the Library's own, changed freely. Under it:
+     originals   the untouched uploaded files: a photo has one, a video one for each version;
+     recipes     the darkroom settings applied to it (flat: four corners, squared up; scene: as it is; video:
+                 its stills), several if several things were made from one photo;
+     renditions  each frozen set of files a recipe produced (a picture at several sizes and a link preview; or a
+                 video's versions with their first and last frames). Never changed: a new result is a new one.
+   Files are known only by the digest of their bytes (table file; R2 key = digest; paths.js). The same bytes are
+   stored once, whatever they are used for.
 
-   An item's parts: its original (a photo as uploaded), each set of sizes made from it (r1, r2...), each video
-   version (<w>x<h>.mp4), each set of video frames (wide-1, tall-1...). What uses an item: entries' drafts and
-   published versions, and History (revisions' data: what "Bring back" restores), by its code (media) and the
-   parts they name (for a removal, what it was before, which "Bring back" restores). "Delete for good": the whole item only while no draft or published version uses it (if
-   History does, it must be asked for, and those versions leave History); a part only while nothing at all does.
+   What uses a rendition: drafts and published documents that name its id, and History (what "Bring back"
+   restores). "Delete for good": an item only while no draft or published document names any of its renditions
+   (if History does, it must be asked for, and those versions leave History); a rendition only while nothing at
+   all names it. A file goes from storage when no original and no rendition refers to it any more. */
 
-*/
-
-import { CODE } from './paths.js';
+import { CODE, DIGEST, fileUrl } from './paths.js';
 import { dimensions, HEAD_BYTES } from './dimensions.js';
+import { renditions } from './media.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 class Bad extends Error { constructor(m, s = 400) { super(m); this.status = s; } }
 export { Bad };
 
 const SECTIONS = { hero: 'Hero', contact: 'Contact', footer: 'Footer' };
+const MAX_BYTES = 95 * 1024 * 1024;
 
-/* Every key under a prefix, with its size and upload time. */
+/* Scaffolding for slice 2's one-off (digests.js, fill.js), going with them in sub-step (e): every key under a
+   prefix, and which part of an old item folder a file was. */
 export async function listAll(env, prefix) {
   const out = [];
   let cursor;
@@ -34,8 +39,6 @@ export async function listAll(env, prefix) {
   } while (cursor);
   return out;
 }
-
-/* Which part of its item a file is: 'original', 'r1', '1536x1152' (a video version), 'wide-1', or 'other'. */
 export function partOf(rest) {
   if (/^original\.[a-z0-9]{1,5}$/.test(rest)) return 'original';
   const dir = /^((?:r|wide-|tall-)\d{1,3})\//.exec(rest);
@@ -44,115 +47,82 @@ export function partOf(rest) {
   return vid ? vid[1] : 'other';
 }
 
-/* What one stored version of an entry uses: its item's code and the parts it names, and how to describe it. */
-function usesOf(kind, id, text) {
+// ---- what uses what ----------------------------------------------------------------------------------------
+
+/* What one stored version of a document uses: the rendition it names, and how to describe it. */
+function useOf(kind, id, text) {
   if (!text) return null;
   let d;
   try { d = JSON.parse(text); } catch { return null; }
-  if (!d.media) return null;
-  if (kind === 'painting') return { code: d.media, parts: [d.rendition, 'original'], label: d.title || d.name, site: false };
-  if (kind !== 'background') return null;
-  const where = SECTIONS[id.slice(3)] || id.slice(3);
-  if (d.type === 'video') {
-    return { code: d.media, label: `${where} background video`, site: true,
-      parts: [...(d.versions || []).map((v) => v.file), ...Object.values(d.frames || {}).map((f) => f.dir)] };
-  }
-  return { code: d.media, parts: [d.rendition, 'original'], label: `${where} background`, site: true };
+  if (d.rendition == null) return null;
+  if (kind === 'artwork') return { rendition: d.rendition, label: d.title || d.name, hidden: !!d.hidden };
+  if (kind === 'background') return { rendition: d.rendition, label: `${SECTIONS[id.slice(3)] || id.slice(3)} background`, hidden: !!d.hidden };
+  return null;
 }
 
-/* The whole library worked out afresh from R2, the catalogue and what uses each item. */
-async function survey(env) {
-  const [objects, rows, entries, revisions] = await Promise.all([
-    listAll(env, 'media/'),
-    env.DB.prepare('SELECT * FROM library').all(),
-    env.DB.prepare('SELECT id, kind, draft, published FROM entries WHERE kind IN (\'painting\', \'background\')').all(),
-    env.DB.prepare('SELECT id, entry_id, kind, data, previous FROM revisions WHERE kind IN (\'painting\', \'background\') AND (data IS NOT NULL OR previous IS NOT NULL)').all(),
+/* Every use of every rendition: Map rendition id -> [{ entry, state: draft | published | hidden | history,
+   label, revision? }]. */
+async function allUses(env) {
+  const [entries, revisions] = await env.DB.batch([
+    env.DB.prepare('SELECT id, kind, draft, published FROM entries WHERE draft_rendition IS NOT NULL OR published_rendition IS NOT NULL'),
+    env.DB.prepare('SELECT id, entry_id, kind, data, previous FROM revisions WHERE kind IN (\'artwork\', \'background\') AND (data IS NOT NULL OR previous IS NOT NULL)'),
   ]);
-  const items = new Map();
-  const item = (code) => {
-    if (!items.has(code)) items.set(code, { id: code, parts: new Map(), bytes: 0, files: 0, uses: [] });
-    return items.get(code);
-  };
-  for (const r of rows.results) item(r.id).row = r;
-  for (const o of objects) {
-    const m = /^media\/([0-9a-f]{8})\/(.+)$/.exec(o.key);
-    if (!m) continue;
-    const it = item(m[1]), part = partOf(m[2]);
-    if (!it.parts.has(part)) it.parts.set(part, { part, bytes: 0, files: 0, uses: [] });
-    const p = it.parts.get(part);
-    p.bytes += o.size; p.files++; it.bytes += o.size; it.files++;
-    const at = o.uploaded instanceof Date ? o.uploaded.toISOString() : String(o.uploaded || '');
-    if (!p.made || at > p.made) p.made = at;          // when the part was made (its newest file)
-    if (part === 'original') p.ext = m[2].split('.').pop();
-  }
-  const use = (u, how) => {
-    if (!u || !items.has(u.code)) return;
-    const it = items.get(u.code);
-    it.uses.push({ ...how, label: u.label });
-    if (u.site) it.site = true;
-    for (const name of u.parts) { const p = it.parts.get(name); if (p) p.uses.push({ ...how, label: u.label }); }
-  };
+  const uses = new Map();
+  const add = (u, how) => { if (u) (uses.get(u.rendition) || uses.set(u.rendition, []).get(u.rendition)).push({ ...how, label: u.label }); };
   for (const e of entries.results) {
-    use(usesOf(e.kind, e.id, e.draft), { entry: e.id, state: 'draft' });
-    use(usesOf(e.kind, e.id, e.published), { entry: e.id, state: e.published && JSON.parse(e.published).hidden ? 'hidden' : 'published' });
+    add(useOf(e.kind, e.id, e.draft), { entry: e.id, state: 'draft' });
+    const p = useOf(e.kind, e.id, e.published);
+    add(p, { entry: e.id, state: p && p.hidden ? 'hidden' : 'published' });
   }
   // History: what "Bring back" restores: a version's data, or for a removal what it was before (editor.js restore)
-  for (const v of revisions.results) use(usesOf(v.kind, v.entry_id, v.data ?? v.previous), { entry: v.entry_id, state: 'history', revision: v.id });
-  await originalSizes(env, items);
-
-  return [...items.values()].map((it) => {
-    const r = it.row || {};
-    const data = JSON.parse(r.data || '{}');
-    const parts = [...it.parts.values()].map((p) => {
-      const out = { part: p.part, bytes: p.bytes, files: p.files, uses: p.uses, made: p.made || '' };
-      const ver = (data.versions || []).find((v) => v.file === p.part);
-      if (ver) Object.assign(out, { w: ver.w, h: ver.h, seconds: ver.seconds });
-      else if (/^\d+x\d+/.test(p.part)) { const [w, h] = p.part.split(/x|-/).map(Number); Object.assign(out, { w, h }); }
-      const ren = (data.renditions || {})[p.part];
-      if (ren) Object.assign(out, { w: ren.w, h: ren.h, sizes: ren.widths.length });
-      if (data.original && data.original.w && p.part === 'original') Object.assign(out, { w: data.original.w, h: data.original.h });
-      if (p.ext) out.ext = p.ext;
-      return out;
-    });
-    const order = (p) => (p.part === 'original' ? 0 : /^r/.test(p.part) ? 1 : /^\d/.test(p.part) ? 2 : /^(wide|tall)/.test(p.part) ? 3 : 4);
-    parts.sort((a, b) => order(a) - order(b) || ((b.w || 0) - (a.w || 0)) || a.part.localeCompare(b.part, 'en', { numeric: true }));
-    const kind = r.kind || (parts.some((p) => /^\d+x\d+/.test(p.part)) ? 'video' : 'photo');
-    return { id: it.id, kind, grp: r.grp || (it.site ? 'site' : 'painting'), name: r.name || `Item ${it.id}`,
-      catalogued: !!it.row, added: r.added || '', bytes: it.bytes, files: it.files, parts, uses: it.uses, ...picturesOf(it.id, parts, data), data };
-  });
+  for (const v of revisions.results) add(useOf(v.kind, v.entry_id, v.data ?? v.previous), { entry: v.entry_id, state: 'history', revision: v.id });
+  return uses;
 }
 
-/* Pictures for the list: the newest set of sizes, or a video's last frame; thumb its smallest, large its largest
-   (for seeing it large and comparing, where detail matters). */
-function picturesOf(code, parts, data) {
-  const upTo = (widths) => Math.max(...widths);
-  const ren = parts.filter((p) => /^r\d+$/.test(p.part)).sort((a, b) => Number(b.part.slice(1)) - Number(a.part.slice(1)))[0];
-  if (ren && data.renditions && data.renditions[ren.part]) {
-    const r = data.renditions[ren.part], ext = r.ext || 'jpg';
-    return { thumb: `${code}/${ren.part}/${r.widths[0]}.${ext}`, large: `${code}/${ren.part}/${upTo(r.widths)}.${ext}` };
+// ---- the listing --------------------------------------------------------------------------------------------
+
+/* Every item with its originals, recipes and renditions, and what uses each.
+     { id, kind, name, added, originals: [{ digest, type, url, bytes, w, h, seconds }],
+       recipes: [{ id, kind, label, settings, renditions: [rendition (media.js) + { bytes, uses }] }],
+       uses, bytes, files (distinct files and their weight), thumb, large (addresses, or null),
+       site, painting (which of the Library's two lists it belongs in: a filter on what it is used or made for) } */
+async function survey(env) {
+  const [items, originals, recipes] = await env.DB.batch([
+    env.DB.prepare('SELECT id, kind, name, added FROM library'),
+    env.DB.prepare('SELECT o.item_id, f.digest, f.type, f.bytes, f.w, f.h, f.seconds FROM original o JOIN file f ON f.digest = o.digest'),
+    env.DB.prepare('SELECT id, item_id, kind, label, settings FROM recipe ORDER BY id'),
+  ]);
+  const [all, uses] = await Promise.all([renditions(env), allUses(env)]);
+  const byId = new Map(items.results.map((r) => [r.id, { ...r, originals: [], recipes: [], uses: [] }]));
+  for (const o of originals.results) {
+    const it = byId.get(o.item_id);
+    if (it) it.originals.push({ digest: o.digest, type: o.type, url: fileUrl(o), bytes: o.bytes, w: o.w, h: o.h, seconds: o.seconds });
   }
-  const f = data.frames && (data.frames.wide || data.frames.tall);
-  if (f) return { thumb: `${code}/${f.dir}/last-${f.widths[0]}.jpg`, large: `${code}/${f.dir}/last-${upTo(f.widths)}.jpg` };
-  return { thumb: null, large: null };
-}
-
-/* An original's size in pixels, read once from its file's header (dimensions.js) and kept in the item's record
-   (data.original { w, h }; 0 x 0 if it couldn't be read, so it isn't tried again). Covers items from before it was
-   recorded (the move from the old layout) as well as new ones. At most 20 a visit, to stay well inside a Worker's
-   limits; the rest follow on the next. */
-async function originalSizes(env, items) {
-  const todo = [...items.values()].filter((it) => it.row && it.parts.has('original') && !JSON.parse(it.row.data || '{}').original).slice(0, 20);
-  await Promise.all(todo.map(async (it) => {
-    const key = `media/${it.id}/original.${it.parts.get('original').ext}`;
-    let size = null;
-    try {
-      const obj = await env.MEDIA.get(key, { range: { offset: 0, length: HEAD_BYTES } });
-      if (obj) size = dimensions(await obj.arrayBuffer());
-    } catch { /* unreadable: recorded as unknown */ }
-    const data = { ...JSON.parse(it.row.data || '{}'), original: size || { w: 0, h: 0 } };
-    it.row.data = JSON.stringify(data);
-    await env.DB.prepare('UPDATE library SET data = ? WHERE id = ?').bind(it.row.data, it.id).run();
-  }));
+  const recipeOf = new Map();
+  for (const c of recipes.results) {
+    const it = byId.get(c.item_id);
+    if (!it) continue;
+    const recipe = { id: c.id, kind: c.kind, label: c.label, settings: JSON.parse(c.settings || '{}'), renditions: [] };
+    it.recipes.push(recipe); recipeOf.set(c.id, recipe);
+  }
+  for (const r of [...all.values()].sort((a, b) => a.id - b.id)) {
+    const recipe = recipeOf.get(r.recipe), it = byId.get(r.item);
+    if (!recipe || !it) continue;
+    const mine = uses.get(r.id) || [];
+    recipe.renditions.push({ ...r, bytes: r.files.reduce((n, f) => n + f.bytes, 0), uses: mine });
+    it.uses.push(...mine.map((u) => ({ ...u, rendition: r.id })));
+  }
+  return [...byId.values()].map((it) => {
+    it.originals.sort((a, b) => (b.w || 0) * (b.h || 0) - (a.w || 0) * (a.h || 0));
+    const weigh = new Map(it.originals.map((o) => [o.digest, o.bytes]));
+    const rens = it.recipes.flatMap((c) => c.renditions);
+    for (const r of rens) for (const f of r.files) weigh.set(f.digest, f.bytes);
+    const latest = rens[rens.length - 1], frames = latest && (latest.frames.wide || latest.frames.tall);
+    const pics = latest && latest.sizes.length ? latest.sizes : frames ? frames.last : [];
+    return { ...it, bytes: [...weigh.values()].reduce((a, b) => a + b, 0), files: weigh.size,
+      thumb: pics.length ? pics[0].url : null, large: pics.length ? pics[pics.length - 1].url : null,
+      site: !it.recipes.length || it.recipes.some((c) => c.kind !== 'flat'), painting: it.recipes.some((c) => c.kind === 'flat') };
+  });
 }
 
 // ---- the API ----------------------------------------------------------------------------------------------
@@ -163,79 +133,220 @@ export async function library(env) {
   return { items: await survey(env) };
 }
 
-/* POST /edit/api/library/new { kind, grp, name, hash?, data? }: a new, empty item; answers its code. */
+/* GET /edit/api/file?digest=<sha256>: is a file with these bytes already stored? And, if it is some item's
+   original, which item (so the same photo is never a second item). */
+export async function haveFile(env, digest) {
+  if (!DIGEST.test(digest)) throw new Bad('Bad digest');
+  const row = await env.DB.prepare(`SELECT f.digest, o.item_id, l.name FROM file f LEFT JOIN original o ON o.digest = f.digest
+    LEFT JOIN library l ON l.id = o.item_id WHERE f.digest = ?`).bind(digest).first();
+  return { have: !!row, item: row ? row.item_id : null, name: row ? row.name : null };
+}
+
+/* PUT /edit/api/file?digest=<sha256>[&w=&h=&seconds=]: store a file under the digest of its bytes, as sent,
+   streamed through. The digest is worked out by the browser and handed to R2 with the upload: R2 works out the
+   SHA-256 of what it receives and refuses the file if it differs (Cloudflare's documented way to check an
+   upload), so a row in `file` is a fact about the stored bytes. A picture's size in pixels is read here from the
+   start of the stored file; a video's size and length are as the browser measured them (w, h, seconds).
+   Sending bytes that are already stored changes nothing. */
+export async function putFile(request, env, url, who) {
+  if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on yet', 503);
+  const digest = url.searchParams.get('digest') || '';
+  if (!DIGEST.test(digest)) throw new Bad('Bad digest');
+  const type = (request.headers.get('content-type') || '').toLowerCase();
+  const video = type === 'video/mp4';
+  if (!video && !/^image\/[a-z0-9.+-]+$/.test(type)) throw new Bad('Only images and MP4 videos can be uploaded');
+  const size = Number(request.headers.get('content-length') || 0);
+  if (!size || size > MAX_BYTES) throw new Bad('Files must be under 95 megabytes');
+  let dim = null, seconds = null;
+  if (video) {
+    const n = (k) => Number(url.searchParams.get(k));
+    if (!(n('w') > 0 && n('h') > 0 && n('seconds') > 0 && n('seconds') < 600)) throw new Bad('A video needs its size and length');
+    dim = { w: Math.round(n('w')), h: Math.round(n('h')) }; seconds = Math.round(n('seconds') * 100) / 100;
+  }
+  const had = await env.DB.prepare('SELECT w, h FROM file WHERE digest = ?').bind(digest).first();
+  if (had) return { digest, w: had.w, h: had.h, have: true };
+  const { readable, writable } = new FixedLengthStream(size);
+  const piping = request.body.pipeTo(writable);
+  try {
+    await Promise.all([env.MEDIA.put(digest, readable, { sha256: digest, httpMetadata: { contentType: type } }), piping]);
+  } catch (e) {
+    throw new Bad(`Storage refused the file (its bytes didn't match its digest, or the upload broke off): ${e.message || e}`, 409);
+  }
+  if (!video) {
+    for (const length of [65536, HEAD_BYTES]) {
+      const obj = await env.MEDIA.get(digest, { range: { offset: 0, length } });
+      dim = obj && dimensions(await obj.arrayBuffer());
+      if (dim || !obj || obj.size <= length) break;
+    }
+  }
+  await env.DB.prepare('INSERT OR IGNORE INTO file (digest, bytes, type, w, h, seconds, added, added_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(digest, size, type, dim ? dim.w : null, dim ? dim.h : null, seconds, now(), who).run();
+  return { digest, w: dim ? dim.w : null, h: dim ? dim.h : null, have: false };
+}
+
+/* The rows of some stored files: Map digest -> { digest, type, w, h, bytes, seconds }. */
+async function filesOf(env, digests) {
+  const list = [...new Set(digests)];
+  if (list.some((d) => !DIGEST.test(d))) throw new Bad('Bad digest');
+  if (!list.length) return new Map();
+  const { results } = await env.DB.prepare('SELECT digest, type, w, h, bytes, seconds FROM file WHERE digest IN (SELECT value FROM json_each(?))')
+    .bind(JSON.stringify(list)).all();
+  const out = new Map(results.map((f) => [f.digest, f]));
+  if (out.size !== list.length) throw new Bad('A file isn\'t in storage: upload it first');
+  return out;
+}
+
+/* POST /edit/api/library/new { kind, name, originals: [digest] }: a new item from files already stored: a
+   photo's one original, or a video's versions. A photo that is already an item's original is that item (answer
+   { id, shared: true, scene: the id of its newest rendition made as it is, if any }). */
 export async function newItem(env, who, b) {
   if (!['photo', 'video'].includes(b.kind)) throw new Bad('An item is a photo or a video');
-  if (!['site', 'painting'].includes(b.grp)) throw new Bad('Bad group');
+  const digests = Array.isArray(b.originals) ? b.originals.map(String) : [];
+  if (b.kind === 'photo' ? digests.length !== 1 : digests.length < 1 || digests.length > 6) throw new Bad(b.kind === 'photo' ? 'A photo has one original' : 'A video needs one to six versions');
+  const files = await filesOf(env, digests);
+  for (const f of files.values()) if ((f.type === 'video/mp4') !== (b.kind === 'video')) throw new Bad('That file isn\'t a ' + b.kind);
+  const taken = (await env.DB.prepare('SELECT o.digest, o.item_id, l.name FROM original o JOIN library l ON l.id = o.item_id WHERE o.digest IN (SELECT value FROM json_each(?))')
+    .bind(JSON.stringify(digests)).all()).results;
+  if (taken.length) {
+    if (b.kind === 'video') throw new Bad(`That video is already in the Library, as "${taken[0].name}": choose it from the Library`, 409);
+    const scene = await env.DB.prepare('SELECT r.id FROM rendition r JOIN recipe c ON c.id = r.recipe_id WHERE c.item_id = ? AND c.kind = \'scene\' ORDER BY r.id DESC LIMIT 1')
+      .bind(taken[0].item_id).first();
+    return { id: taken[0].item_id, shared: true, scene: scene ? scene.id : null };
+  }
   const name = String(b.name || '').trim().slice(0, 120) || (b.kind === 'video' ? 'Video' : 'Photo');
-  const hash = b.hash == null ? null : String(b.hash);
-  if (hash && !/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
   for (let tries = 0; tries < 5; tries++) {
     const id = [...crypto.getRandomValues(new Uint8Array(4))].map((x) => x.toString(16).padStart(2, '0')).join('');
-    const r = await env.DB.prepare('INSERT OR IGNORE INTO library (id, kind, grp, name, hash, data, added, added_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, b.kind, b.grp, name, hash, dataOf(b.data || {}), now(), who).run();
-    if (r.meta.changes) return { id };
+    if (await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(id).first()) continue;
+    // grp is an old column, no longer read (the Library's lists are a filter on use); it goes in sub-step (e)
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO library (id, kind, grp, name, added, added_by) VALUES (?, ?, \'\', ?, ?, ?)').bind(id, b.kind, name, now(), who),
+      ...digests.map((d) => env.DB.prepare('INSERT INTO original (digest, item_id) VALUES (?, ?)').bind(d, id)),
+    ]);
+    return { id, shared: false, scene: null };
   }
   throw new Bad('Couldn\'t make a code for it: try again', 500);
 }
 
-/* What an item records about its parts, so it can be picked and shown without reading the files:
-   original { w, h }, renditions { r1: { widths, w, h, ext } }, versions [{ file, w, h, bytes, seconds }],
-   frames { wide: { dir, widths, from }, tall: {...} }. Checked for shape only; kept small. */
-function dataOf(d) {
-  if (typeof d !== 'object' || Array.isArray(d)) throw new Bad('Bad item record');
-  const text = JSON.stringify(d);
-  if (text.length > 20000) throw new Bad('Item record too large');
-  return text;
-}
-
-/* POST /edit/api/library/data { id, data }: merged into the item's record (a part named again replaces its own). */
-export async function setData(env, id, data) {
-  const row = await env.DB.prepare('SELECT data FROM library WHERE id = ?').bind(id).first();
-  if (!row) throw new Bad('No such item', 404);
-  const d = JSON.parse(row.data || '{}');
-  const n = JSON.parse(dataOf(data));
-  if (n.original) d.original = n.original;
-  if (n.renditions) d.renditions = { ...(d.renditions || {}), ...n.renditions };
-  if (n.versions) {
-    const keep = (d.versions || []).filter((v) => !n.versions.some((x) => x.file === v.file));
-    d.versions = [...keep, ...n.versions];
+/* POST /edit/api/library/original { id, digest }: another version of a video item (a file already stored). */
+export async function addOriginal(env, id, digest) {
+  const item = await env.DB.prepare('SELECT kind FROM library WHERE id = ?').bind(id).first();
+  if (!item) throw new Bad('No such item', 404);
+  if (item.kind !== 'video') throw new Bad('Only a video has several versions');
+  const f = (await filesOf(env, [digest])).get(digest);
+  if (f.type !== 'video/mp4') throw new Bad('That file isn\'t a video');
+  const at = await env.DB.prepare('SELECT item_id FROM original WHERE digest = ?').bind(digest).first();
+  if (at && at.item_id !== id) throw new Bad('That video file already belongs to another item in the Library', 409);
+  if (!at) {
+    if ((await env.DB.prepare('SELECT count(*) n FROM original WHERE item_id = ?').bind(id).first()).n >= 12) throw new Bad('That video has too many versions');
+    await env.DB.prepare('INSERT INTO original (digest, item_id) VALUES (?, ?)').bind(digest, id).run();
   }
-  if (n.frames) d.frames = { ...(d.frames || {}), ...n.frames };
-  await env.DB.prepare('UPDATE library SET data = ? WHERE id = ?').bind(dataOf(d), id).run();
-  return { id, data: d };
+  return { id, digest };
 }
 
-/* GET /edit/api/library/next?id=<code>&part=r|wide|tall|<w>x<h>: the next free part name in the item's folder
-   (r3, wide-2, 1536x1152 or 1536x1152-2), so nothing is ever overwritten. */
-export async function nextPart(env, id, part) {
+/* A recipe's settings, checked: how a picture was made from its original (edit/darkroom.js). flat: nothing (as
+   supplied), or white balance 'none' or 'picks' (from spots) and the four corners it was squared up from, all
+   as fractions of the original's width and height; brightness (how bright the white comes out, 0.5 to 1) and
+   warmth (the share of the light's colour kept, 0 to 1) go with any white balance; the corners are in the order
+   the painting's top left, top right, bottom right and bottom left, so they also say which way up it goes (and
+   whether it's mirrored); shape is the artwork's measured size [height, width] when the crop took that shape
+   (the artwork drives the recipe, never the reverse); white_paper: a drawing on white paper (reopening one with
+   no other choices starts from "Find the paper"). scene and video: no choices yet. */
+function settingsOf(kind, p) {
+  if (kind !== 'flat') return {};
+  if (p == null || typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad settings');
+  const num = (v, what) => { if (typeof v !== 'number' || !isFinite(v)) throw new Bad(`${what} must be a number`); return v; };
+  const out = {};
+  if (p.white != null) {
+    if (!['none', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
+    const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
+    const points = (a, lo, hi, what) => {
+      if (!Array.isArray(a) || a.length < lo || a.length > hi) throw new Bad(`Bad ${what}`);
+      return a.map((q) => { if (!Array.isArray(q) || q.length !== 2) throw new Bad(`Bad ${what}`); return q.map(frac); });
+    };
+    out.white = p.white;
+    if (p.white === 'picks') out.spots = points(p.spots, 1, 40, 'white spots');
+    if (p.white !== 'none') {
+      const share = (v, lo, what) => { num(v, what); if (v < lo || v > 1) throw new Bad(`Bad ${what}`); return Math.round(v * 100) / 100; };
+      out.brightness = share(p.brightness ?? 1, 0.5, 'brightness');
+      out.warmth = share(p.warmth ?? 0, 0, 'warmth');
+    }
+    if (p.corners != null) out.corners = points(p.corners, 4, 4, 'corners');
+    if (p.shape != null) {
+      if (!Array.isArray(p.shape) || p.shape.length !== 2 || !p.shape.every((v) => num(v, 'Size') > 0 && v < 10000)) throw new Bad('Bad size');
+      out.shape = p.shape.slice();
+    }
+  }
+  if (p.white_paper === true) out.white_paper = true;
+  return out;
+}
+
+/* POST /edit/api/library/rendition { item, recipe?, kind?, label?, settings?, files: [{ digest, role, shape? }] }:
+   a new rendition, from files already stored. With `recipe` it is that recipe's next one, and the recipe's
+   settings become these (the recipe re-edited); without, a new recipe of `kind` is made for it.
+   A picture (flat or scene): its sizes (role size) and, for link previews, a preview. A video: its versions
+   (role version; each must be one of the item's originals) and first and last frames for each shape (role first
+   or last, with shape wide or tall). Widths, and a version's shape, are the stored files' own: facts, not what
+   the browser says. Answers the rendition as media.js describes it. */
+export async function newRendition(env, who, b) {
+  const id = String(b.item || '');
   if (!CODE.test(id)) throw new Bad('Bad code');
-  if (!(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(id).first())) throw new Bad('No such item', 404);
-  const taken = new Set((await listAll(env, `media/${id}/`)).map((o) => partOf(o.key.slice(15))));
-  if (part === 'r') { for (let n = 1; ; n++) if (!taken.has(`r${n}`)) return { part: `r${n}` }; }
-  if (part === 'wide' || part === 'tall') { for (let n = 1; ; n++) if (!taken.has(`${part}-${n}`)) return { part: `${part}-${n}` }; }
-  if (/^\d{2,5}x\d{2,5}$/.test(part)) {
-    if (!taken.has(part)) return { part };
-    for (let n = 2; n < 100; n++) if (!taken.has(`${part}-${n}`)) return { part: `${part}-${n}` };
+  const item = await env.DB.prepare('SELECT kind FROM library WHERE id = ?').bind(id).first();
+  if (!item) throw new Bad('No such item', 404);
+  let recipe = null;
+  if (b.recipe != null) {
+    recipe = await env.DB.prepare('SELECT id, kind, item_id FROM recipe WHERE id = ?').bind(b.recipe).first();
+    if (!recipe || recipe.item_id !== id) throw new Bad('No such recipe for that item', 404);
   }
-  throw new Bad('Bad part');
+  const kind = recipe ? recipe.kind : b.kind;
+  if (!['flat', 'scene', 'video'].includes(kind)) throw new Bad('Bad kind of recipe');
+  if ((kind === 'video') !== (item.kind === 'video')) throw new Bad('That kind of recipe doesn\'t fit that item');
+  const settings = JSON.stringify(settingsOf(kind, b.settings ?? {}));
+  if (!Array.isArray(b.files) || !b.files.length || b.files.length > 40) throw new Bad('A rendition needs its files');
+  const stored = await filesOf(env, b.files.map((f) => String(f.digest || '')));
+  const mine = kind === 'video' ? new Set((await env.DB.prepare('SELECT digest FROM original WHERE item_id = ?').bind(id).all()).results.map((o) => o.digest)) : null;
+  const rows = [], seen = new Set();
+  let top = null;
+  for (const f of b.files) {
+    const s = stored.get(f.digest), isVideo = s.type === 'video/mp4';
+    if (!(kind === 'video' ? ['version', 'first', 'last'] : ['size', 'preview']).includes(f.role)) throw new Bad('Bad role for a file');
+    if ((f.role === 'version') !== isVideo) throw new Bad('A file isn\'t what its role says');
+    if (!s.w || !s.h) throw new Bad('A file\'s size in pixels isn\'t known');
+    if (f.role === 'version' && !mine.has(f.digest)) throw new Bad('A version isn\'t one of that video\'s originals');
+    const shape = f.role === 'version' ? (s.h > s.w ? 'tall' : 'wide') : kind === 'video' ? f.shape : null;
+    if (kind === 'video' && !['wide', 'tall'].includes(shape)) throw new Bad('A frame needs its shape');
+    const key = `${f.digest} ${f.role}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push([f.digest, f.role, s.w, shape]);
+    if ((f.role === 'size' || f.role === 'version') && (!top || s.w * s.h > top.w * top.h)) top = s;
+  }
+  if (!top) throw new Bad(kind === 'video' ? 'A video\'s rendition needs a version' : 'A picture\'s rendition needs a size');
+  const at = now();
+  if (!recipe) {
+    const label = String(b.label || '').trim().slice(0, 120);
+    recipe = await env.DB.prepare('INSERT INTO recipe (item_id, kind, label, settings, changed, changed_by) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+      .bind(id, kind, label, settings, at, who).first();
+  }
+  const n = ((await env.DB.prepare('SELECT max(n) n FROM rendition WHERE recipe_id = ?').bind(recipe.id).first()).n || 0) + 1;
+  await env.DB.batch([   // one transaction: the rendition with all its files, or nothing
+    env.DB.prepare('UPDATE recipe SET settings = ?, changed = ?, changed_by = ? WHERE id = ?').bind(settings, at, who, recipe.id),
+    env.DB.prepare('INSERT INTO rendition (recipe_id, n, settings, w, h, made, made_by) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(recipe.id, n, settings, top.w, top.h, at, who),
+    env.DB.prepare(`INSERT INTO rendition_file (rendition_id, digest, role, width, shape)
+      SELECT (SELECT id FROM rendition WHERE recipe_id = ? AND n = ?), value->>0, value->>1, value->>2, value->>3 FROM json_each(?)`).bind(recipe.id, n, JSON.stringify(rows)),
+  ]);
+  const made = [...(await renditions(env, 'WHERE r.recipe_id = ? AND r.n = ?', recipe.id, n)).values()][0];
+  return { rendition: made };
 }
 
-/* GET /edit/api/stored?hash=: a photo already stored with that content (the first 12 hex digits of its SHA-256,
-   worked out in the browser), as media/<code>, or null; so the same photo is never uploaded twice. */
-export async function storedPhoto(env, hash) {
-  if (!/^[0-9a-f]{12}$/.test(hash)) throw new Bad('Bad fingerprint');
-  const row = await env.DB.prepare('SELECT id FROM library WHERE hash = ? AND kind = \'photo\' ORDER BY added LIMIT 1').bind(hash).first();
-  if (!row) return null;
-  const has = (await env.MEDIA.list({ prefix: `media/${row.id}/original.`, limit: 1 })).objects.length;
-  return has ? `media/${row.id}` : null;
-}
-
-/* PUT /edit/api/upload?key=media/<code>/<file>: is this a file an item may have? (the item must exist) */
-export async function uploadAllowed(env, key) {
-  const m = /^media\/([0-9a-f]{8})\/(original\.(?:jpg|jpeg|png|webp|heic|heif|tif|tiff)|r\d{1,3}\/(?:\d{2,4}|preview)\.jpg|\d{2,5}x\d{2,5}(?:-\d{1,2})?\.mp4|(?:wide|tall)-\d{1,3}\/(?:first|last)-\d{2,4}\.jpg)$/.exec(key);
-  if (!m) return false;
-  return !!(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(m[1]).first());
+/* GET /edit/api/original?item=<code>: a photo item's original, for reopening a picture in the darkroom. Only
+   ever to the signed-in editor (this API); visitors never get originals. */
+export async function original(env, id) {
+  if (!env.MEDIA) throw new Bad('Image storage (R2) is not switched on', 503);
+  if (!CODE.test(id)) throw new Bad('Bad code');
+  const row = await env.DB.prepare('SELECT f.digest, f.type FROM original o JOIN file f ON f.digest = o.digest WHERE o.item_id = ? AND f.type != \'video/mp4\' LIMIT 1').bind(id).first();
+  const obj = row && await env.MEDIA.get(row.digest);
+  if (!obj) throw new Bad('The original photo isn\'t in storage', 404);
+  return new Response(obj.body, { headers: { 'content-type': row.type, 'cache-control': 'private, no-store' } });
 }
 
 /* POST /edit/api/library/name { id, name } */
@@ -246,44 +357,69 @@ export async function rename(env, id, name) {
   return { id, name: name.trim() };
 }
 
-/* POST /edit/api/library/delete { id, part?, history? }: an item for good (see the top), or one of its parts. */
-export async function remove(env, url, id, part, history) {
+/* POST /edit/api/library/delete { rendition } or { id, history? }: a rendition, or an item, for good (see the
+   top). Files nothing refers to any more go from storage, and visitors' cached copies are purged. */
+export async function remove(env, url, b) {
   if (!env.MEDIA) throw new Bad('File storage (R2) is not switched on', 503);
-  if (!CODE.test(id)) throw new Bad('Bad code');
-  const it = (await survey(env)).find((x) => x.id === id);
-  if (!it) throw new Bad('No such item', 404);
-  const files = (await listAll(env, `media/${id}/`)).map((o) => o.key);
-  if (part) {
-    const p = it.parts.find((x) => x.part === part);
-    if (!p || part === 'original') throw new Bad('That part can\'t be deleted on its own');
-    if (p.uses.length) throw new Bad(`Still used by ${[...new Set(p.uses.map((u) => u.label))].join(', ')}`, 409);
-    const keys = files.filter((k) => partOf(k.slice(15)) === part);
-    await env.MEDIA.delete(keys);
-    return { deleted: `${id}/${part}`, files: keys.length, purged: await purge(env, url, keys) };
+  const uses = await allUses(env);
+  const names = (list) => [...new Set(list.map((u) => u.label))].join(', ');
+  if (b.rendition != null) {
+    const r = await env.DB.prepare('SELECT id, recipe_id FROM rendition WHERE id = ?').bind(b.rendition).first();
+    if (!r) throw new Bad('No such rendition', 404);
+    const used = uses.get(r.id) || [];
+    if (used.length) throw new Bad(`Still used by ${names(used)}`, 409);
+    const digests = (await env.DB.prepare('SELECT digest FROM rendition_file WHERE rendition_id = ?').bind(r.id).all()).results.map((f) => f.digest);
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM rendition WHERE id = ?').bind(r.id),
+      env.DB.prepare('DELETE FROM recipe WHERE id = ? AND id NOT IN (SELECT recipe_id FROM rendition)').bind(r.recipe_id),
+      // the recipe's settings are those of its newest rendition (a trial that was deleted leaves no trace)
+      env.DB.prepare('UPDATE recipe SET settings = (SELECT settings FROM rendition WHERE recipe_id = ?1 ORDER BY n DESC LIMIT 1) WHERE id = ?1').bind(r.recipe_id),
+    ]);
+    const gone = await sweep(env, url, digests);
+    return { deleted: r.id, ...gone };
   }
-  const live = it.uses.filter((u) => u.state !== 'history');
-  if (live.length) throw new Bad(`Still used by ${[...new Set(live.map((u) => u.label))].join(', ')}: remove it there first`, 409);
-  const past = [...new Set(it.uses.map((u) => u.revision))];
-  if (past.length && !history) throw new Bad('History still has versions that use it', 409);
+  const id = String(b.id || '');
+  if (!CODE.test(id)) throw new Bad('Bad code');
+  if (!(await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(id).first())) throw new Bad('No such item', 404);
+  const rens = (await env.DB.prepare('SELECT r.id FROM rendition r JOIN recipe c ON c.id = r.recipe_id WHERE c.item_id = ?').bind(id).all()).results.map((r) => r.id);
+  const mine = rens.flatMap((r) => uses.get(r) || []);
+  const live = mine.filter((u) => u.state !== 'history');
+  if (live.length) throw new Bad(`Still used by ${names(live)}: remove it there first`, 409);
+  const past = [...new Set(mine.map((u) => u.revision))];
+  if (past.length && b.history !== true) throw new Bad('History still has versions that use it', 409);
+  const digests = (await env.DB.prepare(`SELECT digest FROM original WHERE item_id = ?1 UNION
+    SELECT rf.digest FROM rendition_file rf JOIN rendition r ON r.id = rf.rendition_id JOIN recipe c ON c.id = r.recipe_id WHERE c.item_id = ?1`).bind(id).all()).results.map((f) => f.digest);
   const stmts = [];
   if (past.length) {
-    stmts.push(env.DB.prepare(`DELETE FROM revisions WHERE id IN (${past.map(() => '?').join(',')})`).bind(...past));
+    stmts.push(env.DB.prepare('DELETE FROM revisions WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(past)));
     stmts.push(env.DB.prepare('DELETE FROM releases WHERE id NOT IN (SELECT release_id FROM revisions)'));
   }
-  stmts.push(env.DB.prepare('DELETE FROM library WHERE id = ?').bind(id));
-  for (let i = 0; i < files.length; i += 1000) await env.MEDIA.delete(files.slice(i, i + 1000));
+  stmts.push(env.DB.prepare('DELETE FROM library WHERE id = ?').bind(id));   // its originals, recipes and renditions go with it (foreign keys)
   await env.DB.batch(stmts);
-  return { deleted: id, files: files.length, history: past.length, purged: await purge(env, url, files) };
+  const gone = await sweep(env, url, digests);
+  return { deleted: id, history: past.length, ...gone };
+}
+
+/* Of these files, delete from storage those that no original and no rendition refers to any more; and with
+   them any stray file stored over a day ago that nothing ever referred to (an upload that broke off). */
+async function sweep(env, url, digests) {
+  const { results } = await env.DB.prepare(`SELECT digest, type FROM file
+    WHERE (digest IN (SELECT value FROM json_each(?1)) OR added < ?2)
+      AND digest NOT IN (SELECT digest FROM original) AND digest NOT IN (SELECT digest FROM rendition_file)`)
+    .bind(JSON.stringify(digests), new Date(Date.now() - 86400000).toISOString()).all();
+  if (!results.length) return { files: 0, purged: 'nothing to purge' };
+  const keys = results.map((f) => f.digest);
+  for (let i = 0; i < keys.length; i += 1000) await env.MEDIA.delete(keys.slice(i, i + 1000));
+  await env.DB.prepare('DELETE FROM file WHERE digest IN (SELECT value FROM json_each(?))').bind(JSON.stringify(keys)).run();
+  return { files: keys.length, purged: await purge(env, url, results.map((f) => fileUrl(f))) };
 }
 
 /* Cloudflare keeps visitors' copies of published files for up to a year (worker.js), in every data centre. This
    Worker's cache.delete reaches only the one it runs in, so the proper purge is Cloudflare's API (purge by URL),
-   with secret PURGE_TOKEN (Zone > Cache Purge) and var ZONE_ID. Keys are R2 keys (media/<code>/... is served at
-   /media/<code>/...). */
-export async function purge(env, url, keys) {
+   with secret PURGE_TOKEN (Zone > Cache Purge) and var ZONE_ID. paths: the files' addresses (/media/...). */
+export async function purge(env, url, paths) {
   const hosts = url.hostname.startsWith('admin-dev') ? ['dev.chrisjones.org.uk']
     : url.hostname.startsWith('admin') ? ['chrisjones.org.uk', 'www.chrisjones.org.uk'] : [url.host];
-  const paths = keys.filter((k) => !/\/original\./.test(k)).map((k) => `/${k}`);
   const urls = hosts.flatMap((h) => paths.map((p) => `https://${h}${p}`));
   await Promise.all(urls.map((u) => caches.default.delete(u).catch(() => false)));
   if (!urls.length) return 'nothing to purge';
@@ -296,3 +432,4 @@ export async function purge(env, url, keys) {
   }
   return 'everywhere';
 }
+

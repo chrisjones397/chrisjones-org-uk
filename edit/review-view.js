@@ -10,7 +10,7 @@ import { badge } from './widgets.js';
 const ticked = new Set();
 let ticksFor = '';
 
-const FIELDS = { type: 'Kind', versions: 'Versions', play: 'Plays', calm: 'For reduced motion', file: 'Files', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', section: 'Genre', order: 'Position', wide: 'Wide', white_paper: 'White paper', text: 'Text', featured: 'Featured', hidden: 'Hidden from visitors', media: 'Picture', rendition: 'Picture' };
+const FIELDS = { play: 'Plays', calm: 'For reduced motion', focus: 'Kept in view', shade: 'Shade', title: 'Title', medium: 'Medium', cm: 'Size', year: 'Year', estimated: 'Not measured', size_shown: 'Size shown', genre: 'Genre', order: 'Position', wide: 'Wide', text: 'Text', featured: 'Featured', hidden: 'Hidden from visitors', rendition: 'Picture' };
 function diffs(e) {
   const a = liveOf(e), b = draftOf(e);
   if (!a || !b) return [];
@@ -19,19 +19,15 @@ function diffs(e) {
     return SITES.filter((s) => JSON.stringify(a[s.key]) !== JSON.stringify(b[s.key])).map((s) =>
       h('div', {}, h('b', {}, `${s.name}: `), h('del', {}, show(a[s.key])), ' → ', h('ins', {}, show(b[s.key]))));
   }
-  const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'section' ? ((byId(v) && current(byId(v)).title) || v)
+  const show = (k, v) => (v == null || v === '' ? '(none)' : k === 'genre' ? ((byId(v) && current(byId(v)).title) || v)
     : k === 'cm' ? `${v[0]} × ${v[1]} cm` : k === 'focus' ? `${Math.round(v[0] * 100)}% across, ${Math.round(v[1] * 100)}% down`
-    : k === 'shade' ? `${Math.round(v * 100)}%` : k === 'versions' ? v.map((x) => `${x.w} × ${x.h}`).join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
+    : k === 'shade' ? `${Math.round(v * 100)}%` : typeof v === 'boolean' ? (v ? 'yes' : 'no') : k === 'order' ? `${v + 1}` : String(v));
   if (status(e) === 'hiding' || status(e) === 'showing') return [];      // the badge says it all
-  // the details line is made from medium, size and year, so it isn't listed as a change of its own; a new picture
-  // is one line (its sizes, preview and process change with it)
-  const pic = ['media', 'rendition', 'w', 'h', 'widths', 'ext', 'preview', 'process', 'white_paper'];
-  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !(k === 'details' && 'cm' in b)
-    && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  // a new picture is one line: the document names another rendition (an id, which means nothing to read)
+  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
   const out = [];
-  if (e.kind === 'painting' && keys.some((k) => pic.includes(k))) out.push(h('div', {}, h('b', {}, 'Picture: '), 'made afresh'));
   for (const k of keys) {
-    if (e.kind === 'painting' && pic.includes(k)) continue;
+    if (k === 'rendition') { out.push(h('div', {}, h('b', {}, 'Picture: '), e.kind === 'artwork' ? 'made afresh' : 'a different photo or video, or other versions of it')); continue; }
     if (k === 'hidden') { out.push(h('div', {}, h('b', {}, b.hidden ? 'Hidden from visitors' : 'Shown again'))); continue; }
     out.push(h('div', {}, h('b', {}, `${FIELDS[k] || k}: `), h('del', {}, show(k, a[k])), ' → ', h('ins', {}, show(k, b[k]))));
   }

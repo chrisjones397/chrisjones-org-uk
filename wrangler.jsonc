@@ -30,7 +30,7 @@
     { "binding": "DB", "database_name": "site-content", "database_id": "92160592-99ad-48c8-84db-e418928d0f46" }
   ],
   "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "site-media" }       // the Library's files (served at /media/<code>/...)
+    { "binding": "MEDIA", "bucket_name": "site-media" }       // the Library's files, each under its digest (served at /media/<digest>.<ext>)
   ],
   "vars": {
     "ACCESS_TEAM": "chrisjones-org-uk",

@@ -19,12 +19,13 @@
      anything else        templates/404.html, with status 404
    Every page gets the site's header (templates/header.html) as it's served. An address missing only its last /
    is sent on to the one with it (the usual way, so each page has one address).
-   Files kept in R2 (binding MEDIA): /media/<code>/<file> (the Library's layout, paths.js): only what's published,
-   except to the editor. Videos are sent in pieces when asked (range requests: 206 Partial Content), which is how
+   Files kept in R2 (binding MEDIA): /media/<digest>.<ext> (paths.js): to visitors only a file of a rendition that
+   something published and not hidden names; to the signed-in editor, any. Videos are sent in pieces when asked (range requests: 206 Partial Content), which is how
    browsers play video, and Safari insists on it. */
 
 import { load, rewriter, homeRewriter, gridRewriter, homePreview, esc } from './site.js';
 import { signedIn, api } from './editor.js';
+import { extOf } from './paths.js';
 import notFoundPage from './templates/404.html';   // .html files are imported as text (Wrangler's default rules)
 
 const SITE = 'Christopher Jones - Fine Art';
@@ -37,9 +38,9 @@ export default {
     const path = url.pathname;
 
     if (path.startsWith('/media/')) {
-      // The Library's layout (paths.js): /media/<code>/<file> is R2's media/<code>/<file>
-      const item = /^\/media\/([0-9a-f]{8})\/((?:(?:r|wide-|tall-)\d{1,3}\/)?([a-z0-9-]+)\.([a-z0-9]{1,5}))$/.exec(decodeURIComponent(path));
-      return item ? libraryFile(request, env, ctx, url, editor, item) : notFound(env, url);
+      // A stored file (paths.js): /media/<digest>.<ext> is R2's key <digest>
+      const file = /^\/media\/([0-9a-f]{64})\.([a-z0-9]{1,5})$/.exec(path);
+      return file ? storedFile(request, env, ctx, url, editor, file) : notFound(env, url);
     }
 
     if (editor) {
@@ -146,7 +147,7 @@ async function galleryPage(env, url, mode, editor, name) {
   const page = await env.ASSETS.fetch(new URL('/gallery/index.html', url));
   const rw = finish(gridRewriter(c), c, url, editor);
   if (p) {
-    ogImage(rw, url, { src: `/${p.preview.src}`, w: p.preview.w, h: p.preview.h });
+    if (p.pic.preview) ogImage(rw, url, { src: p.pic.preview.url, w: p.pic.preview.w, h: p.pic.preview.h });
     const here = `${url.origin}/gallery/${p.name}/`;
     const set = (value) => ({ element(el) { el.setAttribute('content', value); } });
     rw.on('link[rel="canonical"]', { element(el) { el.setAttribute('href', here); } })
@@ -191,29 +192,30 @@ function bar(c) {
 </div>`;
 }
 
-/* A file in a Library item's folder. Visitors get it only if something published and not hidden uses the item
-   (its code is the entry's media), and never its original. (A file already cached stays cached until it's
-   deleted for good, which purges it; hiding is meant to be undone, and the page no longer links to it.) The signed-in editor gets everything. */
-async function libraryFile(request, env, ctx, url, editor, [, code, path, base, ext]) {
+/* A stored file, by its digest (docs/entities.md, section 5). Visitors get it only if it belongs to a rendition
+   that a published, not hidden document names (the generated column entries.published_rendition, migration
+   0005): so never an original, and never a rendition still only in a draft. Its address can never mean other
+   bytes, so it is cached for a year and nothing ever needs purging except after Delete for good. The signed-in
+   editor gets any file. The extension must be the one its type has, so a file has one address. */
+async function storedFile(request, env, ctx, url, editor, [, digest, ext]) {
   if (!env.MEDIA) return notFound(env, url);
-  const key = `media/${code}/${path}`;
-  const isVideo = ext === 'mp4';
+  let row;
   if (!editor) {
-    if (base === 'original' && !path.includes('/')) return notFound(env, url);
-    if (!isVideo) { const hit = await caches.default.match(request); if (hit) return hit; }
-    const ok = await env.DB.prepare(`SELECT 1 FROM entries WHERE kind IN ('painting', 'background')
-        AND published IS NOT NULL AND json_extract(published, '$.media') = ?
-        AND json_extract(published, '$.hidden') IS NULL LIMIT 1`).bind(code).first();
-    if (!ok) return notFound(env, url);
-  } else if (!(await signedIn(request, env, url))) {
-    return signInAgain(request, url);
+    const hit = ext === 'mp4' ? null : await caches.default.match(request);
+    if (hit) return hit;
+    row = await env.DB.prepare(`SELECT f.type FROM file f WHERE f.digest = ? AND EXISTS (
+        SELECT 1 FROM rendition_file rf JOIN entries e ON e.published_rendition = rf.rendition_id
+        WHERE rf.digest = f.digest AND json_extract(e.published, '$.hidden') IS NULL)`).bind(digest).first();
+  } else {
+    if (!(await signedIn(request, env, url))) return signInAgain(request, url);
+    row = await env.DB.prepare('SELECT type FROM file WHERE digest = ?').bind(digest).first();
   }
+  if (!row || extOf(row.type) !== ext) return notFound(env, url);
   const caching = editor ? 'private, max-age=3600' : 'public, max-age=31536000, immutable';
-  if (isVideo) return video(request, env, key, caching);
-  const obj = await env.MEDIA.get(key);
+  if (row.type === 'video/mp4') return video(request, env, digest, caching);
+  const obj = await env.MEDIA.get(digest);
   if (!obj) return notFound(env, url);
-  const type = { jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', png: 'image/png' }[ext] || obj.httpMetadata?.contentType || 'application/octet-stream';
-  const res = new Response(obj.body, { headers: { 'content-type': type, etag: obj.httpEtag, 'cache-control': caching } });
+  const res = new Response(obj.body, { headers: { 'content-type': row.type, etag: obj.httpEtag, 'cache-control': caching } });
   if (!editor) ctx.waitUntil(caches.default.put(request, res.clone()));
   return res;
 }

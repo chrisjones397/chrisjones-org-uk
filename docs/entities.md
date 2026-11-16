@@ -236,7 +236,10 @@ editor allows. Every `..._by` column above holds that email.
    git with no `process` gets a recipe meaning "as supplied". **Built 16 Nov 2026** (fill.js, which states its
    rules; items that are the very same photo become one item with a recipe for each painting cut from it).
 4. Entries and History are rewritten to the new documents (painting to artwork, section to genre), after a
-   Time Travel bookmark, as was done on 11 Nov. Code switches over in the same release.
+   Time Travel bookmark, as was done on 11 Nov. Code switches over in the same release. **Built 16 Nov 2026**
+   (migrations/0005_documents_name_renditions.sql does the rewrite, in the deploy command, so data and code
+   change together; it also adds the generated columns of section 3). As built, the Background document
+   names one Rendition and still carries focus, play and calm, until step 5 makes them the Framing.
 5. Once he has checked dev, then live: the old keys and the old columns are removed.
 
 Every step before the last can be undone. Sizes today: dev 25 paintings, 46 Library items; live 25 paintings,
