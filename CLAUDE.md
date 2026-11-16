@@ -517,4 +517,18 @@ Wanted later, not yet (his notes, 16 Nov 2026):
   thumbnail on the left, the list of renditions beside it rather than slightly under it. His thoughts, not a
   brief: don't treat them as the whole redesign.
 
+- **Videos in any format, converted on the server** (his decision, 16 Nov 2026, after a video from his phone's
+  photo roll, a QuickTime .MOV, was refused with "choose an MP4"): the finished editor should accept such files
+  and make the MP4 versions itself, server side. Design check, same day: Cloudflare's own way is Media
+  Transformations (Stream's docs, "Transform videos"), which has a Workers binding (`media`, public beta, not
+  billed during it) that reads a video from R2 and writes an optimised H.264/AAC MP4, or a still frame, back to
+  R2: so it could also take the first and last frames, replacing the browser's. Its documented limits decide
+  the design: input under 100 megabytes and 10 minutes; output at most 2000 pixels on a side (so no 4K
+  versions from it) and at most a minute long; the documented input is MP4 with H.264 ("other formats may work
+  but are untested": a phone's .MOV, often HEVC, must be tried before relying on it). Free allowance 5,000
+  transformations a month, a video costing one per second of output. If .MOV fails, the alternatives are
+  Cloudflare Stream or a Container running ffmpeg, both paid. In the model it is a recipe of kind video with
+  real settings: the upload is the original, the converted versions its rendition. Not scheduled: fits with
+  slice 3 (the Library the only upload) or after it.
+
 Dropped: "change address" forwarding.
