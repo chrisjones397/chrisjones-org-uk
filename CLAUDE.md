@@ -407,14 +407,22 @@ editor redraws the whole view after every change; fonts come from Google, not th
    "|" + frame folders). Settings format: the process record without `original`, plus white_paper when true; {}
    = no choices recorded (as supplied). Decisions made here, told to him: items that are the very same photo
    become one item with a recipe per painting (on dev the six pentaptych items, original 695cdfe4..., become
-   bebc468b with eight recipes, labelled by painting title; the other five Library rows stay until (d), which
+   bebc468b with seven recipes, labelled by painting title; the other five Library rows stay until (d), which
    must delete them and repoint anything naming their codes); sets one painting named over time are one recipe.
    For (d): History on dev names four items deleted long ago (fbe37810, 98a0c36f, ebd11c20, 31fdf63d: no rows
    in old_part), so those versions can't be rewritten: drop them from History or leave them unrestorable, his
    call. Run fill again just before (d) (new uploads, deletions), then never. Tested locally (node on made-up
    data; wrangler dev with real small files through digest/store then digest/fill: every table read back, a
    second run giving fresh ids, refusal while files wait). Not tested: the button in a browser, real R2.
-   Next: he presses it on admin-dev, the tables are checked through the API, then (d), in a new chat.
+   Pressed by him on admin-dev and checked through the API, 16 Nov 2026 (after one fix: a video named by several
+   versions of a background was recorded twice in old_part): 310 files, all measured; 43 originals; 48 recipes
+   (33 flat, 14 scene, 1 video); 50 renditions; 278 rendition files; every digest placed; every set of sizes in
+   old_part; all 54 current painting and background versions find their rendition, with matching size, number
+   of sizes and settings; no foreign key faults. The pentaptych item bebc468b has seven recipes (eight sets:
+   Part 2's recipe has two renditions). Ids start at 13 on dev; nothing depends on that.
+   Live, same day: main at 4ed30c9 has (a) and (b); he pressed (b)'s button on admin (223 old keys, 223 digest
+   objects, nothing else in the bucket). Live still needs (c): put dev live, press the button on admin once
+   ("Media tables to fill"), check through the API. Next: (d), in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
