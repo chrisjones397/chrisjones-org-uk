@@ -227,7 +227,8 @@ Files (all at the top level unless said):
   heading, paragraphs, background box, contact links), Library (items newest first, Site pictures and Paintings:
   name edited in place, code, what uses it, a line per part, Delete for good when unused; tick two or three to
   compare side by side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a
-  removal, it undoes it). Header: an eye opens the preview.
+  removal, it undoes it). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
+  so switching to a short view doesn't shift the layout.
   One saving rule: every change saves itself as a draft at once (a save queue), shown by a tick that takes no
   room (on the changed button's or label's top right corner, or inside a text field on its right), fading over
   3.5 seconds, with a tooltip. Hide (an eye on published paintings, genres, backgrounds) acts at once on the live

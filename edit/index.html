@@ -15,6 +15,7 @@
   [hidden] { display: none !important; }
   /* Quick repeated taps on a button shouldn't zoom the page (Safari's double-tap zoom); pinching still works. */
   button, select, .dr-bar { touch-action: manipulation; }
+  html { overflow-y: scroll; }   /* the scrollbar always there, so a short view (Review) doesn't shift sideways */
   body { margin: 0; background: #1a1a1a; color: var(--ink);
          font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
   a { color: var(--ink); text-decoration: none; }
