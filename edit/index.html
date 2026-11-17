@@ -225,6 +225,12 @@
   .lib-pick { position: relative; display: flex; flex-direction: column; gap: 0.3rem; padding: 0.3rem; text-align: left; }
   .lib-pick img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #111; border-radius: 4px; }
   .lib-pick .lib-video { top: 0.6rem; right: 0.6rem; bottom: auto; }
+  .lib-pick-none { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; background: #111; border-radius: 4px; color: var(--dim); }
+  .lib-pick-mark { position: absolute; top: 0.6rem; left: 0.6rem; display: flex; padding: 2px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; }
+  .add-from { display: flex; align-items: center; gap: 0.7rem; }
+  .add-from .lib-thumb { width: 5rem; flex: none; }
+  .add-from .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .icon-btn { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.45rem 0.7rem; }
   .lib-pick-name { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lib-video { position: absolute; right: 3px; bottom: 3px; display: flex; padding: 2px; border-radius: 50%;
                background: rgba(0,0,0,0.65); color: #fff; }

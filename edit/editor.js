@@ -1,7 +1,7 @@
 /* The editor page (edit/index.html) starts here. Its views:
-     #gallery  add a painting (at the top), and change the genres and paintings
+     #gallery  add a painting (at the top, from a photo in the Library), and change the genres and paintings
      #content  change the page's words, section by section.
-     #library  every file in storage (Site pictures, Paintings): what uses each, its name, Delete for good
+     #library  everything uploaded (the only place files come in): what is made from each and what uses it
      #review   every unpublished change, each with a tick: publish the ticked ones, or all, or discard them.
      #history  each publication, and every earlier version of anything, which can be brought back as a draft.
    One saving rule: every change saves itself as a draft at once, everywhere (paintings too: there is no Save
@@ -21,8 +21,9 @@
      darkroom.js      the pixels: white balance, squaring up, the full-screen views (it stands alone)
      uploads.js       files into storage and the Library: originals, renditions (sizes; video versions and frames)
      details.js       a painting's medium, size and year fields
+     picker.js        the Library's items as tiles to pick from
      picture.js       the darkroom as a form
-     add.js           the add-a-painting form
+     add.js           adding a painting, from a photo in the Library
      painting.js      a painting's row, Edit form and picture
      background.js    a section's background box
      uses.js          what uses a Library item, as marks

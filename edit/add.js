@@ -1,13 +1,16 @@
-/* Adding a painting (the form at the top of the Gallery view): its picture is made in the browser and stored as
-   a rendition of its photo's Library item, then the artwork, naming that rendition, is saved as a draft. */
+/* Adding a painting (at the top of the Gallery view): its photo is chosen from the Library (the only place files
+   come in; the Library's brush on a photo's row comes here too), its picture is made from that original in the
+   browser and stored as a rendition of the photo's Library item, then the artwork, naming that rendition, is
+   saved as a draft. */
 
-import { h, toast } from './dom.js';
-import { state, current, paintingsIn, picOf } from './state.js';
-import { call } from './server.js';
+import { h, toast, glyph, GLYPHS } from './dom.js';
+import { state, current, paintingsIn } from './state.js';
+import { call, loadLibrary } from './server.js';
 import { render } from './render.js';
 import { detailsFields, detailsOf, carry } from './details.js';
+import { originalOf, storeImages } from './uploads.js';
+import { libraryTiles, newestFirst } from './picker.js';
 import { darkroom } from './picture.js';
-import { storeImages, storedFor, keepOriginal } from './uploads.js';
 
 function slug(t) {
   return t.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ')
@@ -24,18 +27,56 @@ function nameFor(title) {
 let newGenre = null;                // a genre just added, for the add form to pick
 export function pickGenre(id) { newGenre = id; }
 
-let adding = null;   // the add form's darkroom, kept while the page re-renders
+let adding = null;                  // { item, dr }: the Library photo chosen and its darkroom, kept while the page re-renders
+let picking = false;                // whether the Library's tiles are open
+
+/* Start a painting from a Library photo: its original is read back from storage into the darkroom. */
+function begin(it) {
+  picking = false;
+  const dr = darkroom();
+  adding = { item: it, dr };
+  dr.say('Fetching the photo from the Library…');
+  (async () => {
+    try {
+      const blob = await originalOf(it.id);
+      if (adding && adding.dr === dr) await dr.load(blob);
+    } catch (e) { if (adding && adding.dr === dr) { dr.say(''); toast(e.message, true); } }
+  })();
+}
+/* From the Library: "Make a painting" on a photo's row. */
+export function paintFrom(it) { begin(it); location.hash = '#gallery'; setTimeout(() => scrollTo(0, 0), 120); }   // once the Gallery is drawn
+
 export function addForm(secs) {
   if (!state.media) {
     return h('p', { class: 'hint' }, 'Adding paintings needs image storage (R2), which isn\'t switched on yet for this site. Everything else here works.');
   }
+  if (!adding) {
+    const out = [h('div', { class: 'actions top' },
+      h('button', { class: 'icon-btn', 'aria-expanded': String(picking), title: 'Add a painting: choose its photo from the Library', 'aria-label': 'Add a painting from the Library',
+        onclick: () => { picking = !picking; render(); } }, glyph(GLYPHS.add), glyph(GLYPHS.brush)),
+      h('a', { class: 'icon-btn muted', href: '#library', title: 'Photos are uploaded in the Library: go there', 'aria-label': 'Upload in the Library' }, glyph(GLYPHS.upload)))];
+    if (picking) {
+      if (!state.library) { loadLibrary(); out.push(h('p', { class: 'hint' }, 'Loading the Library…')); }
+      else {
+        const photos = newestFirst(state.library.items.filter((it) => it.kind === 'photo'));
+        out.push(photos.length
+          ? libraryTiles(photos, (it) => { begin(it); render(); },
+            (it) => (it.painting ? h('span', { class: 'lib-pick-mark', title: 'Already a painting (it can be another too)' }, glyph(GLYPHS.brush, 12)) : null))
+          : h('p', { class: 'hint' }, 'The Library has no photos yet: upload one there first.'));
+      }
+    }
+    return h('div', {}, ...out);
+  }
   const f = {};
-  const dr = adding || (adding = darkroom());
+  const { dr, item } = adding;
   const form = h('div', { class: 'card' },
-    h('label', {}, 'Photo of the painting'), f.file = h('input', { type: 'file', accept: 'image/*', onchange: pick }),
-    dr.note || (dr.note = h('p', { class: 'hint stored-note' })),
+    h('div', { class: 'add-from' },
+      h('span', { class: 'lib-thumb' }, item.thumb ? h('img', { src: item.thumb, alt: '' }) : glyph(GLYPHS.photo, 28)),
+      h('span', { class: 'grow', title: 'Its photo, from the Library' }, item.name),
+      h('button', { class: 'icon-btn', title: 'Choose a different photo, or none', 'aria-label': 'Choose a different photo',
+        onclick: () => { adding = null; picking = true; render(); } }, glyph(GLYPHS.close, 16))),
     dr.el,
-    h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off' }),
+    h('label', {}, 'Title'), f.title = h('input', { type: 'text', autocomplete: 'off', value: item.name }),
     ...detailsFields(f, {}, () => dr.sizeChanged()),
     h('label', {}, 'Genre'), f.genre = h('select', {}, ...secs.map((s) => h('option', { value: s.id }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox' }), 'Wide'),
@@ -44,38 +85,10 @@ export function addForm(secs) {
   carry(dr.fields, f);
   dr.fields = f;
   if (newGenre && [...f.genre.options].some((o) => o.value === newGenre)) { f.genre.value = newGenre; newGenre = null; }
-  if (dr.file) {                                     // show the chosen photo's name again (add() uses dr.file)
-    try { const t = new DataTransfer(); t.items.add(dr.file); f.file.files = t.files; } catch { /* older browsers */ }
-  }
   dr.attach(f);
 
-  async function pick() {
-    const file = dr.file = f.file.files[0] || null;
-    dr.known = null; dr.note.textContent = '';
-    if (!file) return;
-    if (!f.title.value) f.title.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
-    lookUp(file);                                    // alongside preparing the picture
-    await dr.load(file);
-  }
-
-  /* Say straight away whether this photo is already stored (and for which paintings), so it won't be uploaded
-     again; add() reuses the answer. */
-  async function lookUp(file) {
-    dr.note.textContent = 'Checking whether this photo is already stored…';
-    try {
-      const known = await storedFor(file);
-      if (dr.file !== file) return;                  // another photo was chosen meanwhile
-      dr.known = known;
-      if (!known.item) { dr.note.textContent = 'A new photo: it will be uploaded when you add the painting.'; return; }
-      const users = state.entries.filter((e) => e.kind === 'artwork' && current(e) && (picOf(current(e)) || {}).item === known.item)
-        .map((e) => `"${current(e).title}"`);
-      dr.note.textContent = `Already stored${users.length ? ` (used by ${users.join(', ')})` : ''}: it won't be uploaded again.`;
-    } catch { if (dr.file === file) dr.note.textContent = ''; }   // add() checks again
-  }
-
   async function add() {
-    const file = dr.file;
-    if (!file || !dr.ready) return toast('Choose a photo first', true);
+    if (!dr.ready) return toast('The photo isn\'t ready yet', true);
     const title = f.title.value.trim();
     if (!title) return toast('Give it a title', true);
     if (!f.genre.value) return toast('Add a genre first', true);
@@ -85,15 +98,14 @@ export function addForm(secs) {
     try {
       const name = nameFor(title);
       const say = (t) => { f.progress.textContent = t; };
-      const { id: item, shared } = await keepOriginal(file, title, dr.known, say);
-      // a second painting from a photo already stored is a recipe of its own, told apart by the painting's title
-      const pic = await storeImages(item, null, dr.result(), dr.record(), shared ? title : '', say);
+      // each painting made from a photo is a recipe of its own, told apart in the Library by the painting's title
+      const pic = await storeImages(item.id, null, dr.result(), dr.record(), title, say);
       const data = { name, title, ...det, genre: f.genre.value, order: paintingsIn(f.genre.value).length, wide: f.wide.checked,
         rendition: pic.id };
       await call('POST', 'save', { items: [{ id: `p-${name}`, kind: 'artwork', data }] });
       try { localStorage.setItem('editor-medium', det.medium); localStorage.setItem('editor-height', String(det.cm[0])); } catch { /* private browsing */ }
-      adding = null;                                 // a fresh form, and a fresh note
-      toast(`"${title}" added as a draft${shared ? ', sharing a photo already stored' : ''}`);
+      adding = null; state.library = null;          // a fresh start, and the Library's rows to be read again
+      toast(`"${title}" added as a draft`);
       render();
     } catch (e) {
       toast(e.message, true); f.progress.textContent = '';

@@ -23,10 +23,13 @@ beforeDiscard.add((ids) => {
   }
 });
 
+/* Open a painting's Edit form (the Library's uses marks lead here). */
+export function openPainting(id) { open.add(id); }
+
 export function paintingRow(e, items, i, secs) {
   const d = current(e);
   const gone = e.draft == null;
-  const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') + (isHidden(e) ? ' hidden' : '') },
+  const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') + (isHidden(e) ? ' hidden' : ''), 'data-entry': e.id },
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
     h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
       h('span', { class: 'd' }, detailsLine(d) || ' ', sizeNote(d))),

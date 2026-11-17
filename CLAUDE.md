@@ -523,6 +523,15 @@ editor redraws the whole view after every change; fonts come from Google, not th
    served), name, alt and credit saved with ticks, a site picture made, blink between an original and its
    rendition, see large (the original), the same photo again not a second item, the filter, desktop and phone
    widths. Not tested: videos, real phones, Safari.
+   (b) DONE on dev: a painting starts from a Library photo. The Gallery's "Add a painting" upload form is gone:
+   a plus-and-brush button opens the Library's photos as tiles (edit/picker.js libraryTiles, the one tile used
+   by every picker); choosing one reads its original back into the darkroom, with the title starting as the
+   photo's name (edit/add.js). The Library's brush on a photo's row goes to the same place with that photo
+   (paintFrom). Every painting made from a photo is a recipe of its own, labelled with the painting's title. The
+   Library's uses marks are links: to the painting's Edit form in the Gallery (opened, scrolled to), a
+   section's background under Content, or History (edit/uses.js). Tested locally (Playwright): picker, darkroom
+   loaded from the Library, artwork saved naming its rendition, uses link, brush, the tile's "already a
+   painting" mark. Not tested: the full-screen corner and spot views, real phones, Safari.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

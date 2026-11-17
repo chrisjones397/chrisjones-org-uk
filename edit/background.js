@@ -29,7 +29,7 @@ const lastStill = (r) => {
 export function backgroundBox(key) {
   const id = `bg-${key}`, e = byId(id), d = e && current(e);
   const r = picOf(d), isVideo = !!r && r.kind === 'video';       // the rendition it shows
-  const box = h('div', { class: 'box bg-box' + (isHidden(e) ? ' hidden' : '') }, h('div', { class: 'row' },
+  const box = h('div', { class: 'box bg-box' + (isHidden(e) ? ' hidden' : ''), 'data-entry': id }, h('div', { class: 'row' },
     h('label', { class: 'grow' }, 'Background ', e ? badge(e) : null),
     d ? hideButton(e, 'this background') : null));
   if (!state.media) return box.append(h('p', { class: 'hint' }, 'Needs file storage (R2), which isn\'t switched on for this site.')), box;

@@ -83,6 +83,12 @@ export const discard = (ids) => {
 /* A rendition just made (library/rendition's answer), so a draft can name it straight away. */
 export function known(r) { state.renditions[r.id] = r; return r; }
 
+/* The Library's items, asked for if they haven't been (for something outside the page's redrawing to wait on). */
+export async function libraryReady() {
+  if (!state.library) state.library = await call('GET', 'library');
+  return state.library;
+}
+
 export function loadLibrary() {
   return call('GET', 'library').then((d) => { state.library = d; render(); }).catch((e) => toast(e.message, true));
 }

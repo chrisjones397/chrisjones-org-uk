@@ -6,6 +6,7 @@ import { marks, placeMarks } from './marks.js';
 import { call, act, loadLibrary } from './server.js';
 import { render } from './render.js';
 import { libraryPhoto, videoItem, sceneRendition } from './uploads.js';
+import { paintFrom } from './add.js';
 import { strongest, useMarks } from './uses.js';
 import { showItems, blinkView } from './compare.js';
 
@@ -128,6 +129,8 @@ function libraryRow(it) {
       field('alt', 500, 'Alternative text: what the picture shows, for visitors who can\'t see it', 'says', 'What it shows'),
       field('credit', 200, 'Credit: who made it, if it wasn\'t you', 'person', 'Who made it, if not you'),
       h('div', { class: 'lib-acts' },
+        it.kind === 'photo' ? h('button', { disabled: !!doing, title: 'Make a painting from it: to the Gallery, with this photo in the darkroom', 'aria-label': 'Make a painting',
+          onclick: () => paintFrom(it) }, glyph(GLYPHS.brush)) : null,
         it.kind === 'photo' && !hasScene ? h('button', { disabled: !!doing, title: 'Make a site picture: its sizes, as it is, for backgrounds', 'aria-label': 'Make a site picture',
           onclick: () => makeScene(it) }, glyph(GLYPHS.crop)) : null,
         h('span', { class: 'lib-doing muted', 'data-doing': it.id }, doing || ''),
