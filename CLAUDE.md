@@ -490,7 +490,7 @@ editor redraws the whole view after every change; fonts come from Google, not th
    rendition and every artwork's has sizes; no foreign key faults. Live's Time Travel bookmark from just before:
    000005a1-00000000-00005125-99d084fcaf7e5557f1636c1888701c29. Live's pages were not opened from here.
    Still untested anywhere: a real video upload, "Add a version…" and removing one.
-   **(e) DONE 16 Nov 2026 on dev; live to follow when he puts dev live.** Migration 0006 drops old_key,
+   **(e) DONE: dev 16 Nov 2026, live 17 Nov 2026. Slice 2 is finished.** Migration 0006 drops old_key,
    old_part, the Library's columns grp, hash and data (and the index on hash) and adds library.alt and credit
    (text, '' = not said; no field in the editor yet). digests.js, fill.js, their routes, listAll and partOf are
    gone. Checked first, on both sites, through the API: every old key's bytes are stored under their digest at
@@ -498,13 +498,15 @@ editor redraws the whole view after every change; fonts come from Google, not th
    orphaned. Tested locally (wrangler dev): 0006 on rows in the old shape (keys and cascades intact), a new
    upload and Library item, the listing, the old routes not found. Dev: build of b32f4a6 applied 0006; then the
    323 old keys (media/..., 306 megabytes) were deleted from site-media-dev through the API, leaving the 310
-   digest objects. Time Travel bookmark from just before, dev:
-   000001cd-00000000-00005125-cd9657296993ac58a82823678e37d3fc (the database only: deleted files can't come back).
-   **Live still to do**, in this order: put dev live (the build applies 0006); then delete live's 223 old keys
-   (media/..., 154 megabytes) from site-media through the API (DELETE
-   /accounts/{id}/r2/buckets/site-media/objects/{key}, after the same checks: every file row's object present at
-   its size). Until then live's old keys sit unread and harmless. After that, slice 2 is finished and (d) can
-   no longer be undone on live. Next: slice 3 (the Library the only upload, with its redesign), in a new chat.
+   digest objects. Live, when he said: main fast-forwarded to 1f5be45 by Claude (17 Nov 2026, 00:43 UTC), its
+   build applied 0006; then the 223 old keys (154 megabytes) were deleted from site-media, leaving the 223
+   digest objects; checked after: every file row's object present at its size, all 25 artworks and both
+   backgrounds find a rendition with files, no foreign key faults. Live's pages were not opened from here.
+   Time Travel bookmarks from just before (the database only: deleted files can't come back, so (d) can no
+   longer be undone on either site): dev 000001cd-00000000-00005125-cd9657296993ac58a82823678e37d3fc, live
+   000005b3-00000000-00005126-8e056c15202055f6d246ba6640222ab1.
+   Still untested anywhere: a real video upload, "Add a version…" and removing one.
+   **Next: slice 3** (the Library the only upload, with its redesign), in a new chat.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

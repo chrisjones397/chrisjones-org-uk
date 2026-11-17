@@ -240,8 +240,8 @@ editor allows. Every `..._by` column above holds that email.
    (migrations/0005_documents_name_renditions.sql does the rewrite, in the deploy command, so data and code
    change together; it also adds the generated columns of section 3). As built, the Background document
    names one Rendition and still carries focus, play and calm, until step 5 makes them the Framing.
-5. Once he has checked dev, then live: the old keys and the old columns are removed. **Done on dev 16 Nov 2026**
-   (migrations/0006_scaffolding_removed.sql; the old keys deleted from storage through Cloudflare's API), live to follow.
+5. Once he has checked dev, then live: the old keys and the old columns are removed. **Done: dev 16 Nov 2026, live 17 Nov 2026**
+   (migrations/0006_scaffolding_removed.sql; the old keys deleted from storage through Cloudflare's API).
 
 Every step before the last can be undone. Sizes today: dev 25 paintings, 46 Library items; live 25 paintings,
 30 Library items.
