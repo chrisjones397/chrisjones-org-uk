@@ -1,26 +1,26 @@
-/* A section's background (in the Content view): a photo or a video, its focus and shade. */
+/* A section's background (in the Content view): a photo or a video chosen from the Library, its focus and shade. */
 
 import { sizeFor, framesFor } from '/paths.js';
 import { h, toast, glyph, GLYPHS, MB } from './dom.js';
-import { state, byId, changed, current, isHidden, picOf, PAGE } from './state.js';
+import { state, byId, changed, current, isHidden, picOf } from './state.js';
 import { save, discard, loadLibrary } from './server.js';
 import { render } from './render.js';
 import { badge, hideButton } from './widgets.js';
-import { photoItem, videoItem, videoRendition } from './uploads.js';
+import { sceneRendition } from './uploads.js';
+import { libraryTiles, newestFirst } from './picker.js';
 
 /* A section's background: a photo or a video, shown as it is now (the photo, or the video's last frame), with
    its focus (the point kept in view when the screen's shape crops it: tap the picture to move it), how a phone held
    upright and a wide screen would crop it, and the shade (how much it's darkened, so the words over it read).
-   The background's document names a rendition of a Library item (photoItem, videoItem in uploads.js; also chosen
-   from the Library with "From the Library…"):
-   A photo: kept as uploaded, with one set of sizes made from it as it is (a photograph, not a painting: no white
-   balance or corners).
-   A video: one or more versions (sizes for wide screens, one made for phones held upright), each uploaded as
-   made, after the checks in videoFacts(); first and last frames are taken here, once per shape, and stored as
-   pictures. How it plays (once, or on a loop) and what visitors who ask for reduced motion or less
-   data see instead (its last frame, or a slow fade from the first frame to the last) are the section's choices. */
-const bgBusy = {};                    // section -> what it's doing, while a photo or video is being stored
-const bgNotes = {};                   // section -> the checks' findings for the video version last added
+   The background's document names a rendition of a Library item, chosen from the Library's tiles (nothing is
+   uploaded here: the Library is the only place files come in, step 4 slice 3):
+   A photo: its site picture, a set of sizes made from it as it is (a photograph, not a painting: no white
+   balance or corners). A photo that has none yet gets one made on the spot when it's chosen (sceneRendition).
+   A video: its newest set of versions (sizes for wide screens, one made for phones held upright) with first
+   and last frames; versions are added and left out on the video's row in the Library. How it plays (once, or
+   on a loop) and what visitors who ask for reduced motion or less data see instead (its last frame, or a slow
+   fade from the first frame to the last) are the section's choices. */
+const bgBusy = {};                    // section -> what it's doing, while a site picture is being made
 const lastStill = (r) => {
   const f = framesFor(r, r.versions.filter((x) => x.h <= x.w)[0] || r.versions[0]);
   return f && f.last.length ? sizeFor(f.last, 1024).url : '';
@@ -34,16 +34,11 @@ export function backgroundBox(key) {
     d ? hideButton(e, 'this background') : null));
   if (!state.media) return box.append(h('p', { class: 'hint' }, 'Needs file storage (R2), which isn\'t switched on for this site.')), box;
   const busy = !!bgBusy[key];
-  const status = h('p', { class: 'hint' }, bgBusy[key] || '');
-  const say = (t) => { bgBusy[key] = t; status.textContent = t; };
+  const status = h('p', { class: 'hint bg-status' }, bgBusy[key] || '');
+  // the box is drawn afresh while a site picture is being made, so its progress goes to whichever copy is on the page
+  const say = (t) => { bgBusy[key] = t; const el = document.querySelector(`[data-entry="${id}"] .bg-status`); if (el) el.textContent = t; };
   // a new picture or video in a hidden background stays hidden until shown again
-  // the new Library item's name (declared before the return below: a const after it is never set)
-  const label = `${(PAGE.find((p) => p.bg === key) || { name: key }).name} background`;
   const store = (data, msg, mk) => save([{ id, kind: 'background', data: data && { ...data, hidden: !!(d && d.hidden) } }], msg, mk);
-  const pickPhoto = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => pickPhoto.files[0] && run(() => addPhoto(pickPhoto.files[0])) });
-  // several files at once are one video's versions (a set: e.g. sizes for wide screens and one framed for phones)
-  const pickVideo = h('input', { type: 'file', accept: 'video/mp4,.mp4,.m4v', hidden: true, multiple: true,
-    onchange: () => pickVideo.files.length && run(() => addVideo([...pickVideo.files], isVideo ? r : null)) });
 
   if (d && r) {
     const src = isVideo ? lastStill(r) : sizeFor(r.sizes, 1024).url;
@@ -70,73 +65,54 @@ export function backgroundBox(key) {
         choice('Plays', 'play', [['once', 'Once, stopping on its last frame'], ['loop', 'On a loop']]),
         choice('For visitors who ask for reduced motion or less data', 'calm', [['last', 'Its last frame'], ['fade', 'A slow fade from its first frame to its last']]),
         h('label', {}, 'Versions (the browser picks one for each screen)'),
-        ...versionRows(r).map(([v, text]) => h('div', { class: 'row bg-version' }, h('span', { class: 'grow' }, text),
-          r.versions.length > 1 ? h('button', { class: 'danger', disabled: busy, title: 'Remove this version',
-            onclick: () => confirm('Remove this version?') && run(() => removeVersion(v)) }, 'Remove') : null)));
-      if (bgNotes[key]) box.append(h('div', { class: 'bg-notes' }, ...bgNotes[key].map((n) => h('p', { class: 'hint' }, n))));
+        ...versionRows(r).map(([, text]) => h('div', { class: 'row bg-version' }, h('span', { class: 'grow' }, text))),
+        h('p', { class: 'hint' }, 'Versions are added and left out on the video\'s row in the ', h('a', { href: '#library' }, 'Library'), '.'));
     } else {
       box.append(h('p', { class: 'hint' }, `Photo, ${r.w} × ${r.h} pixels.`));
     }
   } else {
     box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background (the picture stays in the Library).' : 'None: the section shows the page\'s grey.'));
   }
-  if (bgPicking.has(key)) box.append(libraryPicker(d, (data) => { bgPicking.delete(key); store(data, 'Saved as a draft'); }));
-  box.append(pickPhoto, pickVideo, status, h('div', { class: 'actions' },
-    h('button', { disabled: busy, title: 'Choose a photo or video already in the Library',
-      onclick: () => { bgPicking.has(key) ? bgPicking.delete(key) : bgPicking.add(key); render(); } }, bgPicking.has(key) ? 'Close the Library' : 'From the Library…'),
-    h('button', { disabled: busy, onclick: () => pickPhoto.click() }, d && !isVideo ? 'Replace with a photo…' : 'Choose a photo…'),
-    h('button', { disabled: busy, title: 'One video, or several versions of it at once (sizes for wide screens, one made for phones held upright)',
-      onclick: () => { addingFresh = true; pickVideo.click(); } }, d ? 'Replace with a video…' : 'Choose a video…'),
-    isVideo ? h('button', { disabled: busy || r.versions.length >= 6, title: 'Another size of this video, or one made for phones held upright',
-      onclick: () => { addingFresh = false; pickVideo.click(); } }, 'Add a version…') : null,
+  if (bgPicking.has(key)) box.append(libraryPicker(choose));
+  box.append(status, h('div', { class: 'actions' },
+    h('button', { class: 'icon-btn', disabled: busy, 'aria-expanded': String(bgPicking.has(key)), title: d ? 'Choose a different photo or video from the Library' : 'Choose a photo or video from the Library',
+      'aria-label': 'Choose from the Library', onclick: () => { bgPicking.has(key) ? bgPicking.delete(key) : bgPicking.add(key); render(); } }, glyph(GLYPHS.photo), glyph(GLYPHS.swap, 14)),
+    h('a', { class: 'icon-btn muted', href: '#library', title: 'Photos and videos are uploaded in the Library: go there', 'aria-label': 'Upload in the Library' }, glyph(GLYPHS.upload)),
     d ? h('button', { class: 'danger', disabled: busy, title: 'Take it out of this section: the picture stays in the Library',
       onclick: () => confirm('Remove this section\'s background? The picture stays in the Library.') && store(null, 'Removed in the draft') }, 'Remove') : null,
     e && changed(e) ? h('button', { disabled: busy, onclick: () => discard([id]) }, 'Undo change') : null));
   return box;
 
-  async function run(job) {
-    try { await job(); } catch (err) { toast(err.message, true); }
-    delete bgBusy[key]; render();
-  }
-  async function addPhoto(file) {
-    const pic = await photoItem(file, label, say);
-    delete bgBusy[key];
-    await store({ rendition: pic.rendition, focus: [0.5, 0.5], shade: d ? d.shade : 0.12 }, 'Photo saved as a draft: tap it to choose the part to keep in view');
-  }
-  /* One or more versions of a video. into: the section's video rendition to add them to (Add a version…: a new
-     rendition of the same item, with these as well), or null for a new video (Choose / Replace with a video…), a
-     new Library item. */
-  async function addVideo(files, into) {
-    if (addingFresh) into = null;
-    const got = await videoItem(into ? into.item : null, `${label} video`, files, into, say);
-    bgNotes[key] = got.notes;
-    delete bgBusy[key];
-    const base = into ? d : { focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0, play: 'once', calm: 'last' };
-    await store({ ...base, rendition: got.rendition.id },
-      files.length > 1 ? `${files.length} versions saved as a draft` : 'Video saved as a draft');
-  }
-  /* Take a version out of the background: a new rendition without it (the file stays in the Library, as one of the
-     item's originals); if its shape's frames came from it, they're made again from the next largest of that shape. */
-  async function removeVersion(v) {
-    const made = await videoRendition(r.item, r.versions.filter((x) => x.digest !== v.digest), r, () => null, say);
-    delete bgBusy[key];
-    await store({ ...d, rendition: made.id }, 'Version removed in the draft');
+  /* A Library item chosen: its newest site picture or set of versions becomes the background (in the draft),
+     keeping the focus and shade; a photo with no site picture yet has one made first, here. */
+  async function choose(it) {
+    bgPicking.delete(key);
+    try {
+      let b = backgroundFrom(it, d);
+      if (!b) {
+        if (it.kind !== 'photo') throw new Error('That video has no versions to show');
+        bgBusy[key] = 'Making its sizes…'; render();
+        const made = await sceneRendition(it.id, say);
+        state.library = null;
+        b = { rendition: made.id, focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0.12 };
+      }
+      delete bgBusy[key];
+      await store(b, 'Saved as a draft: tap the picture to choose the part to keep in view');
+    } catch (err) { delete bgBusy[key]; toast(err.message, true); render(); }
   }
 }
-let addingFresh = false;
 const bgPicking = new Set();          // sections whose Library picker is open
 
-/* The Library's site pictures that can be a background: photos with a rendition made as they are, and videos.
-   Tapping one makes its newest such rendition the background (in the draft), keeping the focus and shade. */
-function libraryPicker(d, use) {
+/* The Library's photos and videos, as tiles. */
+function libraryPicker(use) {
   if (!state.library) { loadLibrary(); return h('p', { class: 'hint' }, 'Loading the Library…'); }
-  const fit = state.library.items.filter((it) => it.site).map((it) => [it, backgroundFrom(it, d)]).filter(([, b]) => b);
-  if (!fit.length) return h('p', { class: 'hint' }, 'The Library has no site pictures yet: add some there, or choose a photo or video here.');
-  return h('div', { class: 'lib-picker' }, ...fit.map(([it, b]) => h('button', { class: 'lib-pick', title: it.name, onclick: () => use(b) },
-    it.thumb ? h('img', { src: it.thumb, alt: '' }) : glyph(GLYPHS.photo, 28),
-    it.kind === 'video' ? h('span', { class: 'lib-video' }, glyph(GLYPHS.play, 12)) : null,
-    h('span', { class: 'lib-pick-name' }, it.name))));
+  const items = newestFirst(state.library.items);
+  if (!items.length) return h('p', { class: 'hint' }, 'The Library has nothing yet: upload a photo or a video there first.');
+  return libraryTiles(items, use,
+    (it) => (it.kind === 'photo' && !it.site ? h('span', { class: 'lib-pick-mark', title: 'Its sizes will be made when you choose it' }, glyph(GLYPHS.crop, 12)) : null));
 }
+/* What choosing an item would make the background: its newest site picture (a photo) or set of versions (a
+   video), keeping the focus and shade; null if it has none yet. */
 function backgroundFrom(it, d) {
   const keep = { focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0.12 };
   const rens = it.recipes.filter((c) => c.kind !== 'flat').flatMap((c) => c.renditions);

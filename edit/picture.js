@@ -15,13 +15,15 @@ import { WIDTHS } from './uploads.js';
    faint corners and spots in the full-screen views, and "Back to saved". Its element is kept across re-renders
    of the page; the form it sits in gives it the details fields (height, width, measured or not) with attach().
    opts, for reopening: previous (address of the painting's current picture), saved (its choices, as summarised
-   before the original is read), start (load()'s options for those choices) and fetch (resolves with the
-   original's { blob }).
-   Reopening also offers "Replace photo…", for a better photo or a higher-resolution copy: if its proportions match
+   before the original is read), start (load()'s options for those choices), fetch (resolves with the
+   original's { blob }), and for "Replace photo…": library (given what to do with the item picked, resolves
+   with the Library's photos as tiles) and original (resolves with an item's original, a Blob).
+   Reopening also offers "Replace photo…", for a better photo or a higher-resolution copy, chosen from the
+   Library (the only place files come in: upload it there first): if its proportions match
    the old original's (the same photo), the corners and white spots carry over (they're fractions of the photo);
    otherwise only the sliders are kept, the corners are guessed afresh and the spots cleared. It says which. The
-   new photo is stored as an original with the picture (replacement; storePicture); "Back to saved" returns to the
-   old photo and its choices, and their pictures.
+   picture is then made from the new photo's Library item (replacement: { blob, item }; storePicture); "Back to
+   saved" returns to the old photo and its choices, and their pictures.
    opts.onChange, for reopening: called whenever the result has been made afresh (the form stores it once it rests). */
 const fieldsetOf = (...kids) => h('fieldset', { class: 'step-body', disabled: true }, ...kids);
 function whiteText(r) {
@@ -79,10 +81,18 @@ export function darkroom(opts = {}) {
         g.shapeText = h('p', { class: 'hint shape-note' })))),
     h('div', { class: 'row dr-foot' },
       g.status = h('p', { class: 'hint grow' }),
-      g.pickFile = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: () => replace(g.pickFile.files[0]) }),
-      g.replaceBtn = h('button', { type: 'button', hidden: !reopen, title: 'Use a better photo, or a higher-resolution copy, of this painting', onclick: () => g.pickFile.click() }, 'Replace photo…'),
+      g.replaceBtn = h('button', { type: 'button', hidden: !reopen || !opts.library, title: 'Use a better photo, or a higher-resolution copy, of this painting: choose it from the Library', onclick: () => pickReplacement() }, 'Replace photo…'),
       g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was when you opened it (and the photo, if replaced)', onclick: () => backToSaved() }, 'Back to as it was')),
+    g.picker = h('div', { class: 'dr-picker', hidden: true }),
     g.replaceNote = h('p', { class: 'hint stored-note' }));
+  /* Replace photo…: the Library's photos, as tiles, open under the button; tapping it again closes them. */
+  async function pickReplacement() {
+    const close = () => { g.picker.hidden = true; g.picker.replaceChildren(); };
+    if (!g.picker.hidden) return close();
+    g.picker.hidden = false; g.picker.replaceChildren(h('p', { class: 'hint' }, 'Loading the Library…'));
+    try { g.picker.replaceChildren(await opts.library((it) => { close(); replace(it); })); }
+    catch (err) { close(); toast(err.message, true); }
+  }
   function slid() {
     g.brightOut.textContent = `${g.bright.value}%: ${+g.bright.value === 100 ? 'pure white' : 'a light grey'}`;
     g.warmOut.textContent = `${g.warm.value}%${+g.warm.value === 0 ? ': cast fully removed' : ''}`;
@@ -114,13 +124,14 @@ export function darkroom(opts = {}) {
     return fetching;
   }
 
-  /* Replace the photo (see above). The old original is read first, if it hasn't been, to compare proportions. */
-  async function replace(file) {
-    g.pickFile.value = '';
-    if (!file) return;
+  /* Replace the photo (see above) with a Library item's. The old original is read first, if it hasn't been, to
+     compare proportions. */
+  async function replace(it) {
     g.replaceBtn.disabled = true;
     try {
       if (!p && !replacement) await need();
+      g.status.textContent = 'Fetching the photo from the Library…';
+      const file = await opts.original(it.id);
       const before = p ? { W: p.W, H: p.H, rec: record() } : null;
       const was = before ? before.rec : (opts.start.process || { white: opts.saved.white });
       const sliders = was.white && was.white !== 'none' ? { brightness: was.brightness ?? 1, warmth: was.warmth ?? 0 } : {};
@@ -133,7 +144,7 @@ export function darkroom(opts = {}) {
         if (oldBlob) { replacement = null; await load(oldBlob, opts.start); }
         return;
       }
-      replacement = file;
+      replacement = { blob: file, item: it.id };
       ghost = same ? saved : saved && { brightness: saved.brightness, warmth: saved.warmth };
       const had = (was.spots || []).length, hadCrop = !!(was.corners && !wholePhoto(was.corners));
       const kept = [hadCrop && 'the corners', had && 'the white spots', sliders.brightness != null && 'the sliders'].filter(Boolean);
@@ -141,9 +152,10 @@ export function darkroom(opts = {}) {
       g.replaceNote.textContent = !before
         ? 'The old photo couldn\'t be read, so nothing was compared: the corners are a fresh guess.'
         : same
-          ? `Same proportions as the old photo${kept.length ? `: kept ${and(kept)}` : ''}. It's stored, as a draft, straight away.`
-          : `Different proportions from the old photo: ${sliders.brightness != null ? 'kept the sliders, ' : ''}guessed the corners afresh${had ? ' and cleared the white spots' : ''}. It's stored, as a draft, straight away.`;
+          ? `Same proportions as the old photo${kept.length ? `: kept ${and(kept)}` : ''}. The new picture is stored, as a draft, straight away.`
+          : `Different proportions from the old photo: ${sliders.brightness != null ? 'kept the sliders, ' : ''}guessed the corners afresh${had ? ' and cleared the white spots' : ''}. The new picture is stored, as a draft, straight away.`;
       await update();
+    } catch (err) { g.status.textContent = ''; toast(err.message, true);
     } finally { g.replaceBtn.disabled = false; }
   }
   async function backToSaved() {
@@ -343,7 +355,7 @@ export function darkroom(opts = {}) {
     sizeChanged() { if (p) later(update); else shapeLine(); },
     get ready() { return !!(p && p.out); },
     get white() { return white(); },
-    get replacement() { return replacement; },        // a new photo, to be stored as the original on saving
+    get replacement() { return replacement; },        // { blob, item }: another Library photo the picture is now made from
     result() { return { out: p.out, W: p.outW, H: p.outH }; },
     changed() { return !!p && (!!replacement || JSON.stringify(record()) !== baseline); },   // since it was loaded
     say(text) { g.status.textContent = text; },

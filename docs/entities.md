@@ -81,6 +81,7 @@ One thing the client uploaded, and what is true of the picture itself whatever i
 | `name` | what the Library shows; changed freely |
 | `alt` | alternative text (new) |
 | `credit` | who made it, if not him (new) |
+| `thumb` | digest of a small picture of it (480 pixels across, made in the browser at upload; editor only; slice 3, migration 0007) |
 | `added`, `added_by` | |
 
 Goes: `grp` (site or painting). Being a painting is a use, not a property of the photo, so the Library's two

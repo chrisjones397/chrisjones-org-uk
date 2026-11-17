@@ -86,18 +86,6 @@ export async function sceneRendition(item, say) {
   return known(rendition);
 }
 
-/* A photo into the Library as it is (a photograph, not a painting: no white balance or corners): its original,
-   and a rendition of sizes (BG_WIDTHS) made from it. If the same photo is already there with such a rendition,
-   that one is used. Returns { rendition: its id }. */
-export async function photoItem(file, name, say) {
-  const src = await photoOf(file, say);
-  const { id, scene } = await keepOriginal(file, name, null, say);
-  if (scene) return { rendition: scene };
-  const files = await storeSizes(src, say);
-  const { rendition } = await call('POST', 'library/rendition', { item: id, kind: 'scene', files });
-  return { rendition: known(rendition).id };
-}
-
 /* Video files into the Library: each checked (videoFacts) and stored as made; a new item (id null), or more
    versions of an existing one. have: the rendition the versions are added to (its versions and frames are kept),
    or null. Then a new rendition: every version, with first and last frames for each shape (withFrames).

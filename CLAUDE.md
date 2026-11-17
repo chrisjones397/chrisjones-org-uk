@@ -192,8 +192,8 @@ Files (all at the top level unless said):
   removed in the draft, published NULL = never published; generated columns draft_rendition and
   published_rendition, indexed: which rendition each names), `releases` (each publish), `revisions` (what each
   entry became, and was, per release). Media, never drafted, with foreign keys: `library` (items: id = code,
-  kind photo/video, name, alt, credit, added; alt and credit exist since slice 2 (e) but nothing reads or edits
-  them yet: the Library's redesign, slice 3, gives them their fields),
+  kind photo/video, name, alt, credit, thumb, added; alt and credit are edited on the Library's rows since
+  slice 3 but the pages don't read them yet; thumb is the item's small picture, editor only, migration 0007),
   `file` (digest, bytes, type, w, h, seconds), `original`, `recipe`, `rendition`, `rendition_file` (role size,
   preview, first, last, version; width; shape). The layers meet at one point: a document names a rendition by
   id (checked on saving: editor.js linked()). JSON is written with fixed key order (editor.js normalise), so
@@ -231,19 +231,19 @@ Files (all at the top level unless said):
   bottom (worker.js bar(): an amber eye = this is the preview; the amber count = changes waiting, to Review, or a
   green tick when all is published; a pencil to the editor). The editor itself is /edit/ (edit/index.html and
   ES modules in edit/, listed in order at the top of edit/editor.js, each importing only from those above it:
-  dom, state, marks, render, server, widgets, darkroom, uploads, details, picture, add, painting, background,
+  dom, state, marks, render, server, widgets, darkroom, uploads, details, picker, picture, add, painting, background,
   uses, compare, the five *-view.js, editor.js which registers the views and starts. Shared state is the one
   `state` object in state.js (entries, and the renditions they name by id, refreshed with every answer that
   carries entries), written only by server.js; render() still redraws the whole view. Its API /edit/api/* is in
   editor.js and library.js: state, save, discard, publish, restore, hide, history; file (GET: stored? PUT:
-  store), library, library/new, library/original, library/rendition, library/name, library/delete, original). On other hosts /edit is
+  store), library, library/new, library/original, library/rendition, library/item, library/delete, original). On other hosts /edit is
   not found. A rejected token: worker.js signInAgain() clears Access's cookie once and retries, then shows a
   "Couldn't sign you in" page; API calls get 401 and the editor shows a "Sign in again" bar.
-  Tabs: Gallery (add a painting, genres and their paintings, Edit forms), Content (a box per page section:
-  heading, paragraphs, background box, contact links), Library (items newest first, Site pictures and Paintings,
-  now a filter on what an item is made or used for, so one can be in both: name edited in place, code, what
-  uses it, a line per original and per rendition, Delete for good when unused; tick two or three to
-  compare side by side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a
+  Tabs: Gallery (add a painting from a Library photo, genres and their paintings, Edit forms), Content (a box
+  per page section: heading, paragraphs, background box choosing from the Library, contact links), Library (the
+  only upload; items newest first with a filter in symbols; each row: picture, name, alt, credit, code, uses as
+  links, make a painting, make a site picture, a video's versions, a line per original and per rendition,
+  Delete for good when unused; tick two or three lines to compare side by side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a
   removal, it undoes it). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
   so switching to a short view doesn't shift the layout.
   One saving rule: every change saves itself as a draft at once (a save queue), shown by a tick that takes no
@@ -262,7 +262,8 @@ Files (all at the top level unless said):
   recorded as the recipe's next rendition (the recipe taking the new settings); a picture saves itself 1.2 s
   after the last change, and a trial rendition made earlier in the same sitting is deleted once replaced. The
   same photo is found by its digest and never stored twice: a second painting from it is a second recipe.
-- **Video uploads**: the browser can't re-encode, so a video is uploaded as made (MP4 only, under 95 megabytes),
+- **Uploads** (slice 3): only in the Library. A photo keeps its original and a small picture; nothing else is
+  made until a recipe makes it. **Video uploads**: the browser can't re-encode, so a video is uploaded as made (MP4 only, under 95 megabytes),
   checked first (codec, fast start, sound, length, bit rate, size); first and last frames taken in the browser.
 
 Local test: `.dev.vars` with DEV_USER="local test" (never committed);
@@ -532,6 +533,25 @@ editor redraws the whole view after every change; fonts come from Google, not th
    section's background under Content, or History (edit/uses.js). Tested locally (Playwright): picker, darkroom
    loaded from the Library, artwork saved naming its rendition, uses link, brush, the tile's "already a
    painting" mark. Not tested: the full-screen corner and spot views, real phones, Safari.
+   (c) DONE on dev: nothing is uploaded outside the Library any more. A section's background box (Content) has
+   no upload: a photo-and-arrows button opens the Library's tiles (all photos and videos); a photo with no
+   site picture yet is marked with crop marks and has its sizes made on the spot when chosen. "Replace photo…"
+   in a painting's darkroom opens the Library's photos under the button (picture.js opts.library, opts.original);
+   the picture is then a recipe of that other item (replacement = { blob, item }). A video's versions are
+   managed on its Library row: plus-and-frames adds versions, a cross on a version's line leaves it out of the
+   video as shown, a plus puts it back; each makes a new rendition, and every draft naming the previous one is
+   pointed at the new one, as a draft (library-view.js videoChange). The checks' notes show under the row.
+   uploads.js photoItem is gone. Tested locally (Playwright; videos for the first time, as AV1 in MP4 made with
+   ffmpeg, which this Chromium plays): background from an unprepared photo, Replace photo and Back to as it
+   was, a video uploaded (versions, frames for both shapes), versions added, the video as a background, a
+   version left out and put back with the background's draft following, publish, public pages answering.
+   Not tested: H.264 videos, real phones, Safari, the real R2 and D1 (dev's builds succeeded).
+   **Slice 3 is built; he has not seen any of it.** For him to try on admin-dev: upload a photo in the
+   Library, brush it into a painting, choose it as a background, add alt text. Left for him to judge or for
+   slice 4: text buttons remain elsewhere in the editor (Edit, Remove, Replace photo…); alt and credit are
+   stored but the public pages don't read them yet; a scene recipe still has no straighten or crop; the old
+   items' small pictures are their newest rendition's smallest size (only new uploads get library.thumb).
+   To undo slice 3 on dev: `git revert` its three commits (migration 0007's column can stay: nothing else reads it).
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

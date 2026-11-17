@@ -4,12 +4,13 @@
 import { detailsLine } from '/paths.js';
 import { h, toast, glyph, GLYPHS } from './dom.js';
 import { state, byId, draftOf, changed, current, isHidden, paintingsIn, thumb, picOf, pictureAt } from './state.js';
-import { fetchFor, call, save, discard, beforeDiscard } from './server.js';
+import { call, save, discard, beforeDiscard, libraryReady } from './server.js';
 import { render } from './render.js';
 import { badge, hideButton } from './widgets.js';
 import { detailsFields, detailsOf, carry, sizeNote } from './details.js';
 import { darkroom } from './picture.js';
-import { storeImages, keepOriginal } from './uploads.js';
+import { storeImages, originalOf } from './uploads.js';
+import { libraryTiles, newestFirst } from './picker.js';
 
 const open = new Set();             // paintings whose edit form is open
 const editFields = new Map();       // painting id -> its Edit form's fields, while open
@@ -111,8 +112,8 @@ function closeEdit(id) {
    sizes are made and stored as its recipe's next rendition (the recipe taking the new settings) and the draft
    names it. A rendition made for an earlier change in this same sitting, which nothing else can be using, is
    deleted once replaced, so trying things out doesn't fill the Library. Going back to the choices it opened with
-   (Back to saved) names its own rendition again, making nothing. A replaced photo is kept as a Library item
-   once, with a recipe of its own, however many changes follow. */
+   (Back to saved) names its own rendition again, making nothing. A replaced photo (another Library item) gets
+   one recipe of its own, however many changes follow. */
 const PICTURE_REST = 1200;
 function pictureChanged(id, re) {
   clearTimeout(re.timer);
@@ -122,7 +123,7 @@ async function storePicture(id, re) {
   if (re.running) { re.again = true; return; }
   const dr = re.dr;
   if (!dr.ready) return;
-  const want = dr.changed() ? JSON.stringify(dr.record()) + (dr.replacement ? `|${dr.replacement.name}|${dr.replacement.size}` : '') : 'opened';
+  const want = dr.changed() ? JSON.stringify(dr.record()) + (dr.replacement ? `|${dr.replacement.item}` : '') : 'opened';
   if (want === re.saved) return;
   re.running = true;
   const say = (t) => dr.say(t);
@@ -133,13 +134,11 @@ async function storePicture(id, re) {
       const settings = { ...dr.record(), ...(re.paper ? { white_paper: true } : {}) };
       let at = re;                                       // where the new rendition goes: { item, recipe }
       if (dr.replacement) {
-        if (!re.kept || re.kept.file !== dr.replacement) {
-          const { id: item } = await keepOriginal(dr.replacement, title, null, say);
-          re.kept = { file: dr.replacement, item, recipe: item === re.item ? re.recipe : null };
-        }
+        const item = dr.replacement.item;
+        if (!re.kept || re.kept.item !== item) re.kept = { item, recipe: item === re.item ? re.recipe : null };
         at = re.kept;
       }
-      const made = await storeImages(at.item, at.recipe, dr.result(), settings, at.item === re.item ? '' : title, say);
+      const made = await storeImages(at.item, at.recipe, dr.result(), settings, title, say);   // the title labels a new recipe
       at.recipe = made.recipe;
       pic = { rendition: made.id };
       re.made.add(made.id);
@@ -185,11 +184,9 @@ function pictureFields(e, d, f) {
       previous: pictureAt(d, 1024),                  // the painting's current picture, at a size fit for comparing
       saved: process || { white },
       start: process ? { process } : { white, guess: false },
-      fetch: async () => {
-        const got = await fetchFor(`/edit/api/original?item=${r.item}`, {}, 120000);
-        if (!got.ok) throw new Error((await got.json().catch(() => ({}))).error || `Couldn't fetch the original (${got.status})`);
-        return { blob: await got.blob() };
-      },
+      fetch: async () => ({ blob: await originalOf(r.item) }),
+      library: async (use) => libraryTiles(newestFirst((await libraryReady()).items.filter((it) => it.kind === 'photo')), use),
+      original: originalOf,
     });
     reopened.set(e.id, re);
   }

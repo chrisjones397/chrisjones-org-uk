@@ -1,11 +1,11 @@
 /* The Library view. */
 
 import { h, toast, glyph, GLYPHS, MB } from './dom.js';
-import { state } from './state.js';
+import { state, draftOf } from './state.js';
 import { marks, placeMarks } from './marks.js';
-import { call, act, loadLibrary } from './server.js';
+import { call, act, save, loadLibrary } from './server.js';
 import { render } from './render.js';
-import { libraryPhoto, videoItem, sceneRendition } from './uploads.js';
+import { libraryPhoto, videoItem, videoRendition, sceneRendition } from './uploads.js';
 import { paintFrom } from './add.js';
 import { strongest, useMarks } from './uses.js';
 import { showItems, blinkView } from './compare.js';
@@ -22,6 +22,7 @@ import { showItems, blinkView } from './compare.js';
    The filter is on what an item is made or used for, so an item can be both a painting and a site picture. */
 let libBusy = '';
 const libDoing = {};           // item code -> what is being made from it, while it is
+const libNotes = {};           // item code -> the checks' findings for the video versions last added
 const libPicked = new Set();   // lines ticked to compare (two or three): an item's code (its original) or <code>/<rendition id>
 let libFilter = 'all';
 const FILTERS = [
@@ -72,7 +73,7 @@ async function addToLibrary(files) {
       const got = await libraryPhoto(f, nameOf(f), (t) => say(photos.length > 1 ? `Photo ${i + 1} of ${photos.length}: ${t}` : t));
       if (got.shared) had.push(got.name);
     }
-    if (videos.length) await videoItem(null, nameOf(videos[0]), videos, null, say);
+    if (videos.length) { const got = await videoItem(null, nameOf(videos[0]), videos, null, say); libNotes[got.rendition.item] = got.notes; }
     toast(had.length ? `Already in the Library: ${had.join(', ')}` : 'Added to the Library');
     if (libFilter !== 'all') libFilter = 'fresh';
   } catch (e) { toast(e.message, true); }
@@ -133,9 +134,55 @@ function libraryRow(it) {
           onclick: () => paintFrom(it) }, glyph(GLYPHS.brush)) : null,
         it.kind === 'photo' && !hasScene ? h('button', { disabled: !!doing, title: 'Make a site picture: its sizes, as it is, for backgrounds', 'aria-label': 'Make a site picture',
           onclick: () => makeScene(it) }, glyph(GLYPHS.crop)) : null,
+        it.kind === 'video' ? moreVersions(it, !!doing) : null,
         h('span', { class: 'lib-doing muted', 'data-doing': it.id }, doing || ''),
         bin)),
-    h('div', { class: 'lib-parts' }, ...it.originals.map((o) => originalLine(it, o)), ...renditionsOf(it).map((r) => renditionLine(it, r))));
+    h('div', { class: 'lib-parts' }, ...it.originals.map((o) => originalLine(it, o)), ...renditionsOf(it).map((r) => renditionLine(it, r)),
+      libNotes[it.id] ? h('div', { class: 'bg-notes' }, ...libNotes[it.id].map((n) => h('p', { class: 'hint' }, n))) : null));
+}
+
+/* A video's versions (step 4, slice 3: managed here, on its row, not in a section's background). The video as
+   shown is its newest rendition: a set of versions with first and last frames for each shape. Adding versions,
+   leaving one out or putting one back makes a new set (a new rendition; the files themselves stay, as the
+   item's originals), and every draft that showed the previous set is pointed at the new one, as a draft, so the
+   change reaches visitors when it's published. */
+const latestVideo = (it) => it.recipes.filter((c) => c.kind === 'video').flatMap((c) => c.renditions).sort((a, b) => b.id - a.id)[0] || null;
+const asVersion = (v) => ({ digest: v.digest, w: v.w, h: v.h });
+async function videoChange(it, job) {
+  const say = (t) => { libDoing[it.id] = t; const el = document.querySelector(`[data-doing="${it.id}"]`); if (el) el.textContent = t; };
+  say('Starting…'); render();
+  const was = latestVideo(it);
+  try {
+    const made = await job(was, say);
+    if (was && made && made.id !== was.id) {
+      const users = state.entries.filter((e) => e.draft != null && draftOf(e).rendition === was.id);
+      if (users.length) await save(users.map((e) => ({ id: e.id, kind: e.kind, data: { ...draftOf(e), rendition: made.id } })), 'Where that video is shown now has its new set of versions, as a draft');
+      else toast('A new set of versions made');
+    }
+  } catch (e) { toast(e.message, true); }
+  delete libDoing[it.id]; state.library = null; render();
+}
+function moreVersions(it, busy) {
+  const pick = h('input', { type: 'file', accept: 'video/mp4,.mp4,.m4v', multiple: true, hidden: true,
+    onchange: () => pick.files.length && videoChange(it, async (was, say) => {
+      const got = await videoItem(it.id, it.name, [...pick.files], was, say);
+      libNotes[it.id] = got.notes;
+      return got.rendition;
+    }) });
+  return h('span', {}, pick, h('button', { disabled: busy || it.originals.length >= 12, title: 'Add versions of this video: another size, or one made for phones held upright', 'aria-label': 'Add versions',
+    onclick: () => pick.click() }, glyph(GLYPHS.add), glyph(GLYPHS.frames, 14)));
+}
+/* The control at the end of a video version's line: leave it out of the video as shown, or put it back. */
+function versionControl(it, o) {
+  const now = latestVideo(it);
+  if (!now) return h('span', { class: 'lib-bin-space' });
+  const shown = now.versions.some((v) => v.digest === o.digest);
+  if (shown && now.versions.length < 2) return h('span', { class: 'lib-bin-space' });
+  return shown
+    ? h('button', { class: 'lib-bin small', disabled: !!libDoing[it.id], title: 'Leave this version out of the video as shown (its file stays here)', 'aria-label': 'Leave this version out',
+      onclick: () => videoChange(it, (was, say) => videoRendition(it.id, was.versions.filter((v) => v.digest !== o.digest).map(asVersion), was, () => null, say)) }, glyph(GLYPHS.close, 14))
+    : h('button', { class: 'lib-bin small', disabled: !!libDoing[it.id], title: 'Put this version back into the video as shown', 'aria-label': 'Put this version back',
+      onclick: () => videoChange(it, (was, say) => videoRendition(it.id, [...was.versions.map(asVersion), asVersion(o)], was, () => null, say)) }, glyph(GLYPHS.add, 14));
 }
 
 /* A site picture from a photo: its sizes made in the browser from the original, as it is. */
@@ -168,11 +215,12 @@ function pickedList() {
 /* An original, on a line of its own: a photo as uploaded, or one of a video's versions. */
 function originalLine(it, o) {
   const video = o.type === 'video/mp4', ext = (o.url.split('.').pop() || '').toUpperCase();
+  const now = video ? latestVideo(it) : null, left = !!now && !now.versions.some((v) => v.digest === o.digest);
   return h('div', { class: 'lib-part', title: video ? 'A version of the video, as uploaded' : 'The photo as uploaded: never shown to visitors' },
     video || !it.large ? h('span', { class: 'lib-tick-space' }) : pickTick(it.id, `${it.name}, the original`),
     h('span', { class: 'lib-part-icon' }, video ? shapeOf(o, it.originals) : glyph(GLYPHS.photo, 16)),
-    h('span', { class: 'lib-part-what' }, video ? `${o.w} × ${o.h}${o.seconds ? `, ${o.seconds} seconds` : ''}` : `Original${o.w ? `, ${o.w} × ${o.h}` : ''} (${ext})`),
-    h('span', { class: 'lib-part-uses' }), h('span', { class: 'lib-size' }, MB(o.bytes)), h('span', { class: 'lib-bin-space' }));
+    h('span', { class: 'lib-part-what' }, video ? `${o.w} × ${o.h}${o.seconds ? `, ${o.seconds} seconds` : ''}${left ? ' (left out)' : ''}` : `Original${o.w ? `, ${o.w} × ${o.h}` : ''} (${ext})`),
+    h('span', { class: 'lib-part-uses' }), h('span', { class: 'lib-size' }, MB(o.bytes)), video ? versionControl(it, o) : h('span', { class: 'lib-bin-space' }));
 }
 
 /* A rendition, on a line of its own: what it is, as a symbol and its size, its weight, its users' marks, and a
