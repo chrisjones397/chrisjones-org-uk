@@ -20,6 +20,7 @@ export function render() {
   $('#count').hidden = !n; $('#count').textContent = n;
   document.querySelectorAll('.bar a[data-view]').forEach((a) => a.classList.toggle('on', a.dataset.view === view()));
   const main = $('#main');
+  document.body.dataset.view = view();          // a view may use more of the page's width (the Library)
   const y = scrollY;
   // The field being typed in (marked data-k) keeps its focus, caret and text across the re-render.
   const a = document.activeElement, k = a && a.dataset && a.dataset.k;

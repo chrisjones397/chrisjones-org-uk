@@ -506,7 +506,23 @@ editor redraws the whole view after every change; fonts come from Google, not th
    longer be undone on either site): dev 000001cd-00000000-00005125-cd9657296993ac58a82823678e37d3fc, live
    000005b3-00000000-00005126-8e056c15202055f6d246ba6640222ab1.
    Still untested anywhere: a real video upload, "Add a version…" and removing one.
-   **Next: slice 3** (the Library the only upload, with its redesign), in a new chat.
+   **Slice 3 (17 Nov 2026, built unattended overnight at his word: "just do it", dev only, he accepted every
+   suggestion unread, so each is his to overturn): the Library the only upload.** In sub-steps, each pushed:
+   (a) DONE on dev: migration 0007 (library.thumb: a 480-pixel JPEG made in the browser at upload, for the
+   editor only); a photo upload keeps only its original and that small picture (uploads.js libraryPhoto), sizes
+   being made later by a recipe; "Make a site picture" (crop marks) on a row makes a scene rendition as it is
+   (sceneRendition); the Library row redesigned to use the page's width (main is 76rem wide in this view):
+   picture at the pickers' tile size (7.5rem, 4:3, the whole picture shown), name, code, uses, alt and credit
+   fields (saving themselves, route library/item replaces library/name), then a line per original and rendition;
+   the tick box moved from the row to the lines (a photo's original line carries the item's); one upload button
+   (top right); a filter in symbols (everything, just uploaded, paintings, site pictures) replaces the two lists.
+   Design check for the small picture: Cloudflare's own way is the Images binding (env.IMAGES, reads R2 bytes,
+   HEIC too, 5,000 unique transformations a month free, 20 megabytes input at most); departed from, in line
+   with the agreed "sizes stored, made in the browser" decision, so nothing depends on a second service or its
+   allowance. Tested locally (wrangler dev, Playwright): two photos uploaded (originals only, small pictures
+   served), name, alt and credit saved with ticks, a site picture made, blink between an original and its
+   rendition, see large (the original), the same photo again not a second item, the filter, desktop and phone
+   widths. Not tested: videos, real phones, Safari.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is

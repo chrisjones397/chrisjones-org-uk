@@ -43,9 +43,9 @@ export async function storedFor(file) {
 
 /* Keep a photo as a Library item (its original), unless the same photo already is one, for this painting or
    another: then that item is used. known: storedFor's answer, if already asked. name: the new item's name in
-   the Library. Returns { id: the item's code, shared: whether it was already an item, scene: the id of its
-   newest rendition made as it is, if it has one }. */
-export async function keepOriginal(file, name, known_, say) {
+   the Library. thumb: the digest of its small picture, if one was made. Returns { id: the item's code, shared:
+   whether it was already an item, name, scene: the id of its newest rendition made as it is, if it has one }. */
+export async function keepOriginal(file, name, known_, say, thumb) {
   let k = known_ && known_.file === file ? known_ : null;
   if (!k) { say('Checking whether this photo is already stored…'); k = await storedFor(file); }
   if (!k.have) {
@@ -53,7 +53,37 @@ export async function keepOriginal(file, name, known_, say) {
     const r = await fetchFor(`/edit/api/file?digest=${k.digest}`, { method: 'PUT', headers: { 'content-type': file.type || 'image/jpeg' }, body: file }, 120000);
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Upload failed (${r.status})`);
   }
-  return call('POST', 'library/new', { kind: 'photo', name, originals: [k.digest] });
+  return call('POST', 'library/new', { kind: 'photo', name, originals: [k.digest], ...(thumb ? { thumb } : {}) });
+}
+
+/* A photo into the Library (step 4, slice 3: the Library is the only upload): only its original is kept, as
+   uploaded, with one small picture of it (THUMB pixels across) for the Library's rows and the pickers' tiles.
+   Nothing else is made: its sizes come later, from a recipe (a painting squared up in the darkroom, or a site
+   picture as it is: sceneRendition). The same photo again is the item it already is. Returns keepOriginal's
+   answer. */
+const THUMB = 480;
+export async function libraryPhoto(file, name, say) {
+  const src = await photoOf(file, say);
+  say('Making its small picture…');
+  const thumb = await putFile(await resized(src, Math.min(src.width, THUMB), 0.8), 'image/jpeg');
+  return keepOriginal(file, name, null, say, thumb);
+}
+
+/* A photo item's original, read back from storage (only the signed-in editor can). */
+export async function originalOf(item) {
+  const got = await fetchFor(`/edit/api/original?item=${item}`, {}, 120000);
+  if (!got.ok) throw new Error((await got.json().catch(() => ({}))).error || `Couldn't fetch the original (${got.status})`);
+  return got.blob();
+}
+
+/* A site picture from a photo item: a rendition of sizes (BG_WIDTHS) made from its original as it is (recipe
+   kind scene: no settings yet). Returns the rendition. */
+export async function sceneRendition(item, say) {
+  say('Fetching the original…');
+  const src = await photoOf(await originalOf(item), say);
+  const files = await storeSizes(src, say);
+  const { rendition } = await call('POST', 'library/rendition', { item, kind: 'scene', files });
+  return known(rendition);
 }
 
 /* A photo into the Library as it is (a photograph, not a painting: no white balance or corners): its original,

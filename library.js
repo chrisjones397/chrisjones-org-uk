@@ -14,7 +14,7 @@
    What uses a rendition: drafts and published documents that name its id, and History (what "Bring back"
    restores). "Delete for good": an item only while no draft or published document names any of its renditions
    (if History does, it must be asked for, and those versions leave History); a rendition only while nothing at
-   all names it. A file goes from storage when no original and no rendition refers to it any more. */
+   all names it. A file goes from storage when no original, no rendition and no item's small picture refers to it any more. */
 
 import { CODE, DIGEST, fileUrl } from './paths.js';
 import { dimensions, HEAD_BYTES } from './dimensions.js';
@@ -26,6 +26,7 @@ export { Bad };
 
 const SECTIONS = { hero: 'Hero', contact: 'Contact', footer: 'Footer' };
 const MAX_BYTES = 95 * 1024 * 1024;
+const SHOWN = ['image/jpeg', 'image/png', 'image/webp'];   // photo types every browser shows
 
 // ---- what uses what ----------------------------------------------------------------------------------------
 
@@ -62,13 +63,15 @@ async function allUses(env) {
 // ---- the listing --------------------------------------------------------------------------------------------
 
 /* Every item with its originals, recipes and renditions, and what uses each.
-     { id, kind, name, added, originals: [{ digest, type, url, bytes, w, h, seconds }],
+     { id, kind, name, alt, credit, added, originals: [{ digest, type, url, bytes, w, h, seconds }],
        recipes: [{ id, kind, label, settings, renditions: [rendition (media.js) + { bytes, uses }] }],
-       uses, bytes, files (distinct files and their weight), thumb, large (addresses, or null),
-       site, painting (which of the Library's two lists it belongs in: a filter on what it is used or made for) } */
+       uses, bytes, files (distinct files and their weight),
+       thumb (a small picture's address: the item's own, made at upload, or its newest rendition's smallest size),
+       large (to see it large: a photo's original if browsers can show its type, else its newest rendition's largest),
+       site, painting (a filter on what it is made or used for: a site picture, a painting; a new upload is neither) } */
 async function survey(env) {
   const [items, originals, recipes] = await env.DB.batch([
-    env.DB.prepare('SELECT id, kind, name, added FROM library'),
+    env.DB.prepare('SELECT l.id, l.kind, l.name, l.alt, l.credit, l.added, l.thumb, f.type AS thumb_type FROM library l LEFT JOIN file f ON f.digest = l.thumb'),
     env.DB.prepare('SELECT o.item_id, f.digest, f.type, f.bytes, f.w, f.h, f.seconds FROM original o JOIN file f ON f.digest = o.digest'),
     env.DB.prepare('SELECT id, item_id, kind, label, settings FROM recipe ORDER BY id'),
   ]);
@@ -99,9 +102,14 @@ async function survey(env) {
     for (const r of rens) for (const f of r.files) weigh.set(f.digest, f.bytes);
     const latest = rens[rens.length - 1], frames = latest && (latest.frames.wide || latest.frames.tall);
     const pics = latest && latest.sizes.length ? latest.sizes : frames ? frames.last : [];
-    return { ...it, bytes: [...weigh.values()].reduce((a, b) => a + b, 0), files: weigh.size,
-      thumb: pics.length ? pics[0].url : null, large: pics.length ? pics[pics.length - 1].url : null,
-      site: !it.recipes.length || it.recipes.some((c) => c.kind !== 'flat'), painting: it.recipes.some((c) => c.kind === 'flat') };
+    const { thumb, thumb_type: thumbType, ...rest } = it;
+    if (thumb) weigh.set(thumb, 0);
+    const o = it.kind === 'photo' && it.originals[0];
+    const shown = o && SHOWN.includes(o.type) ? o.url : null;
+    return { ...rest, bytes: [...weigh.values()].reduce((a, b) => a + b, 0), files: weigh.size,
+      thumb: thumb ? fileUrl({ digest: thumb, type: thumbType }) : pics.length ? pics[0].url : null,
+      large: shown || (pics.length ? pics[pics.length - 1].url : null),
+      site: it.recipes.some((c) => c.kind !== 'flat'), painting: it.recipes.some((c) => c.kind === 'flat') };
   });
 }
 
@@ -176,32 +184,39 @@ async function filesOf(env, digests) {
   return out;
 }
 
-/* POST /edit/api/library/new { kind, name, originals: [digest] }: a new item from files already stored: a
-   photo's one original, or a video's versions. A photo that is already an item's original is that item (answer
-   { id, shared: true, scene: the id of its newest rendition made as it is, if any }). */
+/* POST /edit/api/library/new { kind, name, originals: [digest], thumb? }: a new item from files already stored: a
+   photo's one original, or a video's versions; thumb: a small picture of it, already stored (migration 0007).
+   A photo that is already an item's original is that item (answer { id, shared: true, scene: the id of its
+   newest rendition made as it is, if any }); it takes the thumb if it has none. */
 export async function newItem(env, who, b) {
   if (!['photo', 'video'].includes(b.kind)) throw new Bad('An item is a photo or a video');
   const digests = Array.isArray(b.originals) ? b.originals.map(String) : [];
   if (b.kind === 'photo' ? digests.length !== 1 : digests.length < 1 || digests.length > 6) throw new Bad(b.kind === 'photo' ? 'A photo has one original' : 'A video needs one to six versions');
   const files = await filesOf(env, digests);
   for (const f of files.values()) if ((f.type === 'video/mp4') !== (b.kind === 'video')) throw new Bad('That file isn\'t a ' + b.kind);
+  let thumb = null;
+  if (b.thumb != null) {
+    thumb = String(b.thumb);
+    if ((await filesOf(env, [thumb])).get(thumb).type === 'video/mp4') throw new Bad('A small picture can\'t be a video');
+  }
   const taken = (await env.DB.prepare('SELECT o.digest, o.item_id, l.name FROM original o JOIN library l ON l.id = o.item_id WHERE o.digest IN (SELECT value FROM json_each(?))')
     .bind(JSON.stringify(digests)).all()).results;
   if (taken.length) {
     if (b.kind === 'video') throw new Bad(`That video is already in the Library, as "${taken[0].name}": choose it from the Library`, 409);
     const scene = await env.DB.prepare('SELECT r.id FROM rendition r JOIN recipe c ON c.id = r.recipe_id WHERE c.item_id = ? AND c.kind = \'scene\' ORDER BY r.id DESC LIMIT 1')
       .bind(taken[0].item_id).first();
-    return { id: taken[0].item_id, shared: true, scene: scene ? scene.id : null };
+    if (thumb) await env.DB.prepare('UPDATE library SET thumb = ? WHERE id = ? AND thumb IS NULL').bind(thumb, taken[0].item_id).run();
+    return { id: taken[0].item_id, shared: true, name: taken[0].name, scene: scene ? scene.id : null };
   }
   const name = String(b.name || '').trim().slice(0, 120) || (b.kind === 'video' ? 'Video' : 'Photo');
   for (let tries = 0; tries < 5; tries++) {
     const id = [...crypto.getRandomValues(new Uint8Array(4))].map((x) => x.toString(16).padStart(2, '0')).join('');
     if (await env.DB.prepare('SELECT 1 FROM library WHERE id = ?').bind(id).first()) continue;
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO library (id, kind, name, added, added_by) VALUES (?, ?, ?, ?, ?)').bind(id, b.kind, name, now(), who),
+      env.DB.prepare('INSERT INTO library (id, kind, name, added, added_by, thumb) VALUES (?, ?, ?, ?, ?, ?)').bind(id, b.kind, name, now(), who, thumb),
       ...digests.map((d) => env.DB.prepare('INSERT INTO original (digest, item_id) VALUES (?, ?)').bind(d, id)),
     ]);
-    return { id, shared: false, scene: null };
+    return { id, shared: false, name, scene: null };
   }
   throw new Bad('Couldn\'t make a code for it: try again', 500);
 }
@@ -328,12 +343,23 @@ export async function original(env, id) {
   return new Response(obj.body, { headers: { 'content-type': row.type, 'cache-control': 'private, no-store' } });
 }
 
-/* POST /edit/api/library/name { id, name } */
-export async function rename(env, id, name) {
-  if (typeof name !== 'string' || !name.trim() || name.length > 120) throw new Bad('A name must be 1 to 120 characters');
-  const r = await env.DB.prepare('UPDATE library SET name = ? WHERE id = ?').bind(name.trim(), id).run();
+/* POST /edit/api/library/item { id, name?, alt?, credit? }: what is true of the item itself: its name in the
+   Library, its alternative text (what the picture shows, for visitors who can't see it) and its credit (who made
+   it, when it wasn't the site's owner). Only what is sent changes; alt and credit may be emptied, a name not. */
+export async function describe(env, b) {
+  const id = String(b.id || '');
+  if (!CODE.test(id)) throw new Bad('Bad code');
+  const sets = [], binds = [], out = { id };
+  const text = (k, max, what, need) => {
+    if (b[k] == null) return;
+    if (typeof b[k] !== 'string' || b[k].length > max || (need && !b[k].trim())) throw new Bad(`${what} must be ${need ? '1' : '0'} to ${max} characters`);
+    out[k] = b[k].trim(); sets.push(`${k} = ?`); binds.push(out[k]);
+  };
+  text('name', 120, 'A name', true); text('alt', 500, 'Alternative text'); text('credit', 200, 'A credit');
+  if (!sets.length) throw new Bad('Nothing to change');
+  const r = await env.DB.prepare(`UPDATE library SET ${sets.join(', ')} WHERE id = ?`).bind(...binds, id).run();
   if (!r.meta.changes) throw new Bad('No such item', 404);
-  return { id, name: name.trim() };
+  return out;
 }
 
 /* POST /edit/api/library/delete { rendition } or { id, history? }: a rendition, or an item, for good (see the
@@ -367,6 +393,7 @@ export async function remove(env, url, b) {
   const past = [...new Set(mine.map((u) => u.revision))];
   if (past.length && b.history !== true) throw new Bad('History still has versions that use it', 409);
   const digests = (await env.DB.prepare(`SELECT digest FROM original WHERE item_id = ?1 UNION
+    SELECT thumb FROM library WHERE id = ?1 AND thumb IS NOT NULL UNION
     SELECT rf.digest FROM rendition_file rf JOIN rendition r ON r.id = rf.rendition_id JOIN recipe c ON c.id = r.recipe_id WHERE c.item_id = ?1`).bind(id).all()).results.map((f) => f.digest);
   const stmts = [];
   if (past.length) {
@@ -384,7 +411,8 @@ export async function remove(env, url, b) {
 async function sweep(env, url, digests) {
   const { results } = await env.DB.prepare(`SELECT digest, type FROM file
     WHERE (digest IN (SELECT value FROM json_each(?1)) OR added < ?2)
-      AND digest NOT IN (SELECT digest FROM original) AND digest NOT IN (SELECT digest FROM rendition_file)`)
+      AND digest NOT IN (SELECT digest FROM original) AND digest NOT IN (SELECT digest FROM rendition_file)
+      AND digest NOT IN (SELECT thumb FROM library WHERE thumb IS NOT NULL)`)
     .bind(JSON.stringify(digests), new Date(Date.now() - 86400000).toISOString()).all();
   if (!results.length) return { files: 0, purged: 'nothing to purge' };
   const keys = results.map((f) => f.digest);

@@ -58,16 +58,16 @@ export function showItems(list) {
    one showing bright) stay put whatever the zoom. Largest size of each, so detail can be checked. */
 export function blinkView(pair) {
   pair = pair.map((x) => (x.it ? x : { it: x, ren: null }));
-  // a whole item is seen as its newest picture
-  const renOf = (x) => x.ren || x.it.recipes.flatMap((c) => c.renditions).filter((r) => r.sizes.length).sort((a, b) => b.id - a.id)[0] || null;
+  // a whole item is seen as its original (it.large), or its newest picture when it has nothing else to show
+  const renOf = (x) => x.ren || (x.it.large ? null : x.it.recipes.flatMap((c) => c.renditions).filter((r) => r.sizes.length).sort((a, b) => b.id - a.id)[0] || null);
   const srcOf = (x) => { const r = renOf(x); return r ? r.sizes[r.sizes.length - 1].url : x.it.large; };
-  const sizeOf = (x) => { const r = renOf(x); return r ? `${r.w} × ${r.h}` : ''; };
+  const sizeOf = (x) => { const r = renOf(x), o = x.it.originals[0]; return r ? `${r.w} × ${r.h}` : o && o.w ? `${o.w} × ${o.h}` : ''; };
   let shown = 0, s = 1, tx = 0, ty = 0, timer = null;
   const imgs = pair.map((x, i) => h('img', { src: srcOf(x), alt: x.it.name, draggable: false, class: i ? 'off' : '' }));
   const inner = h('div', { class: 'blink-inner' }, ...imgs);
   const stage = h('div', { class: 'blink-stage' }, inner);
   const labels = pair.map((x, i) => h('div', { class: `blink-label k${i}` + (i ? '' : ' on') },
-    h('span', { class: 'dot' }), h('span', {}, x.it.name, x.ren ? h('b', {}, ` ${x.ren.name}`) : null), h('span', { class: 'muted' }, ` ${sizeOf(x)}`)));
+    h('span', { class: 'dot' }), h('span', {}, x.it.name, h('b', {}, x.ren ? ` ${x.ren.name}` : ' original')), h('span', { class: 'muted' }, ` ${sizeOf(x)}`)));
   const draw = () => { inner.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`; };
   const show = (i) => { shown = i; imgs.forEach((im, k) => im.classList.toggle('off', k !== i)); labels.forEach((l, k) => l.classList.toggle('on', k === i)); };
   const swap = () => show(1 - shown);

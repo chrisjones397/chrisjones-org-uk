@@ -47,6 +47,13 @@ export const GLYPHS = {
   live: 'M10 6.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',                                // published
   draft: 'M4 16l1-4 8-8 3 3-8 8zM11.5 5.5l3 3',                                        // a pencil: in a draft
   past: 'M3.5 10a6.5 6.5 0 1 0 2-4.7M3.5 3.5v3h3M10 6.5V10l2.5 1.5',                    // a clock turning back: History
+  upload: 'M10 13V3.5M6 7.5l4-4 4 4M3.5 12.5v4h13v-4',                                  // an arrow out of a tray: upload
+  tray: 'M3 11.5l2-7h10l2 7v5H3zM3 11.5h4.5l1 2h3l1-2H17',                              // an in-tray: just uploaded, nothing made from it
+  brush: 'M17 3l-7.5 7.5M9.5 10.5a3 3 0 0 1 0 4.2c-1.4 1.4-4 1.3-6 .8 1.2-.6 1.3-1.6 1.8-2.9a3 3 0 0 1 4.2-2.1z',   // a paintbrush: a painting
+  crop: 'M5.5 2.5v12h12M2.5 5.5h12v12',                                                 // crop marks: a site picture
+  says: 'M3 4h14v9H9l-4 3.5V13H3z',                                                     // a speech bubble: alternative text
+  person: 'M10 10a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3.5 17c.6-3.2 3.2-5 6.5-5s5.9 1.8 6.5 5',   // who made it: credit
+  all: 'M3.5 3.5h5.5v5.5H3.5zM11 3.5h5.5v5.5H11zM3.5 11h5.5v5.5H3.5zM11 11h5.5v5.5H11z',   // every item
 };
 
 let toastTimer;
