@@ -9,6 +9,7 @@ import { render } from './render.js';
 import { badge, hideButton } from './widgets.js';
 import { detailsFields, detailsOf, carry, sizeNote } from './details.js';
 import { preparedPictures, preparedTiles } from './picker.js';
+import { grip } from './drag.js';
 
 const open = new Set();             // paintings whose edit form is open
 const editFields = new Map();       // painting id -> its Edit form's fields, while open
@@ -19,10 +20,11 @@ beforeDiscard.add((ids) => { for (const id of ids) editFields.delete(id); });
 /* Open a painting's Edit form (the Library's uses marks lead here). */
 export function openPainting(id) { open.add(id); }
 
-export function paintingRow(e, items, i, secs) {
+export function paintingRow(e, secs) {
   const d = current(e);
   const gone = e.draft == null;
   const row = h('div', { class: 'painting' + (gone ? ' deleted' : '') + (isHidden(e) ? ' hidden' : ''), 'data-entry': e.id },
+    gone ? h('span', { class: 'grip-space' }) : grip('painting', e.id, 'this painting'),
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
     h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
       h('span', { class: 'd' }, detailsLine(d) || ' ', sizeNote(d))),
@@ -31,8 +33,6 @@ export function paintingRow(e, items, i, secs) {
       : h('span', { class: 'move' },
         starButton(e),
         hideButton(e, 'this painting'),
-        h('button', { title: 'Move up', disabled: i === 0, onclick: () => movePainting(items, i, -1) }, '↑'),
-        h('button', { title: 'Move down', disabled: i === items.length - 1, onclick: () => movePainting(items, i, 1) }, '↓'),
         h('button', { onclick: () => { if (open.has(e.id)) closeEdit(e.id); else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
   if (gone || !open.has(e.id)) { editFields.delete(e.id); return [row]; }
 
@@ -134,13 +134,28 @@ function pictureFields(e, d) {
   return out;
 }
 
-function movePainting(items, i, dir) {
-  const list = items.filter((e) => e.draft != null);
-  const a = list.indexOf(items[i]);
-  let b = a + dir;
-  if (b < 0 || b >= list.length) return;
-  [list[a], list[b]] = [list[b], list[a]];
-  const changes = [];
-  list.forEach((e, n) => { const d = draftOf(e); if (d.order !== n) changes.push({ id: e.id, kind: 'artwork', data: { ...d, order: n } }); });
-  save(changes, 'Moved');
+/* Moving a painting (dragged, or by the arrow keys on its grip: drag.js): to(where it is now) gives where it goes,
+   { genre, index } among that genre's other paintings (Infinity: the end), or null to stay. Built when its turn in
+   the save queue comes, from the latest state; the genres it leaves and joins are renumbered from the top, and an
+   open Edit form's genre follows it (so the form's next save doesn't send it back). */
+export function movePainting(id, to) {
+  save(() => {
+    const e = byId(id);
+    if (!e || e.draft == null) return null;
+    const from = draftOf(e).genre, inFrom = paintingsIn(from).filter((x) => x.draft != null);
+    const where = to({ genre: from, index: inFrom.indexOf(e), size: inFrom.length });
+    if (!where) return null;
+    const lists = new Map([[from, inFrom.filter((x) => x !== e)]]);
+    if (!lists.has(where.genre)) lists.set(where.genre, paintingsIn(where.genre).filter((x) => x.draft != null && x !== e));
+    const dest = lists.get(where.genre);
+    dest.splice(Math.max(0, Math.min(dest.length, where.index)), 0, e);
+    const f = editFields.get(id);
+    if (f && f.genre) f.genre.value = where.genre;
+    const changes = [];
+    for (const [genre, list] of lists) list.forEach((x, n) => {
+      const d = draftOf(x);
+      if (d.order !== n || d.genre !== genre) changes.push({ id: x.id, kind: 'artwork', data: { ...d, genre, order: n } });
+    });
+    return changes;
+  }, null, `${id}:move`);
 }

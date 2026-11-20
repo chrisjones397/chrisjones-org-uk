@@ -601,8 +601,27 @@ editor redraws the whole view after every change; fonts come from Google, not th
    a scene levelled 3 degrees (crop shrunk inside), a background from a prepared picture, the Gallery's tiles, the
    public pages answering. Not tested: dragging corners and the crop by hand, Replace photo… in the new view,
    real phones, Safari, real R2 and D1.
-   **Next: slice 4 (b)**, after he has tried (a): dragging paintings to reorder and between genres, and the
-   smaller extras. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
+   **Slice 4 (b), dragging: BUILT 20 Nov 2026, on dev, for him to try on admin-dev.** edit/drag.js: a grip
+   (six dots) on the left of every painting's row and every genre's heading row replaces the up and down arrow
+   buttons. Pointer Events, so one code path for mouse, trackpad and touch (touch-action: none on the grip only,
+   so the rest of the page still scrolls by touch): press and move 5 pixels to lift; the thing follows up and
+   down, a dashed gap shows where it lands, the page scrolls itself within 80 pixels of the window's top or
+   bottom; let go to drop, Escape puts it back, a press without moving does nothing. Keyboard: the grip is a
+   button, arrows up and down move one place (a painting crosses into the next genre at either end). Dragging a
+   genre folds every genre to its heading row while it lasts. The page isn't redrawn while something is lifted
+   (render.js hold()). A drop saves through the queue from the latest state (painting.js movePainting,
+   gallery-view.js moveGenre): the genres left and joined are renumbered from 0, an open Edit form follows its
+   painting and its genre field is updated (else its next save would send it back). Its tick is on the grip.
+   Empty genres say "drag one here" and take drops. No server or database change. Design check: nothing
+   structural (no tables, storage, routing); the standard way for sortable lists is Pointer Events with a
+   keyboard alternative, as here. Gap: WCAG 2.2's 2.5.7 (Dragging Movements, AA) also asks for a way with
+   single taps; today only the Edit form's genre field gives that (between genres, not within one).
+   Tested locally (wrangler dev, Playwright, mouse and keyboard): within a genre, into another, into an empty
+   genre, keyboard across genre ends and stopping at the top, an open Edit form carried along and a title change
+   afterwards not moving it back, Escape, a plain click, a genre dragged to the top (database checked after each).
+   Not tested: real touch, phones, Safari, real D1.
+   **Next: the rest of slice 4's smaller extras** (one original shared by several paintings is now done by
+   recipes; left: "Delete for good" from History, a clear Review of background changes), then step 5. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
    place, replacing the Content tab).
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);

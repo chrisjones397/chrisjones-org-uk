@@ -90,6 +90,26 @@
     animation: saved-field 3.5s linear forwards; }
   textarea.saved { background-position: right 0.5rem top 0.5rem; }
   .move button { padding: 0.3rem 0.55rem; }
+  /* Dragging to rearrange (drag.js): the grip, six dots on the left of a painting's or genre's row. Only the grip
+     starts a drag, so touching anything else still scrolls the page. */
+  button.grip { display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0.35rem 0.15rem;
+                background: none; border-color: transparent; color: var(--dim); cursor: grab; touch-action: none;
+                user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  button.grip:hover, button.grip:focus-visible { color: var(--ink); background: none; }
+  button.grip svg path { stroke-width: 2.8; }
+  .grip-space { flex: none; width: calc(18px + 0.3rem + 2px); }
+  body.dragging, body.dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+  .lifted { z-index: 20; pointer-events: none; background: #2c2c2c; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.55); }
+  .painting.lifted { padding-left: 0.4rem; padding-right: 0.6rem; border-top-color: transparent; }
+  .drop-gap { border: 1px dashed #666; border-radius: 8px; margin: 0.2rem 0; }
+  .card > .drop-gap { margin: 0; }
+  .genres > .drop-gap { margin: 0.6rem 0; }
+  body.dragging .paintings:has(.drop-gap) > .empty { display: none; }
+  .paintings > .empty { margin: 0.5rem 0 0; }
+  .card > .row.head { margin-bottom: 0.3rem; }
+  /* Dragging a genre folds every genre down to its heading row, so they're short enough to pass one another. */
+  body.drag-genres .paintings { display: none; }
+  body.drag-genres .card > .row.head { margin-bottom: 0; }
   .edit { margin: 0.2rem 0 0.8rem; }
   .diff { font-size: 0.88rem; margin: 0.3rem 0 0 1.9rem; color: var(--dim); }
   .diff b { color: var(--ink); font-weight: 400; }

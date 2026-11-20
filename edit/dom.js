@@ -59,6 +59,7 @@ export const GLYPHS = {
   level: 'M2.5 12.5l15-5M2.5 10h15M5.5 4.5h9v11h-9z',                                   // a tilted line made level, cropped: a scene
   frame: 'M3 3h14v14H3zM6 6h8v8H6z',                                                    // a picture frame: in the Gallery
   section: 'M3 3.5h14v13H3zM3 8h14',                                                    // a page section with its picture: a background
+  grip: 'M7.5 4.6v.01M12.5 4.6v.01M7.5 10v.01M12.5 10v.01M7.5 15.4v.01M12.5 15.4v.01',   // six dots: drag to move
   back: 'M12.5 4.5L7 10l5.5 5.5',                                                        // back to where it was opened from
 };
 

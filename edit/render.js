@@ -22,7 +22,13 @@ window.addEventListener('hashchange', (ev) => {
   render();
 });
 
+/* While something is being dragged (drag.js), the page isn't redrawn under it: a redraw asked for meanwhile
+   happens when it's let go. */
+let held = false, pending = false;
+export function hold(on) { held = on; if (!on && pending) { pending = false; render(); } }
+
 export function render() {
+  if (held) { pending = true; return; }
   const n = state.entries.filter(changed).length;
   $('#count').hidden = !n; $('#count').textContent = n;
   document.querySelectorAll('.bar a[data-view]').forEach((a) => a.classList.toggle('on', a.dataset.view === view()));
