@@ -552,6 +552,21 @@ editor redraws the whole view after every change; fonts come from Google, not th
    stored but the public pages don't read them yet; a scene recipe still has no straighten or crop; the old
    items' small pictures are their newest rendition's smallest size (only new uploads get library.thumb).
    To undo slice 3 on dev: `git revert` its three commits (migration 0007's column can stay: nothing else reads it).
+   **His verdict after trying slice 3 on admin-dev (20 Nov 2026, by voice): the Library row's controls aren't
+   intuitive.** He couldn't tell what the brush meant, and the crop marks seemed to take him to the Gallery
+   (most likely he pressed the brush, which does; the crop marks make a site picture and stay in the Library).
+   The design is muddled, not his reading of it: darkroom treatment (white balance, squaring up, cropping)
+   applies to any photo, whether it's shown as a painting, a background or a foreground, so a brush meaning
+   "make a painting" that opens the darkroom inside the Gallery is misleading.
+   **Agreed redesign (next, before or folded into slice 4, his choice; not yet decided):**
+   - The darkroom is a place of its own, opened from any Library item, not embedded in the Gallery's add form
+     or a painting's Edit form. It makes and edits recipes; what it produces (renditions) is then used.
+   - The Gallery is only for arranging paintings: genres, order, titles and details, Featured. It picks a
+     painting's picture from what the Library and darkroom have made; it doesn't process photos itself.
+   - The Library row's actions get rethought with that split (one way into the darkroom; using a rendition as a
+     painting or background is a separate, clearly marked step), with tooltips that say what each does.
+   Queue after that, unchanged: slice 4 (dragging paintings to reorder and between genres, the smaller extras),
+   step 5 (framings and backgrounds as lists), step 6 (edit in place, replacing the Content tab).
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
