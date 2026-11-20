@@ -448,8 +448,9 @@ function icon(name, box = name === 'clear' ? 24 : 20) {
    moves only that edge, pivoting on its far corner, so the other edge stays put and the corner slides along it
    (Christopher's idea, step 2e). Each corner keeps
    its label wherever it's dragged (Christopher's design): put the ones labelled bottom left and bottom right on
-   the painting's bottom corners, and the painting comes out that way up. Tapping an edge relabels them so it's
-   the bottom, the ↺ ↻ buttons move every label one corner round, and ⇋ mirrors. They start on the best guess at
+   the painting's bottom corners, and the painting comes out that way up. The ↺ ↻ buttons move every label one
+   corner round, and ⇋ mirrors. (Tapping an edge to make it the bottom was taken out on 20 Nov 2026: a double tap
+   to zoom, read as two single taps, turned the labels round without his asking.) They start on the best guess at
    the painting's corners (guessCorners), or the photo's own corners; ⎌ goes back to that. No instructions on
    screen, by Christopher's choice: buttons have tooltips.
    Resolves with the new spots, or the corners labelled top left, top right, bottom right, bottom left (fractions
@@ -495,11 +496,15 @@ export function fullView(img, mode, start, guess, ghost, find) {
       cw = cv.clientWidth; ch = cv.clientHeight;
       cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
     }
-    const fitScale = () => Math.min(cw / W, ch / H) * 0.94;
-    function fit() { s = fitScale(); tx = (cw - W * s) / 2; ty = (ch - H * s) / 2; }
+    /* On a touch screen the bottom strip is kept clear: iOS 26 Safari floats its address bar over the bottom of
+       the page, and a touch there goes to Safari, not to this view (20 Nov 2026: the bottom corners couldn't be
+       moved). The whole picture fits above it, and no knob or arrow is put in it (pan to reach a corner in it). */
+    const LOW = matchMedia('(pointer: coarse)').matches ? 80 : 0;
+    const fitScale = () => Math.min(cw / W, (ch - LOW) / H) * 0.94;
+    function fit() { s = fitScale(); tx = (cw - W * s) / 2; ty = (ch - LOW - H * s) / 2; }
     /* Glide the view so photo point p is in the middle, at the same zoom. */
     function goTo(p) {
-      const x0 = tx, y0 = ty, x1 = cw / 2 - p[0] * s, y1 = ch / 2 - p[1] * s, t0 = performance.now();
+      const x0 = tx, y0 = ty, x1 = cw / 2 - p[0] * s, y1 = (ch - LOW) / 2 - p[1] * s, t0 = performance.now();
       const step = (now) => {
         const t = Math.min(1, (now - t0) / 350), e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
         tx = x0 + (x1 - x0) * e; ty = y0 + (y1 - y0) * e; draw();
@@ -511,7 +516,7 @@ export function fullView(img, mode, start, guess, ghost, find) {
        the knob doesn't hide the corner. Near the edge of the screen the stick points inwards instead. While a
        corner is dragged its stick keeps its direction, so the knob stays under the finger. */
     const STICK = 52, EDGE = 34;
-    const inside = (k) => k[0] > 20 && k[1] > 20 && k[0] < cw - 20 && k[1] < ch - 20;
+    const inside = (k) => k[0] > 20 && k[1] > 20 && k[0] < cw - 20 && k[1] < ch - 20 - LOW;
     const knobs = () => {
       const q = pts.map(toScreen), cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
       return q.map((p, i) => {
@@ -552,7 +557,8 @@ export function fullView(img, mode, start, guess, ghost, find) {
       const q = pts.map(toScreen), out = [];
       q.forEach((p, i) => [(i + 1) % 4, (i + 3) % 4].forEach((j) => {
         const dx = q[j][0] - p[0], dy = q[j][1] - p[1], d = Math.hypot(dx, dy) || 1;
-        out.push({ x: p[0] + dx / d * 64, y: p[1] + dy / d * 64, a: Math.atan2(dy, dx), to: j });
+        const a = { x: p[0] + dx / d * 64, y: p[1] + dy / d * 64, a: Math.atan2(dy, dx), to: j };
+        if (a.y < ch - LOW - 16) out.push(a);                      // none where a touch would go to Safari
       }));
       return out;
     };
@@ -811,14 +817,6 @@ export function fullView(img, mode, start, guess, ghost, find) {
     };
     let last = null;                                              // the last single tap, while waiting to see if a second follows
     function single(tap) {
-        if (mode === 'corners') {
-          // A tap near an edge makes it the bottom. Edge j runs from corner j to j + 1: top, right, bottom, left.
-          // Relabelling by k places keeps left and right as they are: the new bottom is edge j when k = j - 2.
-          const g = pts.map(toScreen), [x, y] = tap.p;
-          const dist = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy); };
-          const near = [0, 1, 2, 3].map((j) => [dist(g[j], g[(j + 1) % 4]), j]).sort((a, b) => a[0] - b[0])[0];
-          if (near[0] < 28) { const k = near[1] + 2; pts = [0, 1, 2, 3].map((i) => pts[(i + k) % 4]); draw(); }
-        }
         if (mode === 'spots') {
           const near = pts.findIndex((q) => { const [x, y] = toScreen(q); return Math.max(Math.abs(x - tap.p[0]), Math.abs(y - tap.p[1])) < Math.max(28, spotR * s); });
           if (near >= 0) pts.splice(near, 1);
@@ -929,7 +927,9 @@ export function cropView(img, start, ghost) {
     function size() {
       dpr = window.devicePixelRatio || 1; cw = cv.clientWidth; ch = cv.clientHeight;
       cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
-      s = Math.min(cw / W, ch / H) * 0.9; tx = (cw - W * s) / 2; ty = (ch - H * s) / 2;
+      // above a touch screen's bottom strip, as in fullView (iOS 26 Safari's floating address bar takes touches there)
+      const low = matchMedia('(pointer: coarse)').matches ? 80 : 0;
+      s = Math.min(cw / W, (ch - low) / H) * 0.9; tx = (cw - W * s) / 2; ty = (ch - low - H * s) / 2;
     }
     function setAngle(a) {
       angle = Math.max(-20, Math.min(20, a));

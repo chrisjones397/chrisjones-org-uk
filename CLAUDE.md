@@ -620,6 +620,14 @@ editor redraws the whole view after every change; fonts come from Google, not th
    genre, keyboard across genre ends and stopping at the top, an open Edit form carried along and a title change
    afterwards not moving it back, Escape, a plain click, a genre dragged to the top (database checked after each).
    Not tested: real touch, phones, Safari, real D1.
+   **Corners view fixes (20 Nov 2026, after he tried it on his phone):** the lower two corners couldn't be dragged
+   nor their arrows tapped, and a double tap on an edge turned the labels round. Neither came from slice 4: tap an
+   edge to make it the bottom dates from 7 Nov (a06be96); the corners view's code was unchanged. Likely cause of
+   the first (not seen here: dragging works in Chromium at phone size): iOS 26 Safari's address bar floats over
+   the bottom of the page and takes touches there, under the full-screen darkroom. Fix: on touch screens
+   (pointer: coarse) fullView and cropView keep an 80-pixel strip at the bottom clear: the picture fits above it,
+   no knob or arrow goes in it (LOW in darkroom.js). Tap-an-edge relabelling removed (a double tap to zoom read as
+   two single taps flipped the bottom); ↺ ↻ ⇋ remain. Not tested on a real iPhone: ask him to confirm.
    **Next: the rest of slice 4's smaller extras** (one original shared by several paintings is now done by
    recipes; left: "Delete for good" from History, a clear Review of background changes), then step 5. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
    place, replacing the Content tab).
