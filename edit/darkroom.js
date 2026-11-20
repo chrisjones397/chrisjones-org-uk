@@ -1,11 +1,12 @@
-/* Preparing a photo of a painting in the browser before it's uploaded (used by edit/picture.js and edit/uploads.js):
+/* Preparing a photo in the browser before it's used on the site (a painting, a drawing or a scene: the
+   darkroom is for any photo, step 4 slice 4; used by edit/picture.js and edit/uploads.js):
      1. white balance from spots on the photo that should be white or neutral grey (none: no white balance; one
         spot evens out the colour; two or more also follow the light's fall-off across the photo, six or more
         along a gentle curve). "Find the paper" places them round a drawing's margins;
-     2. crop: four corners dragged onto the painting's corners, and the picture squared up (perspective
-        corrected), optionally to the shape of the size given in its details.
-   The choices are kept with the painting (its "process"), as fractions of the untouched original's width and
-   height, so the same images can be made again from the original. Nothing here talks to the server. */
+     2. for a flat thing (a painting, a drawing): four corners dragged onto its corners, and the picture squared
+        up (perspective corrected), optionally to known proportions; for a scene: turned level and cropped.
+   The choices are kept in the recipe, as fractions of the untouched original's width and height, so the same
+   images can be made again from the original. Nothing here talks to the server. */
 
 export const SOURCE_MAX = 4096;     // the working copy's longer side (Safari limits a canvas to about 16.7 million pixels)
 export const SPOT = 0.01;           // a picked spot is a square this fraction of the photo's longer side, either way
@@ -842,5 +843,163 @@ export function fullView(img, mode, start, guess, ghost, find) {
       resolve(result && result.map(([x, y]) => [x / W, y / H]));
     }
     size(); fit(); draw();
+  });
+}
+
+// ---- a scene: straightened and cropped (step 4 slice 4) ---------------------------------------------------
+
+/* A scene's turn and crop, as kept in its recipe: angle in degrees (clockwise positive) about the photo's centre,
+   and crop [left, top, right, bottom] as fractions of the turned photo's frame, which is the photo's own size.
+   The crop must stay inside the turned photo, so no empty corners ever show. */
+const rad = (deg) => deg * Math.PI / 180;
+/* Is frame point (x, y) (pixels, in a W x H frame) inside the photo turned by angle about the middle? */
+function onPhoto(x, y, W, H, angle) {
+  const a = -rad(angle), dx = x - W / 2, dy = y - H / 2;
+  const u = dx * Math.cos(a) - dy * Math.sin(a) + W / 2, v = dx * Math.sin(a) + dy * Math.cos(a) + H / 2;
+  return u >= -0.5 && v >= -0.5 && u <= W + 0.5 && v <= H + 0.5;
+}
+export function cropFits(c, W, H, angle) {
+  return [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]]].every(([x, y]) => onPhoto(x * W, y * H, W, H, angle));
+}
+/* The largest crop of the photo's own proportions, centred, that fits inside it once turned. */
+export function inscribed(W, H, angle) {
+  const c = Math.abs(Math.cos(rad(angle))), s = Math.abs(Math.sin(rad(angle)));
+  const k = Math.min(W / (W * c + H * s), H / (W * s + H * c));
+  return [0.5 - k / 2, 0.5 - k / 2, 0.5 + k / 2, 0.5 + k / 2];
+}
+/* A crop shrunk about its own centre until it fits (after the angle changes). */
+export function shrinkToFit(c, W, H, angle) {
+  if (cropFits(c, W, H, angle)) return c;
+  const mx = (c[0] + c[2]) / 2, my = (c[1] + c[3]) / 2, hw = (c[2] - c[0]) / 2, hh = (c[3] - c[1]) / 2;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const k = (lo + hi) / 2;
+    if (cropFits([mx - hw * k, my - hh * k, mx + hw * k, my + hh * k], W, H, angle)) lo = k; else hi = k;
+  }
+  const k = lo;
+  if (k > 0.05) return [mx - hw * k, my - hh * k, mx + hw * k, my + hh * k];
+  return inscribed(W, H, angle);
+}
+const WHOLE = [0, 0, 1, 1];
+export const levelAndWhole = (r) => !r.angle && (!r.crop || r.crop.every((v, i) => Math.abs(v - WHOLE[i]) < 1e-4));
+/* The picture turned and cropped, at width w (src: the working copy, or anything of the photo's proportions). */
+export function straightened(src, angle, crop, w) {
+  const W = src.width, H = src.height, c = crop || WHOLE;
+  const cw = (c[2] - c[0]) * W, ch = (c[3] - c[1]) * H;
+  const k = w ? w / cw : 1;
+  const out = canvas(Math.max(1, Math.round(cw * k)), Math.max(1, Math.round(ch * k)));
+  const x = out.getContext('2d'); x.imageSmoothingQuality = 'high';
+  x.scale(k, k); x.translate(-c[0] * W, -c[1] * H); x.translate(W / 2, H / 2); x.rotate(rad(angle || 0));
+  x.drawImage(src, -W / 2, -H / 2);
+  return out;
+}
+
+/* The full-screen view for a scene: level it with the slider (a fine grid over the photo helps line up a
+   horizon or an upright), then drag the crop's corners or edges, or the crop itself to move it. The crop is kept
+   inside the turned photo: turning shrinks it if it must. Resolves with { angle, crop } or null if cancelled.
+   ghost: the saved choice, drawn faintly, dashed. */
+export function cropView(img, start, ghost) {
+  return new Promise((resolve) => {
+    const W = img.width, H = img.height;
+    let angle = start.angle || 0, crop = (start.crop || inscribed(W, H, angle)).slice();
+    let auto = !start.crop;                                // the crop follows the angle until it's dragged
+    const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+    const btn = (content, fn, cls, tip) => el('button', { type: 'button', className: cls || '', onclick: fn, title: tip, ariaLabel: tip }, content);
+    const cv = el('canvas', { className: 'dr-canvas' });
+    const out = el('span', { className: 'dr-count' });
+    const slider = el('input', { type: 'range', min: -20, max: 20, step: 0.1, value: angle, className: 'dr-angle',
+      title: 'Level it: turn the photo until its horizon or uprights run along the grid', ariaLabel: 'Angle' });
+    slider.addEventListener('input', () => setAngle(+slider.value));
+    const nudge = (d) => { setAngle(Math.round((angle + d) * 10) / 10); slider.value = angle; };
+    const box = el('div', { className: 'darkroom' },
+      el('div', { className: 'dr-bar' },
+        el('div', { className: 'dr-buttons' },
+          btn('−', () => nudge(-0.1), '', 'Turn a tenth of a degree anticlockwise'), slider,
+          btn('+', () => nudge(0.1), '', 'Turn a tenth of a degree clockwise'), out,
+          btn(icon('fit'), () => { angle = 0; slider.value = 0; crop = WHOLE.slice(); auto = false; draw(); }, '', 'Start again: level, the whole photo'),
+          btn(icon('cancel'), () => close(null), 'dr-cancel', 'Cancel'),
+          btn(icon('done'), () => close({ angle, crop }), 'main', 'Done'))),
+      cv);
+    document.body.append(box);
+    for (const ev of ['selectstart', 'contextmenu', 'dragstart']) box.addEventListener(ev, (e) => e.preventDefault());
+    cv.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    document.body.style.overflow = 'hidden';
+    const ctx = cv.getContext('2d');
+    let s = 1, tx = 0, ty = 0, cw = 0, ch = 0, dpr = 1;
+    function size() {
+      dpr = window.devicePixelRatio || 1; cw = cv.clientWidth; ch = cv.clientHeight;
+      cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+      s = Math.min(cw / W, ch / H) * 0.9; tx = (cw - W * s) / 2; ty = (ch - H * s) / 2;
+    }
+    function setAngle(a) {
+      angle = Math.max(-20, Math.min(20, a));
+      crop = auto ? inscribed(W, H, angle) : shrinkToFit(crop, W, H, angle);
+      draw();
+    }
+    const R = () => [tx + crop[0] * W * s, ty + crop[1] * H * s, tx + crop[2] * W * s, ty + crop[3] * H * s];
+    function draw() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
+      ctx.save(); ctx.translate(tx + W * s / 2, ty + H * s / 2); ctx.rotate(rad(angle));
+      ctx.imageSmoothingQuality = 'high'; ctx.drawImage(img, -W * s / 2, -H * s / 2, W * s, H * s); ctx.restore();
+      const [x0, y0, x1, y1] = R();
+      ctx.beginPath(); ctx.rect(0, 0, cw, ch); ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill('evenodd');
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+      ctx.lineWidth = 1 / dpr; ctx.strokeStyle = 'rgba(255,255,255,0.28)';      // a fine grid for levelling
+      const step = Math.max(24, Math.min(cw, ch) / 16);
+      ctx.beginPath();
+      for (let x = x0 + step; x < x1; x += step) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+      for (let y = y0 + step; y < y1; y += step) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+      ctx.stroke(); ctx.restore();
+      if (ghost && (ghost.crop || ghost.angle)) {                               // the saved crop, faint and dashed
+        const g = ghost.crop || WHOLE;
+        ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(tx + g[0] * W * s, ty + g[1] * H * s, (g[2] - g[0]) * W * s, (g[3] - g[1]) * H * s); ctx.restore();
+      }
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) {        // corner knobs
+        ctx.beginPath(); ctx.arc(x, y, 11, 0, 7); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      out.textContent = `${angle > 0 ? '+' : ''}${angle.toFixed(1)}°  ${Math.round((crop[2] - crop[0]) * W)} × ${Math.round((crop[3] - crop[1]) * H)}`;
+    }
+    /* What a press takes hold of: a corner (both its edges), an edge, or the inside (moving the crop). */
+    let drag = null;
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('pointerdown', (e) => {
+      cv.setPointerCapture(e.pointerId);
+      const [x, y] = pos(e), [x0, y0, x1, y1] = R(), near = 26;
+      const L = Math.abs(x - x0) < near, Rt = Math.abs(x - x1) < near, T = Math.abs(y - y0) < near, B = Math.abs(y - y1) < near;
+      const inX = x > x0 - near && x < x1 + near, inY = y > y0 - near && y < y1 + near;
+      const sides = { l: L && inY, r: Rt && inY && !L, t: T && inX, b: B && inX && !T };
+      if (!Object.values(sides).some(Boolean) && !(x > x0 && x < x1 && y > y0 && y < y1)) { drag = null; return; }
+      drag = { sides, move: !Object.values(sides).some(Boolean), from: [x, y], was: crop.slice() };
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const [x, y] = pos(e), dx = (x - drag.from[0]) / (W * s), dy = (y - drag.from[1]) / (H * s), w = drag.was;
+      let c = w.slice();
+      const MIN = 0.03;
+      if (drag.move) c = [w[0] + dx, w[1] + dy, w[2] + dx, w[3] + dy];
+      else {
+        if (drag.sides.l) c[0] = Math.min(w[0] + dx, w[2] - MIN);
+        if (drag.sides.r) c[2] = Math.max(w[2] + dx, w[0] + MIN);
+        if (drag.sides.t) c[1] = Math.min(w[1] + dy, w[3] - MIN);
+        if (drag.sides.b) c[3] = Math.max(w[3] + dy, w[1] + MIN);
+      }
+      if (c.every((v) => v >= 0 && v <= 1) && cropFits(c, W, H, angle)) { crop = c; auto = false; draw(); }
+    });
+    const up = () => { drag = null; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    const key = (e) => { if (e.key === 'Escape') close(null); };
+    const onResize = () => { size(); draw(); };
+    window.addEventListener('keydown', key); window.addEventListener('resize', onResize);
+    function close(result) {
+      window.removeEventListener('keydown', key); window.removeEventListener('resize', onResize);
+      document.body.style.overflow = ''; box.remove();
+      resolve(result && { angle: Math.round(result.angle * 100) / 100, crop: result.crop.map((v) => Math.round(v * 1e5) / 1e5) });
+    }
+    size(); draw();
   });
 }

@@ -16,7 +16,7 @@
 
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
-import { library, describe, remove, newItem, addOriginal, newRendition, haveFile, putFile, original } from './library.js';
+import { library, describe, remove, newItem, addOriginal, newRendition, nameRecipe, haveFile, putFile, original } from './library.js';
 import { renditions, NAMED } from './media.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -86,6 +86,7 @@ export async function api(request, env, url, who) {
     if (path === 'library/new') return json(await newItem(env, who, body));
     if (path === 'library/original') return json(await addOriginal(env, String(body.id || ''), String(body.digest || '')));
     if (path === 'library/rendition') return json(await newRendition(env, who, body));
+    if (path === 'library/recipe') return json(await nameRecipe(env, who, body));
     throw new Bad('Not found', 404);
   } catch (e) {
     return json({ error: e.message || String(e) }, e.status || 500);

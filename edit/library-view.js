@@ -5,31 +5,34 @@ import { state, draftOf } from './state.js';
 import { marks, placeMarks } from './marks.js';
 import { call, act, save, loadLibrary } from './server.js';
 import { render } from './render.js';
-import { libraryPhoto, videoItem, videoRendition, sceneRendition } from './uploads.js';
-import { paintFrom } from './add.js';
+import { libraryPhoto, videoItem, videoRendition } from './uploads.js';
+import { hang } from './add.js';
 import { strongest, useMarks } from './uses.js';
 import { showItems, blinkView } from './compare.js';
 
 /* Every item in the Library (library.js on the server), newest first: the one place files come in (step 4,
-   slice 3). An upload keeps only the original (a photo), or a video's versions; what is made from an item is
-   made here or from here: a site picture (its sizes, as it is), a painting (in the Gallery, from its photo).
+   slice 3). An upload keeps only the original (a photo), or a video's versions. A photo is prepared for the
+   site in the darkroom (one way in: the darkroom symbol on its row, step 4 slice 4), whatever it is then used
+   for; using a prepared picture is a separate step: hanging it in the Gallery (the frame on its line), or
+   choosing it as a section's background (under Content).
    Each row uses the page's width: its picture (the size of the pickers' tiles, tap to see it large); what is
    true of the item itself, each saving itself with a tick (its name, alternative text and credit), its code (tap
    to copy), what uses it (each mark a link to where) and what can be done with it; and beside those a line for
    each original and each rendition (a recipe's result: a picture's sizes, or a video's versions and frames) with
    its weight, a tick to compare (two or three side by side, or blink between two), and a bin for a rendition
    nothing uses. The row's bin deletes the whole item, only when no draft or published page uses it.
-   The filter is on what an item is made or used for, so an item can be both a painting and a site picture. */
+   The filter is on what an item is used for (read from its uses), so an item can be in both. */
 let libBusy = '';
 const libDoing = {};           // item code -> what is being made from it, while it is
 const libNotes = {};           // item code -> the checks' findings for the video versions last added
 const libPicked = new Set();   // lines ticked to compare (two or three): an item's code (its original) or <code>/<rendition id>
 let libFilter = 'all';
+const usedAs = (it, prefix) => it.uses.some((u) => u.state !== 'history' && u.entry.startsWith(prefix));
 const FILTERS = [
   ['all', 'all', 'Everything', () => true],
   ['fresh', 'tray', 'Just uploaded: nothing made from them yet', (it) => !it.recipes.length],
-  ['painting', 'brush', 'Paintings', (it) => it.painting],
-  ['site', 'crop', 'Site pictures', (it) => it.site],
+  ['painting', 'frame', 'In the Gallery', (it) => usedAs(it, 'p-')],
+  ['site', 'section', 'Backgrounds', (it) => usedAs(it, 'bg-')],
 ];
 
 export function libraryView() {
@@ -84,7 +87,7 @@ async function addToLibrary(files) {
    label when the item has several recipes ("Part 2 r1"; a site picture's recipe has none, so "As it is r1"). */
 export function renditionsOf(it) {
   return it.recipes.flatMap((c, i) => c.renditions.map((r) => ({ ...r,
-    name: `${it.recipes.length > 1 ? `${c.label || (c.kind === 'scene' ? 'As it is' : `Recipe ${i + 1}`)} ` : ''}r${r.n}` })));
+    name: `${it.recipes.length > 1 ? `${c.label || `Recipe ${i + 1}`} ` : ''}r${r.n}` })));
 }
 
 /* What is true of the item itself saves itself as soon as it's changed, with a tick in the field. */
@@ -117,7 +120,6 @@ function libraryRow(it) {
   const bin = h('button', { class: 'lib-bin danger', disabled: live.length > 0 || !!doing,
     title: live.length ? `In use: ${[...new Set(live.map((u) => u.label))].join(', ')}` : 'Delete for good',
     'aria-label': 'Delete for good', onclick: () => deleteForGood(it, pastOnly) }, glyph(GLYPHS.bin));
-  const hasScene = it.recipes.some((c) => c.kind === 'scene' && c.renditions.length);
   return h('div', { class: 'lib-item' },
     h(it.large ? 'button' : 'span', { class: 'lib-thumb', ...(it.large ? { title: 'See it large', 'aria-label': `See ${it.name} large`, onclick: () => showItems([it]) } : {}) },
       pic, it.kind === 'video' ? h('span', { class: 'lib-video', title: 'Video' }, glyph(GLYPHS.play, 14)) : null),
@@ -130,10 +132,8 @@ function libraryRow(it) {
       field('alt', 500, 'Alternative text: what the picture shows, for visitors who can\'t see it', 'says', 'What it shows'),
       field('credit', 200, 'Credit: who made it, if it wasn\'t you', 'person', 'Who made it, if not you'),
       h('div', { class: 'lib-acts' },
-        it.kind === 'photo' ? h('button', { disabled: !!doing, title: 'Make a painting from it: to the Gallery, with this photo in the darkroom', 'aria-label': 'Make a painting',
-          onclick: () => paintFrom(it) }, glyph(GLYPHS.brush)) : null,
-        it.kind === 'photo' && !hasScene ? h('button', { disabled: !!doing, title: 'Make a site picture: its sizes, as it is, for backgrounds', 'aria-label': 'Make a site picture',
-          onclick: () => makeScene(it) }, glyph(GLYPHS.crop)) : null,
+        it.kind === 'photo' ? h('a', { class: 'icon-btn', href: `#darkroom/${it.id}`, title: 'Darkroom: prepare it for the site (white balance; square up a flat thing, or straighten and crop a scene)',
+          'aria-label': 'Open in the darkroom' }, glyph(GLYPHS.darkroom)) : null,
         it.kind === 'video' ? moreVersions(it, !!doing) : null,
         h('span', { class: 'lib-doing muted', 'data-doing': it.id }, doing || ''),
         bin)),
@@ -185,15 +185,6 @@ function versionControl(it, o) {
       onclick: () => videoChange(it, (was, say) => videoRendition(it.id, [...was.versions.map(asVersion), asVersion(o)], was, () => null, say)) }, glyph(GLYPHS.add, 14));
 }
 
-/* A site picture from a photo: its sizes made in the browser from the original, as it is. */
-async function makeScene(it) {
-  const say = (t) => { libDoing[it.id] = t; const el = document.querySelector(`[data-doing="${it.id}"]`); if (el) el.textContent = t; else render(); };
-  say('Starting…'); render();
-  try { await sceneRendition(it.id, say); toast('Site picture made: choose it as a background under Content'); }
-  catch (e) { toast(e.message, true); }
-  delete libDoing[it.id]; state.library = null; render();
-}
-
 /* A tick box to compare: an item's original (key the item's code) or one of its renditions (key <code>/<rendition id>);
    three at most. */
 function pickTick(key, what) {
@@ -220,7 +211,8 @@ function originalLine(it, o) {
     video || !it.large ? h('span', { class: 'lib-tick-space' }) : pickTick(it.id, `${it.name}, the original`),
     h('span', { class: 'lib-part-icon' }, video ? shapeOf(o, it.originals) : glyph(GLYPHS.photo, 16)),
     h('span', { class: 'lib-part-what' }, video ? `${o.w} × ${o.h}${o.seconds ? `, ${o.seconds} seconds` : ''}${left ? ' (left out)' : ''}` : `Original${o.w ? `, ${o.w} × ${o.h}` : ''} (${ext})`),
-    h('span', { class: 'lib-part-uses' }), h('span', { class: 'lib-size' }, MB(o.bytes)), video ? versionControl(it, o) : h('span', { class: 'lib-bin-space' }));
+    h('span', { class: 'lib-part-uses' }), h('span', { class: 'lib-size' }, MB(o.bytes)), h('span', { class: 'lib-bin-space' }),
+    video ? versionControl(it, o) : h('span', { class: 'lib-bin-space' }));
 }
 
 /* A rendition, on a line of its own: what it is, as a symbol and its size, its weight, its users' marks, and a
@@ -231,11 +223,15 @@ function renditionLine(it, r) {
   const what = video ? `${r.name}: ${n} version${n === 1 ? '' : 's'} with first and last frames${day ? `, ${day}` : ''}`
     : `${r.name}: ${n} size${n === 1 ? '' : 's'}, up to ${r.w} × ${r.h}${day ? `, ${day}` : ''}`;
   const uses = strongest(r.uses);
-  return h('div', { class: 'lib-part', title: `${r.kind === 'flat' ? 'Squared up in the darkroom' : video ? 'The video as shown' : 'The photo as it is'} (${r.files.length} files)` },
+  const how = r.kind === 'flat' ? 'Squared up in the darkroom' : video ? 'The video as shown'
+    : Object.keys(r.settings || {}).length ? 'Prepared in the darkroom' : 'The photo as it is';
+  return h('div', { class: 'lib-part', title: `${how} (${r.files.length} files)` },
     video ? h('span', { class: 'lib-tick-space' }) : pickTick(`${it.id}/${r.id}`, `${it.name}, ${r.name}`),
     h('span', { class: 'lib-part-icon' }, glyph(video ? GLYPHS.frames : GLYPHS.sizes, 16)), h('span', { class: 'lib-part-what' }, what),
     h('span', { class: 'lib-part-uses' }, ...useMarks(uses, it.name).map((m) => { m.lastChild && m.lastChild.nodeType === 3 && m.lastChild.remove(); return m; })),
     h('span', { class: 'lib-size' }, MB(r.bytes)),
+    video ? h('span', { class: 'lib-bin-space' }) : h('button', { class: 'lib-bin small', title: 'Hang it in the Gallery: a new painting with this picture', 'aria-label': 'Hang it in the Gallery',
+      onclick: () => hang(r, it.recipes.find((c) => c.id === r.recipe)?.label || it.name) }, glyph(GLYPHS.frame, 14)),
     !r.uses.length
       ? h('button', { class: 'lib-bin small danger', title: 'Delete this rendition for good', 'aria-label': 'Delete this rendition for good',
         onclick: () => deleteRendition(it, r) }, glyph(GLYPHS.bin, 14))

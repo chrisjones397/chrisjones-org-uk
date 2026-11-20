@@ -4,8 +4,8 @@
    A Library item is one thing uploaded: a photo, or a video (one or several versions, a set). Its code, 8 hex
    digits, never changes; its name is the Library's own, changed freely. Under it:
      originals   the untouched uploaded files: a photo has one, a video one for each version;
-     recipes     the darkroom settings applied to it (flat: four corners, squared up; scene: as it is; video:
-                 its stills), several if several things were made from one photo;
+     recipes     the darkroom settings applied to it (flat: white balance, four corners, squared up; scene: white
+                 balance, straightened and cropped; video: its stills), several if several things were made from one photo;
      renditions  each frozen set of files a recipe produced (a picture at several sizes and a link preview; or a
                  video's versions with their first and last frames). Never changed: a new result is a new one.
    Files are known only by the digest of their bytes (table file; R2 key = digest; paths.js). The same bytes are
@@ -67,8 +67,9 @@ async function allUses(env) {
        recipes: [{ id, kind, label, settings, renditions: [rendition (media.js) + { bytes, uses }] }],
        uses, bytes, files (distinct files and their weight),
        thumb (a small picture's address: the item's own, made at upload, or its newest rendition's smallest size),
-       large (to see it large: a photo's original if browsers can show its type, else its newest rendition's largest),
-       site, painting (a filter on what it is made or used for: a site picture, a painting; a new upload is neither) } */
+       large (to see it large: a photo's original if browsers can show its type, else its newest rendition's largest) }
+   What an item is used for (a painting, a background) is read from its uses, not from its recipes' kinds: a
+   recipe says how a picture was prepared, never where it goes (step 4 slice 4). */
 async function survey(env) {
   const [items, originals, recipes] = await env.DB.batch([
     env.DB.prepare('SELECT l.id, l.kind, l.name, l.alt, l.credit, l.added, l.thumb, f.type AS thumb_type FROM library l LEFT JOIN file f ON f.digest = l.thumb'),
@@ -109,7 +110,7 @@ async function survey(env) {
     return { ...rest, bytes: [...weigh.values()].reduce((a, b) => a + b, 0), files: weigh.size,
       thumb: thumb ? fileUrl({ digest: thumb, type: thumbType }) : pics.length ? pics[0].url : null,
       large: shown || (pics.length ? pics[pics.length - 1].url : null),
-      site: it.recipes.some((c) => c.kind !== 'flat'), painting: it.recipes.some((c) => c.kind === 'flat') };
+    };
   });
 }
 
@@ -237,22 +238,26 @@ export async function addOriginal(env, id, digest) {
   return { id, digest };
 }
 
-/* A recipe's settings, checked: how a picture was made from its original (edit/darkroom.js). flat: nothing (as
-   supplied), or white balance 'none' or 'picks' (from spots) and the four corners it was squared up from, all
-   as fractions of the original's width and height; brightness (how bright the white comes out, 0.5 to 1) and
-   warmth (the share of the light's colour kept, 0 to 1) go with any white balance; the corners are in the order
-   the painting's top left, top right, bottom right and bottom left, so they also say which way up it goes (and
-   whether it's mirrored); shape is the artwork's measured size [height, width] when the crop took that shape
-   (the artwork drives the recipe, never the reverse); white_paper: a drawing on white paper (reopening one with
-   no other choices starts from "Find the paper"). scene and video: no choices yet. */
+/* A recipe's settings, checked: how a picture was made from its original (edit/darkroom.js), all positions as
+   fractions of the original's width and height. Every photo recipe may have white balance: 'none' or 'picks'
+   (from spots), with brightness (how bright the white comes out, 0.5 to 1) and warmth (the share of the light's
+   colour kept, 0 to 1). Then, by kind:
+   flat (a flat thing squared up): the four corners, in the order its top left, top right, bottom right and
+   bottom left, so they also say which way up it goes (and whether it's mirrored); shape, the proportions it was
+   squared up to [height, width] when known (typed in the darkroom, or a painting's measured size offered there:
+   the artwork drives the recipe, never the reverse); white_paper: a drawing on white paper (reopening one with
+   no other choices starts from "Find the paper").
+   scene (a scene straightened and cropped, step 4 slice 4): angle, the turn in degrees (clockwise positive) about
+   the photo's centre, and crop [left, top, right, bottom] of the turned photo's frame (the original's size).
+   video: no choices yet. {} = as supplied. */
 function settingsOf(kind, p) {
-  if (kind !== 'flat') return {};
+  if (kind === 'video') return {};
   if (p == null || typeof p !== 'object' || Array.isArray(p)) throw new Bad('Bad settings');
   const num = (v, what) => { if (typeof v !== 'number' || !isFinite(v)) throw new Bad(`${what} must be a number`); return v; };
+  const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
   const out = {};
   if (p.white != null) {
     if (!['none', 'picks'].includes(p.white)) throw new Bad('Bad white balance');
-    const frac = (v) => { num(v, 'A position'); if (v < 0 || v > 1) throw new Bad('A position is off the photo'); return Math.round(v * 1e5) / 1e5; };
     const points = (a, lo, hi, what) => {
       if (!Array.isArray(a) || a.length < lo || a.length > hi) throw new Bad(`Bad ${what}`);
       return a.map((q) => { if (!Array.isArray(q) || q.length !== 2) throw new Bad(`Bad ${what}`); return q.map(frac); });
@@ -264,13 +269,25 @@ function settingsOf(kind, p) {
       out.brightness = share(p.brightness ?? 1, 0.5, 'brightness');
       out.warmth = share(p.warmth ?? 0, 0, 'warmth');
     }
-    if (p.corners != null) out.corners = points(p.corners, 4, 4, 'corners');
-    if (p.shape != null) {
+    if (kind === 'flat' && p.corners != null) out.corners = points(p.corners, 4, 4, 'corners');
+    if (kind === 'flat' && p.shape != null) {
       if (!Array.isArray(p.shape) || p.shape.length !== 2 || !p.shape.every((v) => num(v, 'Size') > 0 && v < 10000)) throw new Bad('Bad size');
       out.shape = p.shape.slice();
     }
   }
-  if (p.white_paper === true) out.white_paper = true;
+  if (kind === 'scene') {
+    if (p.angle != null && num(p.angle, 'The angle') !== 0) {
+      if (Math.abs(p.angle) > 45) throw new Bad('The angle must be within 45 degrees');
+      out.angle = Math.round(p.angle * 100) / 100;
+    }
+    if (p.crop != null) {
+      if (!Array.isArray(p.crop) || p.crop.length !== 4) throw new Bad('Bad crop');
+      const c = p.crop.map(frac);
+      if (!(c[2] - c[0] > 0.01 && c[3] - c[1] > 0.01)) throw new Bad('The crop is too small');
+      out.crop = c;
+    }
+  }
+  if (kind === 'flat' && p.white_paper === true) out.white_paper = true;
   return out;
 }
 
@@ -360,6 +377,18 @@ export async function describe(env, b) {
   const r = await env.DB.prepare(`UPDATE library SET ${sets.join(', ')} WHERE id = ?`).bind(...binds, id).run();
   if (!r.meta.changes) throw new Bad('No such item', 404);
   return out;
+}
+
+/* POST /edit/api/library/recipe { id, label }: a recipe's label, to tell several made from one photo apart
+   ('' = none). Saves at once, like the item's name. */
+export async function nameRecipe(env, who, b) {
+  const id = Number(b.id);
+  if (!Number.isInteger(id) || id < 1) throw new Bad('Bad recipe');
+  if (typeof b.label !== 'string' || b.label.length > 120) throw new Bad('A label must be 0 to 120 characters');
+  const label = b.label.trim();
+  const r = await env.DB.prepare('UPDATE recipe SET label = ?, changed = ?, changed_by = ? WHERE id = ?').bind(label, now(), who, id).run();
+  if (!r.meta.changes) throw new Bad('No such recipe', 404);
+  return { id, label };
 }
 
 /* POST /edit/api/library/delete { rendition } or { id, history? }: a rendition, or an item, for good (see the

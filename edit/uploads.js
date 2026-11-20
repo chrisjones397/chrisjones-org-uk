@@ -9,11 +9,10 @@ import { SOURCE_MAX, scaled, resized } from './darkroom.js';
 import { MB } from './dom.js';
 import { fetchFor, call, known } from './server.js';
 
-export const WIDTHS = [300, 480, 768, 1024, 1536, 2560], PREVIEW = 1200;
+/* Every picture the darkroom makes (step 4 slice 4: one set, whatever it is used for, since a picture may be a
+   painting, a background or both) is stored at these widths, never larger than itself, with a link preview. */
+export const WIDTHS = [300, 480, 768, 1024, 1536, 2560, 3840], PREVIEW = 1200, MAX_OUT = WIDTHS[WIDTHS.length - 1];
 
-/* Sections with bg can have a photo or video behind them (entries bg-<section>; BACKGROUNDS in editor.js, the
-   server, must list the same). They fill the window, so their sizes go up to a 4K screen's width. */
-const BG_WIDTHS = [768, 1024, 1536, 2560, 3840];
 /* A video's first and last frames (once per shape): shown while it loads, where it rests, and to visitors who
    ask for reduced motion. Up to 2560 across and a little more compressed than photos: the video itself takes
    over on larger screens, and a painted frame at 3840 was 3 to 4 megabytes. */
@@ -58,8 +57,8 @@ export async function keepOriginal(file, name, known_, say, thumb) {
 
 /* A photo into the Library (step 4, slice 3: the Library is the only upload): only its original is kept, as
    uploaded, with one small picture of it (THUMB pixels across) for the Library's rows and the pickers' tiles.
-   Nothing else is made: its sizes come later, from a recipe (a painting squared up in the darkroom, or a site
-   picture as it is: sceneRendition). The same photo again is the item it already is. Returns keepOriginal's
+   Nothing else is made: its sizes come later, from a recipe made in the darkroom (or, chosen unprepared as a
+   background, as it is: sceneRendition). The same photo again is the item it already is. Returns keepOriginal's
    answer. */
 const THUMB = 480;
 export async function libraryPhoto(file, name, say) {
@@ -76,14 +75,12 @@ export async function originalOf(item) {
   return got.blob();
 }
 
-/* A site picture from a photo item: a rendition of sizes (BG_WIDTHS) made from its original as it is (recipe
-   kind scene: no settings yet). Returns the rendition. */
+/* A picture of a photo item as it is (a new recipe of kind scene with no choices: level, the whole photo), for
+   when a photo with nothing made from it yet is chosen as a background. Returns the rendition. */
 export async function sceneRendition(item, say) {
   say('Fetching the original…');
   const src = await photoOf(await originalOf(item), say);
-  const files = await storeSizes(src, say);
-  const { rendition } = await call('POST', 'library/rendition', { item, kind: 'scene', files });
-  return known(rendition);
+  return storeImages(item, null, { out: src, W: src.width }, {}, { kind: 'scene', label: '' }, say);
 }
 
 /* Video files into the Library: each checked (videoFacts) and stored as made; a new item (id null), or more
@@ -159,7 +156,7 @@ async function photoOf(blob, say) {
 
 /* Make JPEG sizes of a picture (BG_WIDTHS, or list; never larger than the picture) and store them; returns them
    as a rendition's files: [{ digest, role: 'size' }]. */
-async function storeSizes(src, say, what = 'sizes', list = BG_WIDTHS, quality) {
+async function storeSizes(src, say, what, list, quality) {
   const widths = [...new Set(list.filter((w) => w < src.width).concat(Math.min(src.width, list[list.length - 1])))];
   const out = [];
   for (const [n, w] of widths.entries()) {
@@ -249,11 +246,12 @@ async function framesOf(src, say) {
   return { w, h: hh, seconds, first, last };
 }
 
-/* Make every size of a painting's picture from the darkroom's result, store them, and record them as a new
-   rendition of the photo's Library item (id): the next one of `recipe` (the recipe re-edited, taking these
-   settings), or the first of a new recipe (recipe null; label tells it apart when several things are made from
-   one photo). A new rendition each time, so the earlier pictures stay for History. Returns the rendition. */
-export async function storeImages(id, recipe, { out, W }, settings, label, say) {
+/* Make every size of a picture from the darkroom's result, store them, and record them as a new rendition of
+   the photo's Library item (id): the next one of `recipe` (the recipe re-edited, taking these settings), or the
+   first of a new recipe (recipe null; fresh: { kind: flat or scene, label, which tells it apart when several
+   things are made from one photo }). A new rendition each time, so the earlier pictures stay for History.
+   Returns the rendition. */
+export async function storeImages(id, recipe, { out, W }, settings, fresh, say) {
   const widths = [...new Set(WIDTHS.filter((w) => w < W).concat(Math.min(W, WIDTHS[WIDTHS.length - 1])))];
   const jobs = widths.map((w) => ['size', w]).concat([['preview', Math.min(PREVIEW, W)]]);
   const files = [];
@@ -261,6 +259,6 @@ export async function storeImages(id, recipe, { out, W }, settings, label, say) 
     say(`Making and uploading image sizes: ${n + 1} of ${jobs.length}`);
     files.push({ digest: await putFile(await resized(out, Math.min(w, out.width)), 'image/jpeg'), role });
   }
-  const { rendition } = await call('POST', 'library/rendition', { item: id, ...(recipe ? { recipe } : { kind: 'flat', label }), settings, files });
+  const { rendition } = await call('POST', 'library/rendition', { item: id, ...(recipe ? { recipe } : { kind: fresh.kind, label: fresh.label || '' }), settings, files });
   return known(rendition);
 }

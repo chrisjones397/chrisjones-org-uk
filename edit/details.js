@@ -1,4 +1,4 @@
-/* A painting's medium, size and year: the fields shared by the add form and a painting's Edit form. */
+/* A painting's medium, size and year: the fields of a painting's Edit form. */
 
 import { h } from './dom.js';
 import { state, current } from './state.js';
@@ -8,7 +8,8 @@ import { state, current } from './state.js';
    What drives what (Christopher's decision, Nov 2026): a measured size is the dog. Measured: the height and width
    are as typed and fix the picture's shape when it's squared up. Not measured (estimated: true in the data):
    the shape comes from the photo, and the size only sets the scale: the side last typed is kept and the other
-   follows the picture's proportions (f.ratio, width over height, set by the darkroom), greyed. Whether visitors
+   follows the picture's proportions (f.ratio, width over height, from its picture), greyed. Both left empty: no
+   size (a painting just hung, its details still to come). Whether visitors
    see the size is a separate tick (size_shown), on by default when measured, off when not. */
 export function detailsFields(f, d, onSize) {
   const media = [...new Set(state.entries.filter((e) => e.kind === 'artwork' && current(e)).map((e) => current(e).medium).filter(Boolean))].sort();
@@ -64,14 +65,15 @@ export function detailsFields(f, d, onSize) {
 /* The fields' values, or an error message. */
 export function detailsOf(f) {
   const hgt = parseFloat(f.height.value), wid = parseFloat(f.width.value);
+  if (!f.height.value.trim() && !f.width.value.trim()) return { medium: f.medium.value.trim(), cm: null, year: f.year.value.trim() };
   if (!(hgt > 0) || !(wid > 0)) return { error: 'Give the height and width in centimetres' };
   return { medium: f.medium.value.trim(), cm: [Math.round(hgt * 10) / 10, Math.round(wid * 10) / 10], year: f.year.value.trim(),
     ...(f.estimated.checked ? { estimated: true } : {}), size_shown: f.shown.checked };
 }
 
 /* Forms are rebuilt whenever the page re-renders (after any save, e.g. adding a genre mid-way), so what has been
-   typed into an open form is carried over from its previous copy: the add form's on its darkroom (dr.fields),
-   each open Edit form's in painting.js editFields. */
+   typed into an open form is carried over from its previous copy: each open Edit form's in painting.js
+   editFields. */
 export function carry(from, to) {
   if (!from) return;
   for (const k of ['title', 'medium', 'height', 'width', 'year']) if (from[k] && to[k]) to[k].value = from[k].value;

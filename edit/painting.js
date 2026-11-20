@@ -1,28 +1,20 @@
 /* A painting (an artwork) in the Gallery view: its row, its Edit form (each field saves itself), its star, and
-   its picture, which is reopened in the darkroom and stores itself as a new rendition of its recipe. */
+   its picture (chosen from those prepared in the darkroom, which is a view of its own). */
 
 import { detailsLine } from '/paths.js';
-import { h, toast, glyph, GLYPHS } from './dom.js';
+import { h, glyph, GLYPHS } from './dom.js';
 import { state, byId, draftOf, changed, current, isHidden, paintingsIn, thumb, picOf, pictureAt } from './state.js';
-import { call, save, discard, beforeDiscard, libraryReady } from './server.js';
+import { save, discard, beforeDiscard, loadLibrary } from './server.js';
 import { render } from './render.js';
 import { badge, hideButton } from './widgets.js';
 import { detailsFields, detailsOf, carry, sizeNote } from './details.js';
-import { darkroom } from './picture.js';
-import { storeImages, originalOf } from './uploads.js';
-import { libraryTiles, newestFirst } from './picker.js';
+import { preparedPictures, preparedTiles } from './picker.js';
 
 const open = new Set();             // paintings whose edit form is open
 const editFields = new Map();       // painting id -> its Edit form's fields, while open
 
 /* Discarding a painting's changes: an open Edit form starts again from the published version. */
-beforeDiscard.add((ids) => {
-  for (const id of ids) {
-    const re = reopened.get(id);
-    if (re) clearTimeout(re.timer);
-    reopened.delete(id); editFields.delete(id);
-  }
-});
+beforeDiscard.add((ids) => { for (const id of ids) editFields.delete(id); });
 
 /* Open a painting's Edit form (the Library's uses marks lead here). */
 export function openPainting(id) { open.add(id); }
@@ -49,10 +41,10 @@ export function paintingRow(e, items, i, secs) {
   const f = {}, k = (name) => `${e.id}:${name}`;
   const form = h('div', { class: 'edit' },
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
-    ...detailsFields(f, d, () => { const re = reopened.get(e.id); if (re) re.dr.sizeChanged(); }),
+    ...detailsFields(f, d),
     h('label', {}, 'Genre'), f.genre = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.genre }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
-    ...pictureFields(e, d, f),
+    ...pictureFields(e, d),
     h('p', { class: 'hint' }, `Address: /gallery/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
       // never published: undoing would take it away altogether, which is what Remove (with its question) is for
@@ -64,6 +56,8 @@ export function paintingRow(e, items, i, secs) {
     el.dataset.k = k(name);
     el.addEventListener('change', () => savePainting(e.id, f, k(name)));
   }
+  const pic = picOf(d);
+  if (pic && (!d.cm || d.estimated)) f.ratio = pic.w / pic.h;   // not measured: the side not typed follows its picture's proportions
   carry(editFields.get(e.id), f);
   editFields.set(e.id, f);
   return [row, form];
@@ -92,6 +86,7 @@ function savePainting(id, f, key) {
     const e = byId(id);
     if (!e || e.draft == null) return null;
     const d = draftOf(e), det = detailsOf(f), title = f.title.value.trim();
+    if (det.error && !(f.height.value.trim() && f.width.value.trim())) return null;   // one side typed: wait for the other
     if (det.error) throw new Error(det.error);
     if (!title) throw new Error('Give it a title');
     const moved = f.genre.value !== d.genre;
@@ -101,97 +96,42 @@ function savePainting(id, f, key) {
   }, null, key);
 }
 
-/* Closing a painting's Edit form: a picture change still waiting to be stored is stored now. */
-function closeEdit(id) {
-  const re = reopened.get(id);
-  if (re && re.timer) { clearTimeout(re.timer); re.timer = null; storePicture(id, re); }
-  open.delete(id); reopened.delete(id); editFields.delete(id);
-}
+/* Closing a painting's Edit form. */
+function closeEdit(id) { open.delete(id); editFields.delete(id); picking.delete(id); }
 
-/* A painting's picture saves itself too: once the darkroom's choices have rested for a moment (PICTURE_REST), its
-   sizes are made and stored as its recipe's next rendition (the recipe taking the new settings) and the draft
-   names it. A rendition made for an earlier change in this same sitting, which nothing else can be using, is
-   deleted once replaced, so trying things out doesn't fill the Library. Going back to the choices it opened with
-   (Back to saved) names its own rendition again, making nothing. A replaced photo (another Library item) gets
-   one recipe of its own, however many changes follow. */
-const PICTURE_REST = 1200;
-function pictureChanged(id, re) {
-  clearTimeout(re.timer);
-  re.timer = setTimeout(() => { re.timer = null; storePicture(id, re); }, PICTURE_REST);
-}
-async function storePicture(id, re) {
-  if (re.running) { re.again = true; return; }
-  const dr = re.dr;
-  if (!dr.ready) return;
-  const want = dr.changed() ? JSON.stringify(dr.record()) + (dr.replacement ? `|${dr.replacement.item}` : '') : 'opened';
-  if (want === re.saved) return;
-  re.running = true;
-  const say = (t) => dr.say(t);
-  try {
-    let pic = re.opened;
-    if (want !== 'opened') {
-      const e = byId(id), title = e ? current(e).title : 'Painting';
-      const settings = { ...dr.record(), ...(re.paper ? { white_paper: true } : {}) };
-      let at = re;                                       // where the new rendition goes: { item, recipe }
-      if (dr.replacement) {
-        const item = dr.replacement.item;
-        if (!re.kept || re.kept.item !== item) re.kept = { item, recipe: item === re.item ? re.recipe : null };
-        at = re.kept;
-      }
-      const made = await storeImages(at.item, at.recipe, dr.result(), settings, title, say);   // the title labels a new recipe
-      at.recipe = made.recipe;
-      pic = { rendition: made.id };
-      re.made.add(made.id);
-    }
-    let before = null;
-    const out = await save(() => {
-      const e = byId(id);
-      if (!e || e.draft == null) return null;
-      before = draftOf(e);
-      return [{ id, kind: 'artwork', data: { ...before, ...pic } }];
-    }, null, `${id}:picture`);
-    if (!out) return;
-    re.saved = want;
-    say('');
-    const old = before && before.rendition;
-    if (old && re.made.has(old) && old !== pic.rendition) {
-      re.made.delete(old);
-      call('POST', 'library/delete', { rendition: old }).catch(() => { /* still used: it stays */ });
-    }
-  } catch (err) {
-    say(''); toast(err.message, true);
-  } finally {
-    re.running = false;
-    if (re.again) { re.again = false; storePicture(id, re); }
-  }
-}
-
-/* Reopening a painting's picture: its darkroom starts with the saved choices summarised (its rendition's
-   settings), and opening a section reads the item's original back from storage and starts from those choices
-   (or, for paintings moved from git, which have none: the whole photo, with "Find the paper"'s spots if it's a
-   drawing on white paper, white_paper). */
-const reopened = new Map();         // painting id -> { dr }, while its Edit form is open
-function pictureFields(e, d, f) {
+/* A painting's picture: one prepared in the darkroom (step 4 slice 4: the Gallery arranges, the darkroom
+   prepares). Shown as it is, with how it was prepared; a button to choose another prepared picture (tiles), and
+   one to open its recipe in the darkroom, which brings back here a new picture as a draft. A mark when its
+   proportions don't match the painting's measured size (more than 1.5 per cent out): squaring it up to that size
+   is done in the darkroom, which offers the size. */
+const picking = new Set();          // paintings whose picture tiles are open
+function pictureFields(e, d) {
   const r = picOf(d);
-  if (!state.media || !r) return [];
-  let re = reopened.get(e.id);
-  if (!re) {
-    const { white_paper: paper, ...choices } = r.settings || {};
-    const process = choices.white ? choices : null, white = paper ? 'paper' : 'none';
-    re = { saved: 'opened', made: new Set(), timer: null, opened: { rendition: d.rendition }, item: r.item, recipe: r.recipe, paper: !!paper };
-    re.dr = darkroom({
-      onChange: () => pictureChanged(e.id, re),
-      previous: pictureAt(d, 1024),                  // the painting's current picture, at a size fit for comparing
-      saved: process || { white },
-      start: process ? { process } : { white, guess: false },
-      fetch: async () => ({ blob: await originalOf(r.item) }),
-      library: async (use) => libraryTiles(newestFirst((await libraryReady()).items.filter((it) => it.kind === 'photo')), use),
-      original: originalOf,
-    });
-    reopened.set(e.id, re);
+  if (!state.media) return [];
+  const key = `${e.id}:picture`;
+  const off = r && d.cm && !d.estimated && Math.abs(Math.log((r.w / r.h) / (d.cm[1] / d.cm[0]))) > 0.015;
+  const out = [h('label', { 'data-k': key }, 'Picture'),
+    h('div', { class: 'row pic-row' },
+      r ? h('img', { class: 'pic-now', src: pictureAt(d, 480), alt: '' }) : h('span', { class: 'lib-pick-none pic-now' }, glyph(GLYPHS.photo, 28)),
+      h('div', { class: 'pic-about' },
+        h('span', { class: 'muted' }, r ? `${r.kind === 'flat' ? 'Squared up' : 'Straightened and cropped'}${r.label ? ` (${r.label})` : ''}, ${r.w} × ${r.h} pixels` : 'Its picture isn\'t known here'),
+        off ? h('span', { class: 'pic-off', title: `Its picture's proportions don't match its measured size, ${d.cm[0]} × ${d.cm[1]} centimetres: open it in the darkroom to square it up to that` },
+          glyph(GLYPHS.square, 14), ' Not its measured proportions') : null,
+        h('div', { class: 'row' },
+          h('button', { class: 'icon-btn', 'aria-expanded': String(picking.has(e.id)), title: 'Choose a different picture, from those prepared in the darkroom', 'aria-label': 'Choose a different picture',
+            onclick: () => { picking.has(e.id) ? picking.delete(e.id) : picking.add(e.id); render(); } }, glyph(GLYPHS.photo), glyph(GLYPHS.swap, 14)),
+          r ? h('a', { class: 'icon-btn', href: `#darkroom/${r.item}/${r.recipe}`, title: 'Open its picture in the darkroom (white balance, corners, proportions); a new picture comes back here as a draft',
+            'aria-label': 'Open in the darkroom' }, glyph(GLYPHS.darkroom)) : null)))];
+  if (picking.has(e.id)) {
+    if (!state.library) { loadLibrary(); out.push(h('p', { class: 'hint' }, 'Loading the Library…')); }
+    else {
+      out.push(preparedTiles(preparedPictures(state.library.items), (x) => {
+        picking.delete(e.id);
+        save(() => { const x0 = byId(e.id); return x0 && x0.draft != null ? [{ id: e.id, kind: 'artwork', data: { ...draftOf(x0), rendition: x.r.id } }] : null; }, null, key);
+      }, d.rendition));
+    }
   }
-  re.dr.attach(f);
-  return [h('label', { 'data-k': `${e.id}:picture` }, 'Picture'), re.dr.el];
+  return out;
 }
 
 function movePainting(items, i, dir) {

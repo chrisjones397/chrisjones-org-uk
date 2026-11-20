@@ -1,20 +1,25 @@
-/* The darkroom as a form: the steps that make a painting's picture from a photo (edit/darkroom.js does the
-   pixels and the full-screen views). */
+/* The darkroom as a form: the steps that prepare a picture from a photo (edit/darkroom.js does the pixels and
+   the full-screen views). The darkroom view (darkroom-view.js) is its one home (step 4 slice 4): it prepares any
+   photo, whatever the picture is then used for. */
 
-import { SOURCE_MAX, scaled, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME } from './darkroom.js';
+import { SOURCE_MAX, scaled, whiteBalanced, findPaper, fullView, cropSize, squaredUp, guessCorners, turnOf, describeTurn, wholePhoto, labelled, ordered, FRAME,
+  cropView, straightened, levelAndWhole } from './darkroom.js';
 import { h, toast } from './dom.js';
-import { detailsOf } from './details.js';
-import { WIDTHS } from './uploads.js';
+import { MAX_OUT } from './uploads.js';
 
-/* The steps that make a painting's picture from a photo: white balance, then corners and shape, each a section
-   that opens with a tap and shows a summary line while closed, under the photo and the result side by side. Used
-   by the add form (sections open once a photo is chosen) and by a painting's Edit form (opts below), where the
+/* The steps that prepare a picture from a photo: white balance, then, for a flat thing (opts.kind 'flat'),
+   corners and proportions, or, for a scene ('scene'), straighten and crop; each a section that opens with a tap
+   and shows a summary line while closed, under the photo and the result side by side. Used for a new recipe
+   (sections open once the photo is loaded) and for reopening one (opts below), where the
    sections start closed with the saved choices summarised, and opening one fetches the original from R2. Then the
    photo is shown small, with the previous and the new results side by side, large; pressing and holding the new
    one shows the previous in its place. The saved choices stay in view as ghosts: a faint mark on each slider,
    faint corners and spots in the full-screen views, and "Back to saved". Its element is kept across re-renders
-   of the page; the form it sits in gives it the details fields (height, width, measured or not) with attach().
-   opts, for reopening: previous (address of the painting's current picture), saved (its choices, as summarised
+   of the page.
+   Proportions (flat): a flat thing is squared up to the proportions typed here (height and width, in any unit),
+   or, left off, to those its photo's perspective gives. opts.suggest: [{ label, shape }], known sizes offered
+   with one press (a painting using the picture, measured): the painting drives the recipe, never the reverse.
+   opts, for reopening: previous (address of the recipe's current picture), saved (its choices, as summarised
    before the original is read), start (load()'s options for those choices), fetch (resolves with the
    original's { blob }), and for "Replace photo…": library (given what to do with the item picked, resolves
    with the Library's photos as tiles) and original (resolves with an item's original, a Blob).
@@ -26,6 +31,7 @@ import { WIDTHS } from './uploads.js';
    saved" returns to the old photo and its choices, and their pictures.
    opts.onChange, for reopening: called whenever the result has been made afresh (the form stores it once it rests). */
 const fieldsetOf = (...kids) => h('fieldset', { class: 'step-body', disabled: true }, ...kids);
+const num = (v) => String(Math.round(v * 10) / 10);
 function whiteText(r) {
   const n = (r.spots || []).length;
   if (!r.white || r.white === 'none' || (r.white === 'picks' && !n)) return 'None: as photographed';
@@ -36,12 +42,18 @@ function whiteText(r) {
 function cornersText(r) {
   const cropped = !!(r.corners && !wholePhoto(r.corners)), turned = r.corners ? describeTurn(turnOf(r.corners)) : '';
   return (cropped ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '')
-    + (cropped ? (r.shape ? `, to ${r.shape[0]} × ${r.shape[1]} cm` : ', shape from the photo') : '');
+    + (cropped ? (r.shape ? `, to ${num(r.shape[0])} × ${num(r.shape[1])}` : ', proportions from the photo') : '');
+}
+function sceneText(r) {
+  if (levelAndWhole(r)) return 'Level, the whole photo';
+  const a = r.angle || 0;
+  return [a ? `Turned ${Math.abs(a).toFixed(1)}° ${a > 0 ? 'clockwise' : 'anticlockwise'}` : 'Level',
+    r.crop && !r.crop.every((v, i) => Math.abs(v - [0, 0, 1, 1][i]) < 1e-4) ? 'cropped' : 'the whole photo'].join(', ');
 }
 export function darkroom(opts = {}) {
-  const reopen = !!opts.fetch;
+  const reopen = !!opts.fetch, scene = opts.kind === 'scene';
   const g = {};
-  let F = {}, p = null, baseline = '', saved = null, startWith = {}, fetching = null;
+  let p = null, baseline = '', saved = null, startWith = {}, fetching = null;
   let replacement = null, oldBlob = null, ghost = null;     // ghost: the saved choices that still apply to the photo shown
   let timer;
   const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
@@ -76,12 +88,26 @@ export function darkroom(opts = {}) {
             const t = turnOf(p.corners);                                  // keep which way up, take in the whole photo
             p.corners = t.r || t.m ? labelled(ordered(FRAME), t.r, t.m) : null; update();
           } }, 'Whole photo')),
-        g.shapeRow = h('label', { class: 'tick' }, g.shape = h('input', { type: 'checkbox', checked: true, onchange: () => update() }),
-          g.shapeTick = h('span', {})),
-        g.shapeText = h('p', { class: 'hint shape-note' })))),
+        h('div', { class: 'row dr-shape' },
+          h('label', { class: 'tick', title: 'Square it up to these proportions (its measured height and width, in any unit); left off, the photo\'s perspective decides' },
+            g.shape = h('input', { type: 'checkbox', onchange: () => update() }), 'Known proportions'),
+          g.shapeH = h('input', { type: 'number', inputmode: 'decimal', min: '0.1', step: '0.1', placeholder: 'Height', 'aria-label': 'Height',
+            oninput: () => { g.shape.checked = shapeTyped(); later(update); } }),
+          h('span', { class: 'muted' }, '×'),
+          g.shapeW = h('input', { type: 'number', inputmode: 'decimal', min: '0.1', step: '0.1', placeholder: 'Width', 'aria-label': 'Width',
+            oninput: () => { g.shape.checked = shapeTyped(); later(update); } })),
+        g.suggest = h('div', { class: 'row dr-suggest' }, ...(opts.suggest || []).map((x) => h('button', { type: 'button', class: 'small',
+          title: `Use ${x.label}'s measured size`, onclick: () => { g.shapeH.value = num(x.shape[0]); g.shapeW.value = num(x.shape[1]); g.shape.checked = true; update(); } },
+          `${x.label}: ${num(x.shape[0])} × ${num(x.shape[1])} centimetres`))),
+        g.shapeText = h('p', { class: 'hint shape-note' }))),
+      g.sceneBox = step('Straighten and crop', g.sceneSum = h('span', { class: 'step-sum muted' }), g.sceneBody = fieldsetOf(
+        h('div', { class: 'row' },
+          g.sceneNote = h('span', { class: 'grow muted' }),
+          h('button', { type: 'button', title: 'Turn it level and crop it, full screen', onclick: () => setScene() }, 'Straighten and crop…'),
+          g.sceneWhole = h('button', { type: 'button', title: 'Level, the whole photo', onclick: () => { if (p) { p.angle = 0; p.crop = null; update(); } } }, 'Whole photo'))))),
     h('div', { class: 'row dr-foot' },
       g.status = h('p', { class: 'hint grow' }),
-      g.replaceBtn = h('button', { type: 'button', hidden: !reopen || !opts.library, title: 'Use a better photo, or a higher-resolution copy, of this painting: choose it from the Library', onclick: () => pickReplacement() }, 'Replace photo…'),
+      g.replaceBtn = h('button', { type: 'button', hidden: !reopen || !opts.library, title: 'Use a better photo, or a higher-resolution copy, of the same thing: choose it from the Library', onclick: () => pickReplacement() }, 'Replace photo…'),
       g.back = h('button', { type: 'button', hidden: true, title: 'Put every choice back as it was when you opened it (and the photo, if replaced)', onclick: () => backToSaved() }, 'Back to as it was')),
     g.picker = h('div', { class: 'dr-picker', hidden: true }),
     g.replaceNote = h('p', { class: 'hint stored-note' }));
@@ -99,11 +125,13 @@ export function darkroom(opts = {}) {
     later(update, 250);
   }
   slid(); clearTimeout(timer);
+  (scene ? g.cornerBox : g.sceneBox).hidden = true;
+  const shapeTyped = () => parseFloat(g.shapeH.value) > 0 && parseFloat(g.shapeW.value) > 0;
 
-  /* The painting's picture as it is now (reopening), in a figure. */
+  /* The picture as it is now (reopening), in a figure. */
   const previous = () => h('img', { class: 'shot', src: opts.previous, alt: '', draggable: false });
   if (reopen) {
-    g.whiteSum.textContent = whiteText(opts.saved); g.cornerSum.textContent = cornersText(opts.saved);
+    g.whiteSum.textContent = whiteText(opts.saved); g.cornerSum.textContent = cornersText(opts.saved); g.sceneSum.textContent = sceneText(opts.saved);
     g.compare.hidden = false; g.compare.classList.add('one');
     g.compare.append(h('figure', {}, previous(), h('figcaption', {}, 'As it is now')));
   }
@@ -118,7 +146,7 @@ export function darkroom(opts = {}) {
         oldBlob = got.blob;
         if (!(await load(got.blob, opts.start))) throw new Error('This browser can\'t read the original');
       } catch (err) {
-        g.status.textContent = ''; g.whiteBox.open = g.cornerBox.open = false; toast(err.message, true);
+        g.status.textContent = ''; g.whiteBox.open = g.cornerBox.open = g.sceneBox.open = false; toast(err.message, true);
       } finally { fetching = null; }
     })();
     return fetching;
@@ -181,15 +209,15 @@ export function darkroom(opts = {}) {
     }
     const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, SOURCE_MAX / Math.max(W, H));
     // One working copy, at most SOURCE_MAX pixels along its longer side: everything is made from it.
-    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null };
+    p = { W, H, src: scaled(img, Math.round(W * k)), spots: [], corners: null, white: null, angle: 0, crop: null };
     URL.revokeObjectURL(img.src);
-    p.guess = guessCorners(p.src);
+    p.guess = scene ? null : guessCorners(p.src);
     const choices = typeof start === 'function' ? start(p) : start;
     if (!replacing) startWith = choices;
     apply(choices);
-    g.whiteBody.disabled = g.cornerBody.disabled = false;
+    g.whiteBody.disabled = g.cornerBody.disabled = g.sceneBody.disabled = false;
     g.steps.hidden = false;
-    if (!reopen) g.whiteBox.open = g.cornerBox.open = true;          // adding: both open
+    if (!reopen) g.whiteBox.open = g.cornerBox.open = g.sceneBox.open = true;          // new: both open
     await update();
     if (replacing) return true;                                      // the saved choices stay as they were
     baseline = JSON.stringify(record());
@@ -203,11 +231,15 @@ export function darkroom(opts = {}) {
       p.spots = process.white === 'picks' ? (process.spots || []).map((q) => q.slice()) : [];
       g.bright.value = Math.round((process.brightness ?? 1) * 100); g.warm.value = Math.round((process.warmth ?? 0) * 100);
       p.corners = process.corners ? process.corners.map((q) => q.slice()) : null;
-      g.shape.checked = !!process.shape || !process.corners;      // as it was made
+      g.shape.checked = !!process.shape;                            // as it was made
+      if (process.shape) { g.shapeH.value = num(process.shape[0]); g.shapeW.value = num(process.shape[1]); }
+      p.angle = process.angle || 0; p.crop = process.crop ? process.crop.slice() : null;
     } else {
-      g.shape.checked = true;
+      const known = (opts.suggest || [])[0];                        // a painting's measured size, if one uses it
+      g.shape.checked = !!known;
+      if (known) { g.shapeH.value = num(known.shape[0]); g.shapeW.value = num(known.shape[1]); }
       g.bright.value = Math.round(brightness * 100); g.warm.value = Math.round(warmth * 100);
-      p.corners = guess && p.guess && !wholePhoto(p.guess) ? p.guess : null;   // a new photo: start from the guess
+      p.corners = !scene && guess && p.guess && !wholePhoto(p.guess) ? p.guess : null;   // a new photo: start from the guess
       p.spots = white === 'paper' ? findPaper(p.src, p.corners) : [];       // a drawing on white paper: find the paper
     }
     slid(); clearTimeout(timer);
@@ -252,17 +284,22 @@ export function darkroom(opts = {}) {
     return p.white;
   }
   const cropped = () => !!(p && p.corners && !wholePhoto(p.corners));
-  /* The shape the picture is squared up to: the measured size's (if measured and ticked: the tick shows only when
-     measured), or none, when the photo's perspective decides. The size is kept to a tenth of a centimetre, so a
-     10 x 5.5 painting is squared up as 10 x 5.5, never rounded to whole centimetres. */
+  /* The proportions the picture is squared up to: those typed (kept to a tenth, so 10 x 5.5 is squared up as
+     10 x 5.5, never rounded), or none, when the photo's perspective decides. Only for a squared-up flat thing. */
   function shapeLine() {
-    const det = F.height ? detailsOf(F) : { error: 1 }, size = det.error ? null : det.cm;
-    const measured = !!(F.estimated && !F.estimated.checked && size);
-    g.shapeRow.hidden = !(p && cropped() && measured);
-    if (measured) g.shapeTick.textContent = `Square up to its measured proportions, ${size[0]} × ${size[1]} centimetres`;
-    const use = measured && g.shape.checked && cropped();
-    g.shapeText.textContent = !p || !cropped() || use ? '' : 'Shape: from the photo\'s perspective';
-    return use ? size : null;
+    if (scene) return null;
+    const hh = parseFloat(g.shapeH.value), ww = parseFloat(g.shapeW.value);
+    const use = g.shape.checked && hh > 0 && ww > 0 && cropped();
+    g.shapeText.textContent = !p || !cropped() ? 'Proportions matter once it\'s cropped to its corners.' : use ? '' : 'Proportions: from the photo\'s perspective';
+    return use ? [Math.round(hh * 10) / 10, Math.round(ww * 10) / 10] : null;
+  }
+  /* A scene: turned level and cropped, full screen. */
+  async function setScene() {
+    if (!p) return;
+    await busy('Getting the full-size view ready…');
+    const r = await cropView(balanced().canvas, { angle: p.angle, crop: p.crop }, ghost && { angle: ghost.angle, crop: ghost.crop });
+    if (r) { p.angle = r.angle; p.crop = levelAndWhole(r) ? null : r.crop; }
+    update();
   }
   const busy = (text) => { g.status.textContent = text; return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30))); };
 
@@ -292,28 +329,26 @@ export function darkroom(opts = {}) {
     g.wholeBtn.hidden = !cropped();
     const turned = p.corners ? describeTurn(turnOf(p.corners)) : '';
     g.cornersNote.textContent = (cropped() ? 'Cropped and squared up' : 'Whole photo') + (turned ? `, ${turned}` : '');
-    // The picture's proportions as the photo has them (after cropping and turning): when the size isn't measured,
-    // the side not typed follows them (F.follow, in detailsFields).
-    if (F.follow) {
-      let ratio = p.W / p.H;
-      if (p.corners) { const [a, b] = cropSize(p.corners.map(([u, v]) => [u * p.W, v * p.H]), null, [p.W / 2, p.H / 2]); ratio = a / b; }
-      F.ratio = ratio; F.follow();
-    }
     const shape = shapeLine();
     const now = record();
-    g.whiteSum.textContent = whiteText(now); g.cornerSum.textContent = cornersText(now);
+    g.sceneNote.textContent = sceneText(now); g.sceneWhole.hidden = levelAndWhole(now);
+    g.whiteSum.textContent = whiteText(now); g.cornerSum.textContent = cornersText(now); g.sceneSum.textContent = sceneText(now);
     g.back.hidden = replacement ? !oldBlob : !saved || JSON.stringify(now) === baseline;
     await busy('Working…');
     const { canvas: wb, note } = balanced();
     let out, W = p.W, H = p.H;
-    if (p.corners) {
+    if (scene && !levelAndWhole(now)) {
+      const c = p.crop || [0, 0, 1, 1];
+      W = Math.round((c[2] - c[0]) * p.W); H = Math.round((c[3] - c[1]) * p.H);   // at the original's resolution
+      out = straightened(wb, p.angle, c, Math.min(W, MAX_OUT, (c[2] - c[0]) * wb.width));
+    } else if (!scene && p.corners) {
       const q = p.corners.map(([u, v]) => [u * wb.width, v * wb.height]);
       const [cw, chh] = cropSize(q, shape, [wb.width / 2, wb.height / 2]), k = wb.width / p.W;      // k: working copy's pixels per original pixel
       W = Math.round(cw / k); H = Math.round(chh / k);                 // the cropped picture at the original's resolution
-      const ow = Math.min(W, WIDTHS[WIDTHS.length - 1]);
+      const ow = Math.min(W, MAX_OUT);
       out = squaredUp(wb, q, ow, Math.max(1, Math.round(H * ow / W)));
     } else {
-      out = scaled(wb, Math.min(W, WIDTHS[WIDTHS.length - 1]));
+      out = scaled(wb, Math.min(W, MAX_OUT));
     }
     Object.assign(p, { out, outW: W, outH: H });
     const shot = (c, quad) => {
@@ -337,7 +372,7 @@ export function darkroom(opts = {}) {
         h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be used')));
     }
     g.status.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;
-    if (opts.onChange) opts.onChange();             // reopened: the painting's form stores the picture once it rests
+    if (opts.onChange) opts.onChange();             // the darkroom view stores the picture once it rests
   }
 
   /* The choices, as kept in the recipe's settings (library.js settingsOf on the server). */
@@ -347,12 +382,11 @@ export function darkroom(opts = {}) {
     return { white: w,
       ...(w === 'picks' ? { spots: p.spots } : {}),
       ...(w !== 'none' ? how() : {}),
-      ...(p.corners ? { corners: p.corners } : {}), ...(shape ? { shape } : {}) };
+      ...(!scene && p.corners ? { corners: p.corners } : {}), ...(shape ? { shape } : {}),
+      ...(scene && p.angle ? { angle: p.angle } : {}), ...(scene && p.crop ? { crop: p.crop } : {}) };
   }
   return {
-    el, load, record, shapeLine,
-    attach(f) { F = f; },
-    sizeChanged() { if (p) later(update); else shapeLine(); },
+    el, load, record,
     get ready() { return !!(p && p.out); },
     get white() { return white(); },
     get replacement() { return replacement; },        // { blob, item }: another Library photo the picture is now made from

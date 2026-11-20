@@ -1,5 +1,6 @@
 /* Drawing the page. The editor has one view at a time, named by the address's # (gallery, content, library,
-   review, history); render() draws it afresh from the state after anything changes. The views register
+   review, history, and darkroom/<item code>/<recipe>, which is opened from the Library and the Gallery rather
+   than the header); render() draws it afresh from the state after anything changes. The views register
    themselves in `views` (editor.js does it), so this module needn't know them. */
 
 import { $ } from './dom.js';
@@ -8,8 +9,14 @@ import { placeMarks } from './marks.js';
 
 export const views = {};            // name -> a function giving that view's elements
 
-export function view() { return (location.hash.slice(1) || 'gallery'); }
-window.addEventListener('hashchange', () => {
+export function view() { return (location.hash.slice(1).split('/')[0] || 'gallery'); }
+/* What follows the view's name in the address (darkroom/<item>/<recipe>: [item, recipe]). */
+export function viewArgs() { return location.hash.slice(1).split('/').slice(1).map(decodeURIComponent); }
+/* Where the darkroom was opened from, for its back arrow: the view before it. */
+export const nav = { cameFrom: '' };
+window.addEventListener('hashchange', (ev) => {
+  const was = new URL(ev.oldURL).hash;
+  if (view() === 'darkroom' && !was.startsWith('#darkroom')) nav.cameFrom = was || '#library';
   if (view() === 'history') state.history = null;
   if (view() === 'library') state.library = null;
   render();

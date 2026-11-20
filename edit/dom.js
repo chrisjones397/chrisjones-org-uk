@@ -54,6 +54,12 @@ export const GLYPHS = {
   says: 'M3 4h14v9H9l-4 3.5V13H3z',                                                     // a speech bubble: alternative text
   person: 'M10 10a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3.5 17c.6-3.2 3.2-5 6.5-5s5.9 1.8 6.5 5',   // who made it: credit
   all: 'M3.5 3.5h5.5v5.5H3.5zM11 3.5h5.5v5.5H11zM3.5 11h5.5v5.5H3.5zM11 11h5.5v5.5H11z',   // every item
+  darkroom: 'M3 6h14M3 14h14M7 3.5v5M13 11.5v5',                                         // two sliders: the darkroom
+  square: 'M4.5 5.5l11-2v13l-11-2zM3 3v14h14V3',                                        // a skewed shape squared up: a flat thing
+  level: 'M2.5 12.5l15-5M2.5 10h15M5.5 4.5h9v11h-9z',                                   // a tilted line made level, cropped: a scene
+  frame: 'M3 3h14v14H3zM6 6h8v8H6z',                                                    // a picture frame: in the Gallery
+  section: 'M3 3.5h14v13H3zM3 8h14',                                                    // a page section with its picture: a background
+  back: 'M12.5 4.5L7 10l5.5 5.5',                                                        // back to where it was opened from
 };
 
 let toastTimer;

@@ -113,9 +113,13 @@ once is one item with five recipes.
 | `settings` | the current choices: white balance (spots, brightness, warmth, starting from the paper or not), corners, shape; or angle and crop |
 | `changed`, `changed_by` | |
 
-`shape` (the proportions a flat thing is squared up to) is an input to the recipe. When an Artwork has a measured
-size and "square up to its measured proportions" is ticked, the editor copies the size's proportions into the
-recipe. The size itself stays on the Artwork: the Artwork drives the Recipe, never the reverse, as agreed.
+`shape` (the proportions a flat thing is squared up to) is an input to the recipe, typed in the darkroom. When
+an Artwork showing the recipe's picture has a measured size, the darkroom offers it with one press (step 4 slice
+4: the darkroom is a view of its own, no longer inside the painting's form). The size itself stays on the
+Artwork: the Artwork drives the Recipe, never the reverse, as agreed. A scene's settings are its white balance,
+`angle` (degrees, clockwise) and `crop` (left, top, right, bottom of the turned photo's frame). A recipe's kind
+says how a picture was prepared, never where it may be used: any photo rendition can be a painting's picture or
+a background.
 
 `white_paper` moves here from the painting (it is about how the photo is treated, not about the artwork).
 

@@ -7,15 +7,16 @@ import { save, discard, loadLibrary } from './server.js';
 import { render } from './render.js';
 import { badge, hideButton } from './widgets.js';
 import { sceneRendition } from './uploads.js';
-import { libraryTiles, newestFirst } from './picker.js';
+import { libraryTiles, newestFirst, preparedPictures, preparedTiles } from './picker.js';
 
 /* A section's background: a photo or a video, shown as it is now (the photo, or the video's last frame), with
    its focus (the point kept in view when the screen's shape crops it: tap the picture to move it), how a phone held
    upright and a wide screen would crop it, and the shade (how much it's darkened, so the words over it read).
-   The background's document names a rendition of a Library item, chosen from the Library's tiles (nothing is
-   uploaded here: the Library is the only place files come in, step 4 slice 3):
-   A photo: its site picture, a set of sizes made from it as it is (a photograph, not a painting: no white
-   balance or corners). A photo that has none yet gets one made on the spot when it's chosen (sceneRendition).
+   The background's document names a rendition of a Library item, chosen from tiles (nothing is uploaded here:
+   the Library is the only place files come in, step 4 slice 3):
+   A photo: any picture prepared in the darkroom (step 4 slice 4: straightened and cropped, or squared up; a
+   painting's picture can be a background too). A photo with nothing prepared yet can be chosen as it is: its
+   sizes are made on the spot (sceneRendition).
    A video: its newest set of versions (sizes for wide screens, one made for phones held upright) with first
    and last frames; versions are added and left out on the video's row in the Library. How it plays (once, or
    on a loop) and what visitors who ask for reduced motion or less data see instead (its last frame, or a slow
@@ -73,7 +74,7 @@ export function backgroundBox(key) {
   } else {
     box.append(h('p', { class: 'hint' }, e ? 'Removed in the draft: once published, the section has no background (the picture stays in the Library).' : 'None: the section shows the page\'s grey.'));
   }
-  if (bgPicking.has(key)) box.append(libraryPicker(choose));
+  if (bgPicking.has(key)) box.append(...libraryPicker(choose, (x) => choosePrepared(x), d && d.rendition));
   box.append(status, h('div', { class: 'actions' },
     h('button', { class: 'icon-btn', disabled: busy, 'aria-expanded': String(bgPicking.has(key)), title: d ? 'Choose a different photo or video from the Library' : 'Choose a photo or video from the Library',
       'aria-label': 'Choose from the Library', onclick: () => { bgPicking.has(key) ? bgPicking.delete(key) : bgPicking.add(key); render(); } }, glyph(GLYPHS.photo), glyph(GLYPHS.swap, 14)),
@@ -83,8 +84,13 @@ export function backgroundBox(key) {
     e && changed(e) ? h('button', { disabled: busy, onclick: () => discard([id]) }, 'Undo change') : null));
   return box;
 
-  /* A Library item chosen: its newest site picture or set of versions becomes the background (in the draft),
-     keeping the focus and shade; a photo with no site picture yet has one made first, here. */
+  /* A prepared picture chosen: it becomes the background (in the draft), keeping the focus and shade. */
+  function choosePrepared(x) {
+    bgPicking.delete(key);
+    store({ rendition: x.r.id, focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0.12 }, 'Saved as a draft: tap the picture to choose the part to keep in view');
+  }
+  /* A video, or a photo with nothing prepared yet, chosen: the video's newest set of versions, or the photo as
+     it is (its sizes made first, here), becomes the background (in the draft), keeping the focus and shade. */
   async function choose(it) {
     bgPicking.delete(key);
     try {
@@ -103,19 +109,24 @@ export function backgroundBox(key) {
 }
 const bgPicking = new Set();          // sections whose Library picker is open
 
-/* The Library's photos and videos, as tiles. */
-function libraryPicker(use) {
-  if (!state.library) { loadLibrary(); return h('p', { class: 'hint' }, 'Loading the Library…'); }
-  const items = newestFirst(state.library.items);
-  if (!items.length) return h('p', { class: 'hint' }, 'The Library has nothing yet: upload a photo or a video there first.');
-  return libraryTiles(items, use,
-    (it) => (it.kind === 'photo' && !it.site ? h('span', { class: 'lib-pick-mark', title: 'Its sizes will be made when you choose it' }, glyph(GLYPHS.crop, 12)) : null));
+/* What can be a background, as tiles: pictures prepared in the darkroom, then videos and photos with nothing
+   prepared yet (chosen as they are). */
+function libraryPicker(use, usePrepared, chosen) {
+  if (!state.library) { loadLibrary(); return [h('p', { class: 'hint' }, 'Loading the Library…')]; }
+  const prepared = preparedPictures(state.library.items);
+  const rest = newestFirst(state.library.items.filter((it) => it.kind === 'video' || !it.recipes.length));
+  if (!prepared.length && !rest.length) return [h('p', { class: 'hint' }, 'The Library has nothing yet: upload a photo or a video there first.')];
+  return [
+    prepared.length ? preparedTiles(prepared, usePrepared, chosen) : null,
+    rest.length ? libraryTiles(rest, use,
+      (it) => (it.kind === 'photo' ? h('span', { class: 'lib-pick-mark', title: 'Not prepared in the darkroom: used as it is, its sizes made when you choose it' }, glyph(GLYPHS.tray, 12)) : null)) : null,
+  ].filter(Boolean);
 }
 /* What choosing an item would make the background: its newest site picture (a photo) or set of versions (a
    video), keeping the focus and shade; null if it has none yet. */
 function backgroundFrom(it, d) {
   const keep = { focus: d ? d.focus : [0.5, 0.5], shade: d ? d.shade : 0.12 };
-  const rens = it.recipes.filter((c) => c.kind !== 'flat').flatMap((c) => c.renditions);
+  const rens = it.recipes.flatMap((c) => c.renditions);
   const r = rens.sort((x, y) => y.id - x.id).find((x) => (it.kind === 'video' ? x.versions.length : x.sizes.length));
   if (!r) return null;
   return it.kind === 'video' ? { rendition: r.id, ...keep, play: d && d.play ? d.play : 'once', calm: d && d.calm ? d.calm : 'last' }

@@ -4,6 +4,8 @@
      #library  everything uploaded (the only place files come in): what is made from each and what uses it
      #review   every unpublished change, each with a tick: publish the ticked ones, or all, or discard them.
      #history  each publication, and every earlier version of anything, which can be brought back as a draft.
+     #darkroom/<item>/<recipe>  preparing a photo for the site (opened from the Library and the Gallery, not the
+               header): white balance, squaring up a flat thing or straightening and cropping a scene.
    One saving rule: every change saves itself as a draft at once, everywhere (paintings too: there is no Save
    button), and a tick on the right of what was changed says so (marks.js). Nothing reaches visitors until it's
    published under Review; the preview (the site at this address) shows drafts in place.
@@ -21,14 +23,14 @@
      darkroom.js      the pixels: white balance, squaring up, the full-screen views (it stands alone)
      uploads.js       files into storage and the Library: originals, renditions (sizes; video versions and frames)
      details.js       a painting's medium, size and year fields
-     picker.js        the Library's items as tiles to pick from
+     picker.js        the Library's items, and the pictures prepared from them, as tiles to pick from
      picture.js       the darkroom as a form
-     add.js           adding a painting, from a photo in the Library
      painting.js      a painting's row, Edit form and picture
+     add.js           adding (hanging) a painting, from a picture prepared in the darkroom
      background.js    a section's background box
      uses.js          what uses a Library item, as marks
      compare.js       side by side, and blink
-     gallery-view.js, content-view.js, library-view.js, review-view.js, history-view.js   the five views
+     gallery-view.js, content-view.js, library-view.js, review-view.js, history-view.js, darkroom-view.js   the six views
      editor.js        this file: registers the views and starts */
 
 import { $, h } from './dom.js';
@@ -40,8 +42,9 @@ import { contentView } from './content-view.js';
 import { libraryView } from './library-view.js';
 import { reviewView } from './review-view.js';
 import { historyView } from './history-view.js';
+import { darkroomView } from './darkroom-view.js';
 
-Object.assign(views, { gallery: galleryView, content: contentView, library: libraryView, review: reviewView, history: historyView });
+Object.assign(views, { gallery: galleryView, content: contentView, library: libraryView, review: reviewView, history: historyView, darkroom: darkroomView });
 
 call('GET', 'state').then((d) => { state.media = d.media; state.who = d.who; render(); })
   .catch((e) => { $('#main').replaceChildren(h('p', {}, `Couldn't load the content: ${e.message}`)); });

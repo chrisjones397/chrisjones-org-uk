@@ -45,8 +45,11 @@ against what's already used (code, database, editor, branches). Add new names he
 - **File** (agreed 16 Nov 2026): one distinct piece of stored content, known only by the SHA-256
   digest of its bytes, which is its R2 key and its address /media/<digest>.<ext>. No name, no folder.
 - **Recipe**: the darkroom settings applied to an item (white balance; four-corner squaring up for flat things,
-  or straighten and crop for scenes). Several per item. It's what gets edited (table `recipe`; kinds flat, scene,
-  video; scene and video have no settings yet).
+  or straighten and crop for scenes: angle and crop). Several per item, each with an optional label. It's what
+  gets edited (table `recipe`; kinds flat, scene, video; video has no settings yet). Its kind says how the
+  picture was prepared, never where it may be used.
+- **Darkroom**: the editor's view for preparing any photo (#darkroom/<item>/<recipe>), opened from the Library
+  or a painting's Edit form, not the header. Not a use: it makes recipes and renditions.
 - **Rendition** (r1, r2...): one frozen set of sizes a recipe produced. Never overwritten, so History and caches
   stay right. It's what a use names (by id), so a darkroom change reaches visitors only when published.
 - **Media**: images and videos in general (/media/ addresses, R2 binding MEDIA, the media layer's tables).
@@ -239,29 +242,43 @@ Files (all at the top level unless said):
   store), library, library/new, library/original, library/rendition, library/item, library/delete, original). On other hosts /edit is
   not found. A rejected token: worker.js signInAgain() clears Access's cookie once and retries, then shows a
   "Couldn't sign you in" page; API calls get 401 and the editor shows a "Sign in again" bar.
-  Tabs: Gallery (add a painting from a Library photo, genres and their paintings, Edit forms), Content (a box
-  per page section: heading, paragraphs, background box choosing from the Library, contact links), Library (the
-  only upload; items newest first with a filter in symbols; each row: picture, name, alt, credit, code, uses as
-  links, make a painting, make a site picture, a video's versions, a line per original and per rendition,
-  Delete for good when unused; tick two or three lines to compare side by side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a
-  removal, it undoes it). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
+  Tabs: Gallery (only arranging: add a painting by choosing a prepared picture, genres and their paintings, Edit
+  forms with the picture, "choose a different picture" and a link into the darkroom, and a mark when the
+  picture's proportions differ from a measured size), Content (a box per page section: heading, paragraphs,
+  background box choosing a prepared picture, a video, or an unprepared photo as it is, contact links), Library
+  (the only upload; items newest first with a filter in symbols: everything, just uploaded, in the Gallery,
+  backgrounds, read from uses; each row: picture, name, alt, credit, code, uses as links, the darkroom (sliders
+  symbol, photos only), a video's versions, a line per original and per rendition, each picture rendition with
+  "hang it in the Gallery" (a frame), Delete for good when unused; tick two or three lines to compare side by
+  side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a removal, it undoes
+  it). Not a tab: the darkroom view (edit/darkroom-view.js). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
   so switching to a short view doesn't shift the layout.
   One saving rule: every change saves itself as a draft at once (a save queue), shown by a tick that takes no
   room (on the changed button's or label's top right corner, or inside a text field on its right), fading over
   3.5 seconds, with a tooltip. Hide (an eye on published paintings, genres, backgrounds) acts at once on the live
   site, as its own release. Remove takes a thing out of the page (its file stays in the Library); Delete for good
   only in the Library.
+- **The darkroom view** (step 4 slice 4, edit/darkroom-view.js): one photo's recipes as tiles (newest picture
+  each) and two to start one: "square up" (flat) and "straighten" (scene); the chosen one opens the darkroom form
+  (picture.js) with a label field, its uses, and "hang it in the Gallery". It saves itself 1.2 s after the last
+  change as the recipe's next rendition (a new recipe: on reading the photo, the address then naming it), and
+  every draft naming the recipe's previous picture (paintings, backgrounds) is pointed at the new one, as a
+  draft; a trial rendition from the same sitting is deleted once replaced. Proportions (flat) are typed there or
+  taken with one press from a measured painting showing the recipe's picture. Every darkroom picture gets the
+  same sizes (300 to 3840 and a preview), whatever it is used for. The back arrow returns to where it was opened.
 - **The darkroom** (edit/darkroom.js, in the browser, as the free plan gives Workers 10 ms of CPU): from a working
   copy (at most 4096 pixels): white balance from spots (none, one to even the colour, two to follow the light,
   three to five a flat slope, six or more a gentle curve), "Find the paper" placing 20 spots round a drawing's
   margins; brightness of the white (50 to 100%) and warmth kept; then four corners (guessed first, dragged in a
   full-screen view with magnifier and edge circles; labels say which is the bottom, so squaring up also turns or
-  mirrors it), squared up by a perspective map to the measured shape or the photo's true proportions (Zhang and
-  He's method). Before and after side by side; reopening shows previous and new, press and hold to blink, ghosts
+  mirrors it), squared up by a perspective map to the proportions typed or the photo's true proportions (Zhang and
+  He's method); or, for a scene, turned level (a slider, with a fine grid) and cropped in a full-screen view
+  (cropView: corners, edges or the whole crop dragged; kept inside the turned photo, which turning shrinks it to
+  fit). Before and after side by side; reopening shows previous and new, press and hold to blink, ghosts
   of the saved choices, "Back to as it was", "Replace photo…". Results are JPEG sizes (Safari can't encode WebP),
   recorded as the recipe's next rendition (the recipe taking the new settings); a picture saves itself 1.2 s
   after the last change, and a trial rendition made earlier in the same sitting is deleted once replaced. The
-  same photo is found by its digest and never stored twice: a second painting from it is a second recipe.
+  same photo is found by its digest and never stored twice: a second thing made from it is a second recipe.
 - **Uploads** (slice 3): only in the Library. A photo keeps its original and a small picture; nothing else is
   made until a recipe makes it. **Video uploads**: the browser can't re-encode, so a video is uploaded as made (MP4 only, under 95 megabytes),
   checked first (codec, fast start, sound, length, bit rate, size); first and last frames taken in the browser.
@@ -565,8 +582,27 @@ editor redraws the whole view after every change; fonts come from Google, not th
      painting's picture from what the Library and darkroom have made; it doesn't process photos itself.
    - The Library row's actions get rethought with that split (one way into the darkroom; using a rendition as a
      painting or background is a separate, clearly marked step), with tooltips that say what each does.
-   **Next: slice 4**, in a new chat: the darkroom redesign above, then dragging paintings to reorder and
-   between genres, and the smaller extras. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
+   **Slice 4 (a), the darkroom redesign: BUILT 20 Nov 2026, on dev, for him to try on admin-dev.** As agreed,
+   plus his answers the same day: proportions are a darkroom setting (the agreed model already had `shape` on
+   the recipe), with a measured painting's size offered at one press; straighten and crop for scenes built now.
+   What changed for him: the Library row's brush and crop marks are gone, replaced by the darkroom (sliders
+   symbol); each picture line has a frame, "hang it in the Gallery" (a new painting, as a draft, in the first
+   genre or the one just added, titled after the recipe's label or the photo, its Edit form opened); the
+   Gallery's add button (plus and frame) offers prepared pictures, never photos; a painting's Edit form shows
+   its picture, "choose a different picture" (prepared pictures) and the darkroom link; a painting can now be
+   hung with no size (both fields empty) and given one later; a section's background picks prepared pictures
+   (any kind, so a painting's picture too), videos, or unprepared photos as they are. Server: library.js
+   settingsOf takes white balance for scenes too, angle and crop; route library/recipe names a recipe; the
+   survey's site and painting flags are gone (the filter reads uses). No migration.
+   Tested locally (wrangler dev, Playwright, fresh database, made-up photos): darkroom from the Library row, a new
+   flat recipe saving itself and the address naming it, proportions typed (the trial rendition deleted), hang
+   from the darkroom, a measured size in the Gallery and its mismatch mark, the darkroom from the painting's form
+   offering that size, the painting's draft following to the new picture and the mark going, the back arrow,
+   a scene levelled 3 degrees (crop shrunk inside), a background from a prepared picture, the Gallery's tiles, the
+   public pages answering. Not tested: dragging corners and the crop by hand, Replace photo… in the new view,
+   real phones, Safari, real R2 and D1.
+   **Next: slice 4 (b)**, after he has tried (a): dragging paintings to reorder and between genres, and the
+   smaller extras. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
    place, replacing the Content tab).
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);

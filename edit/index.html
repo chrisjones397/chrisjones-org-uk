@@ -37,7 +37,7 @@
   p.hint { color: var(--dim); font-size: 0.9rem; margin: 0.2rem 0 1rem; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0.8rem; margin: 0.6rem 0; }
   label { display: block; margin: 0.8rem 0 0.25rem; color: var(--dim); font-size: 0.85rem; }
-  input[type=text], input[type=email], select, textarea { width: 100%; padding: 0.55rem 0.65rem; font: inherit; color: var(--ink);
+  input[type=text], input[type=email], input[type=number], select, textarea { width: 100%; padding: 0.55rem 0.65rem; font: inherit; color: var(--ink);
     background: #1c1c1c; border: 1px solid var(--line); border-radius: 6px; }
   textarea { min-height: 9rem; resize: vertical; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: #888; }
@@ -183,6 +183,26 @@
               box-shadow: 0 2px 14px rgba(0,0,0,0.7); pointer-events: none; display: none; margin-top: 0; }
   /* The Library uses the page's width; every Library picture (rows here, tiles in the pickers) is one size. */
   body[data-view=library] main { max-width: 76rem; }
+  /* The darkroom view (step 4 slice 4): as wide as the Library, its recipes as tiles over the darkroom form */
+  body[data-view=darkroom] main { max-width: 76rem; }
+  .dr-title { gap: 0.7rem; }
+  .dr-title img.dr-item { width: 3rem; height: 2.25rem; object-fit: contain; background: #111; border-radius: 4px; }
+  .dr-title .dr-word { font-size: 1rem; }
+  .lib-pick.on { outline: 2px solid #ddd; outline-offset: 1px; }
+  .dr-recipes .lib-pick-none { color: var(--ink); }
+  .dr-about { margin-bottom: 0.4rem; }
+  .dr-about .lib-marks { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; }
+  .dr-shape { margin-top: 0.5rem; }
+  .dr-shape .tick { margin: 0; }
+  .dr-shape input[type=number] { width: 6.5rem; }
+  .dr-suggest { margin-top: 0.4rem; } .dr-suggest:empty { display: none; }
+  button.small { font-size: 0.8rem; padding: 0.3rem 0.6rem; }
+  .dr-angle { flex: 1; min-width: 8rem; max-width: 26rem; }
+  /* A painting's picture in its Edit form: the picture, how it was prepared, choose another, open in the darkroom */
+  .pic-row { align-items: flex-start; gap: 0.8rem; }
+  .pic-now { width: 7.5rem; aspect-ratio: 4 / 3; object-fit: contain; background: #111; border-radius: 4px; flex: none; }
+  .pic-about { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; min-width: 0; flex: 1; }
+  .pic-off { display: inline-flex; gap: 0.3rem; align-items: center; color: var(--changed); }
   .lib-title { justify-content: space-between; }
   .lib-filter { gap: 0.4rem; margin: 0.2rem 0 0.4rem; }
   .lib-filter-btn { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem; color: var(--dim); }
