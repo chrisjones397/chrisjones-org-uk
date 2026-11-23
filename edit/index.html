@@ -113,6 +113,16 @@
   .edit { margin: 0.2rem 0 0.8rem; }
   .diff { font-size: 0.88rem; margin: 0.3rem 0 0 1.9rem; color: var(--dim); }
   .diff b { color: var(--ink); font-weight: 400; }
+  .rv-pair { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin: 0.4rem 0; }
+  .rv-side { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+  .rv-side figcaption { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--dim); }
+  .rv-arrow { color: var(--dim); font-size: 1.2rem; }
+  .bg-frames.rv .bg-frame.phone { width: 3rem; height: 6.5rem; }
+  .bg-frames.rv .bg-frame.wide { width: 11.6rem; max-width: 34vw; }
+  .rv-none { display: grid; place-items: center; width: 15.4rem; max-width: 42vw; height: 6.5rem; border: 1px dashed var(--line);
+    border-radius: 4px; color: var(--dim); font-size: 0.85rem; text-align: center; }
+  @media (max-width: 640px) { .rv-pair.bg { flex-direction: column; align-items: flex-start; } .rv-pair.bg .rv-arrow { transform: rotate(90deg); margin-left: 6rem; } }
+  .rv-none.art, .rv-art { width: 7.5rem; height: 5.6rem; object-fit: contain; }
   .diff del { color: var(--gone); } .diff ins { color: var(--new); text-decoration: none; }
   .change { display: flex; gap: 0.6rem; align-items: flex-start; }
   .change input { width: 1.2rem; height: 1.2rem; margin-top: 0.2rem; flex: none; }

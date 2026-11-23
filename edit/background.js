@@ -22,7 +22,7 @@ import { libraryTiles, newestFirst, preparedPictures, preparedTiles } from './pi
    on a loop) and what visitors who ask for reduced motion or less data see instead (its last frame, or a slow
    fade from the first frame to the last) are the section's choices. */
 const bgBusy = {};                    // section -> what it's doing, while a site picture is being made
-const lastStill = (r) => {
+export const lastStill = (r) => {
   const f = framesFor(r, r.versions.filter((x) => x.h <= x.w)[0] || r.versions[0]);
   return f && f.last.length ? sizeFor(f.last, 1024).url : '';
 };
@@ -43,9 +43,7 @@ export function backgroundBox(key) {
 
   if (d && r) {
     const src = isVideo ? lastStill(r) : sizeFor(r.sizes, 1024).url;
-    const pos = `${(d.focus[0] * 100).toFixed(1)}% ${(d.focus[1] * 100).toFixed(1)}%`;
-    const frames = ['phone', 'wide'].map((k) => h('div', { class: `bg-frame ${k}`, title: k === 'phone' ? 'On a phone held upright' : 'On a wide screen',
-      style: `background-image: url("${src}"); background-position: ${pos}; filter: brightness(${1 - d.shade})` }));
+    const frames = cropFrames(d, r);
     box.append(
       h('div', { class: 'bg-pick', 'data-k': `${id}:focus`, title: 'Tap the part to keep in view', onclick: (ev) => {
         const r = ev.currentTarget.getBoundingClientRect();
@@ -108,6 +106,16 @@ export function backgroundBox(key) {
   }
 }
 const bgPicking = new Set();          // sections whose Library picker is open
+
+/* How a background would look on a phone held upright and on a wide screen: its picture (a video's last frame),
+   cropped round its focus and darkened by its shade. Here and in Review, so both show the same thing. */
+export function cropFrames(d, r) {
+  const src = r.kind === 'video' ? lastStill(r) : sizeFor(r.sizes, 1024).url;
+  const pos = `${(d.focus[0] * 100).toFixed(1)}% ${(d.focus[1] * 100).toFixed(1)}%`;
+  return ['phone', 'wide'].map((k) => h('div', { class: `bg-frame ${k}`, title: k === 'phone' ? 'On a phone held upright' : 'On a wide screen',
+    style: `background-image: url("${src}"); background-position: ${pos}; filter: brightness(${1 - d.shade})` },
+    r.kind === 'video' ? h('span', { class: 'lib-video', title: 'A video: its last frame' }, glyph(GLYPHS.play, 12)) : null));
+}
 
 /* What can be a background, as tiles: pictures prepared in the darkroom, then videos and photos with nothing
    prepared yet (chosen as they are). */

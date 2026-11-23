@@ -250,8 +250,8 @@ Files (all at the top level unless said):
   backgrounds, read from uses; each row: picture, name, alt, credit, code, uses as links, the darkroom (sliders
   symbol, photos only), a video's versions, a line per original and per rendition, each picture rendition with
   "hang it in the Gallery" (a frame), Delete for good when unused; tick two or three lines to compare side by
-  side, or blink between two), Review (ticks, publish or discard), History (Bring back; for a removal, it undoes
-  it). Not a tab: the darkroom view (edit/darkroom-view.js). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
+  side, or blink between two), Review (ticks, publish or discard; backgrounds and new pictures shown before → after), History (Bring
+  back; for a removal, it undoes it; a bin deletes a removed thing for good). Not a tab: the darkroom view (edit/darkroom-view.js). Header: an eye opens the preview. The page's scrollbar is always shown (16 Nov 2026),
   so switching to a short view doesn't shift the layout.
   One saving rule: every change saves itself as a draft at once (a save queue), shown by a tick that takes no
   room (on the changed button's or label's top right corner, or inside a text field on its right), fading over
@@ -628,8 +628,29 @@ editor redraws the whole view after every change; fonts come from Google, not th
    (pointer: coarse) fullView and cropView keep an 80-pixel strip at the bottom clear: the picture fits above it,
    no knob or arrow goes in it (LOW in darkroom.js). Tap-an-edge relabelling removed (a double tap to zoom read as
    two single taps flipped the bottom); ↺ ↻ ⇋ remain. Not tested on a real iPhone: ask him to confirm.
-   **Next: the rest of slice 4's smaller extras** (one original shared by several paintings is now done by
-   recipes; left: "Delete for good" from History, a clear Review of background changes), then step 5. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
+   **Slice 4's smaller extras: BUILT 23 Nov 2026, on dev, for him to try on admin-dev** (one original shared by
+   several paintings was already done by recipes). Decisions made by Claude, his to overturn:
+   - "Delete for good" from History (route history/forget, library.js forget): a bin on the newest History line of
+     anything gone from the editor altogether (its removal published; "Bring back" still sits beside it). It asks
+     first (can't be undone), then deletes every version of it from History (and publications left empty), and
+     the renditions only those versions named, with their files (swept, cache purged), except a recipe's newest
+     rendition, which is the darkroom's latest work and stays in the Library. The Library item, its original and
+     recipes stay: removing a use never deletes what it used; the Library's own bins do that. Refused while the
+     thing is still in the editor (remove it and publish first).
+   - Review shows background changes by eye: for any changed, new or removed background, the phone and wide
+     crops (as the Content tab draws them: focus and shade applied; a video's last frame with a play mark) "On the
+     site now" → "Once published" ("No background" boxes for none); stacked with a downward arrow under 640
+     pixels. Text lines only for what pictures can't say: what sort of new picture (a different photo or video,
+     named once the Library has been opened; the same photo prepared afresh; another picture from the same photo;
+     the same video with N → M versions), "Kept in view: moved", shade, plays, reduced motion. A painting's new
+     picture gets the same before → after pair. Shared helper: background.js cropFrames.
+   Tested locally (wrangler dev, Playwright, made-up photos in local R2): forget refused for a live entry; for a
+   removed painting with three versions over two renditions plus a recipe's newest: versions and emptied
+   publications gone, the two older renditions and their files deleted, the newest and the original kept; the
+   History bin, its confirm and toast; Review with a changed, a new and a removed background and a re-prepared
+   painting, at computer and phone widths; the Content tab's background boxes unchanged. Not tested: a video
+   background in Review, real phones, Safari, real D1 and R2.
+   **Slice 4 is then finished**; next, step 5. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
    place, replacing the Content tab).
    **Slices 3 and 4 put live by him, 23 Nov 2026** (main at 63827ed, with 4 (b)'s dragging and the corners
    view's Safari fix): live's build succeeded and applied migration 0007; checked through the API: every
