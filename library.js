@@ -409,6 +409,7 @@ export async function remove(env, url, b) {
       env.DB.prepare('DELETE FROM recipe WHERE id = ? AND id NOT IN (SELECT recipe_id FROM rendition)').bind(r.recipe_id),
       // the recipe's settings are those of its newest rendition (a trial that was deleted leaves no trace)
       env.DB.prepare('UPDATE recipe SET settings = (SELECT settings FROM rendition WHERE recipe_id = ?1 ORDER BY n DESC LIMIT 1) WHERE id = ?1').bind(r.recipe_id),
+      ...closeGap(env, r.recipe_id),
     ]);
     const gone = await sweep(env, url, digests);
     return { deleted: r.id, ...gone };
@@ -465,8 +466,20 @@ export async function forget(env, url, b) {
   const gone = JSON.stringify(olds.results.map((r) => r.id));
   const digests = (await env.DB.prepare('SELECT DISTINCT digest FROM rendition_file WHERE rendition_id IN (SELECT value FROM json_each(?))')
     .bind(gone).all()).results.map((f) => f.digest);
-  if (olds.results.length) await env.DB.prepare('DELETE FROM rendition WHERE id IN (SELECT value FROM json_each(?))').bind(gone).run();
+  if (olds.results.length) {
+    const recipes = (await env.DB.prepare('SELECT DISTINCT recipe_id FROM rendition WHERE id IN (SELECT value FROM json_each(?))').bind(gone).all()).results;
+    await env.DB.batch([env.DB.prepare('DELETE FROM rendition WHERE id IN (SELECT value FROM json_each(?))').bind(gone),
+      ...recipes.flatMap((c) => closeGap(env, c.recipe_id))]);
+  }
   return { forgotten: id, versions: versions.length, renditions: olds.results.length, ...(await sweep(env, url, digests)) };
+}
+
+/* A recipe's renditions numbered 1, 2, 3... again in the order they were made, after one is deleted (the number is
+   only its place in the list: migration 0008). Two steps, so no two share a number midway. For a batch. */
+function closeGap(env, recipe) {
+  return [env.DB.prepare('UPDATE rendition SET n = n + 100000 WHERE recipe_id = ?').bind(recipe),
+    env.DB.prepare(`UPDATE rendition SET n = (SELECT COUNT(*) FROM rendition x WHERE x.recipe_id = ?1 AND x.id <= rendition.id)
+      WHERE recipe_id = ?1`).bind(recipe)];
 }
 
 /* Of these files, delete from storage those that no original and no rendition refers to any more; and with

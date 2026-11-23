@@ -59,17 +59,14 @@ export function darkroom(opts = {}) {
   const later = (fn, ms = 500) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
   const how = () => ({ brightness: +g.bright.value / 100, warmth: +g.warm.value / 100 });
   const slider = (input, ghost) => h('div', { class: 'slider' }, input, ghost);
-  const step = (title, sum, body) => {
-    const d = h('details', { class: 'step', ontoggle: () => { if (d.open) need(); } },
-      h('summary', {}, h('span', { class: 'step-title' }, title), sum), body);
-    return d;
-  };
+  // each step is always open (the darkroom has a page of its own, so there's room): its title, then its controls
+  const step = (title, sum, body) => h('section', { class: 'step' }, h('h3', { class: 'step-title' }, title), body);
   const el = h('div', { class: 'dr-form' },
-    g.compare = h('div', { class: 'compare', hidden: true, title: 'Tap to make bigger or smaller', onclick: () => g.compare.classList.toggle('big') }),
+    g.compare = h('div', { class: 'compare', hidden: true, title: scene ? 'Tap the photo to straighten and crop it; tap the result to make it bigger or smaller' : 'Tap the photo to set its corners; tap the result to make it bigger or smaller',
+      onclick: (ev) => { if (ev.target.closest('figure.photo') && p) { if (scene) setScene(); else setCorners(); } else g.compare.classList.toggle('big'); } }),
     g.steps = h('div', { class: 'steps', hidden: !reopen },
       g.whiteBox = step('White balance', g.whiteSum = h('span', { class: 'step-sum muted' }), g.whiteBody = fieldsetOf(
-        h('div', { class: 'row' },
-          h('span', { class: 'grow' }),
+        h('div', { class: 'row dr-btns' },
           h('button', { type: 'button', title: 'Place white spots round the margins of a drawing on white paper', onclick: () => findSpots() }, 'Find the paper'),
           g.spotsBtn = h('button', { type: 'button', onclick: () => pickSpots() }, 'Pick white…')),
         g.sliders = h('div', { class: 'sliders' },
@@ -136,7 +133,7 @@ export function darkroom(opts = {}) {
     g.compare.append(h('figure', {}, previous(), h('figcaption', {}, 'As it is now')));
   }
 
-  /* Reopening: the first section opened fetches the original and reads it. */
+  /* Reopening: the original is fetched and read straight away, so every control works at once. */
   function need() {
     if (!reopen || p || fetching) return fetching;
     fetching = (async () => {
@@ -146,11 +143,13 @@ export function darkroom(opts = {}) {
         oldBlob = got.blob;
         if (!(await load(got.blob, opts.start))) throw new Error('This browser can\'t read the original');
       } catch (err) {
-        g.status.textContent = ''; g.whiteBox.open = g.cornerBox.open = g.sceneBox.open = false; toast(err.message, true);
+        g.status.textContent = ''; toast(err.message, true);
       } finally { fetching = null; }
     })();
     return fetching;
   }
+
+  if (reopen) setTimeout(need, 0);
 
   /* Replace the photo (see above) with a Library item's. The old original is read first, if it hasn't been, to
      compare proportions. */
@@ -215,9 +214,10 @@ export function darkroom(opts = {}) {
     const choices = typeof start === 'function' ? start(p) : start;
     if (!replacing) startWith = choices;
     apply(choices);
+    // a new recipe carrying another's white balance (the darkroom's switch between squaring up and straightening)
+    if (choices.guessCorners && !scene && !p.corners && p.guess && !wholePhoto(p.guess)) p.corners = p.guess;
     g.whiteBody.disabled = g.cornerBody.disabled = g.sceneBody.disabled = false;
     g.steps.hidden = false;
-    if (!reopen) g.whiteBox.open = g.cornerBox.open = g.sceneBox.open = true;          // new: both open
     await update();
     if (replacing) return true;                                      // the saved choices stay as they were
     baseline = JSON.stringify(record());
@@ -365,10 +365,12 @@ export function darkroom(opts = {}) {
     g.compare.hidden = false; g.compare.classList.remove('one');
     if (reopen) {
       g.compare.classList.add('reopen');
+      // the photo, and the picture: as it is until something changes, then the new one (press and hold: the previous)
+      const same = !replacement && (!baseline || JSON.stringify(now) === baseline);
       g.compare.replaceChildren(h('figure', { class: 'photo' }, shot(p.src, p.corners), h('figcaption', {}, 'Photo')),
-        h('figure', {}, previous(), h('figcaption', {}, 'Previous')), holdable(shot(out)));
+        same ? h('figure', {}, shot(out), h('figcaption', {}, 'The picture as it is')) : holdable(shot(out)));
     } else {
-      g.compare.replaceChildren(h('figure', {}, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
+      g.compare.replaceChildren(h('figure', { class: 'photo' }, shot(p.src, p.corners), h('figcaption', {}, 'Before')),
         h('figure', {}, shot(out), h('figcaption', {}, 'After: this is what will be used')));
     }
     g.status.textContent = `${W} × ${H} pixels.${note ? ' ' + note : ''}`;

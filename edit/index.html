@@ -226,7 +226,31 @@
   .dr-title .dr-word { font-size: 1rem; }
   .lib-pick.on { outline: 2px solid #ddd; outline-offset: 1px; }
   .dr-recipes .lib-pick-none { color: var(--ink); }
-  .dr-about { margin-bottom: 0.4rem; }
+  .dr-about { margin-bottom: 0.6rem; }
+  /* square up or straighten: two symbols side by side, the one in use lit */
+  .dr-kind { display: inline-flex; flex: none; }
+  .dr-kind button { display: inline-flex; padding: 0.45rem 0.6rem; color: var(--dim); }
+  .dr-kind button:first-child { border-radius: 6px 0 0 6px; } .dr-kind button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+  .dr-kind button.on { color: var(--ink); background: #4a4a4a; }
+  /* the darkroom's page: the pictures on the left, every control on the right, all open */
+  body[data-view=darkroom] .dr-form { display: grid; gap: 0 1.2rem; }
+  @media (min-width: 900px) {
+    body[data-view=darkroom] .dr-form { grid-template-columns: minmax(0, 1fr) 22rem; align-items: start; }
+    body[data-view=darkroom] .dr-form > .compare { grid-column: 1; grid-row: 1 / span 6; position: sticky; top: 4rem; }
+    body[data-view=darkroom] .dr-form > :not(.compare) { grid-column: 2; }
+  }
+  body[data-view=darkroom] .compare .shot { max-height: 60vh; }
+  body[data-view=darkroom] .compare.reopen .photo .shot { max-height: 22vh; }
+  body[data-view=darkroom] .compare figure.photo .shot { cursor: crosshair; }
+  .dr-shape { flex-wrap: wrap; gap: 0.4rem; }
+  .dr-shape label.tick { flex-basis: 100%; }
+  .dr-shape input[type=number] { width: 6rem; }
+  body[data-view=darkroom] .compare.reopen { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: start; }
+  body[data-view=darkroom] .compare.reopen figure.photo { grid-column: auto; }
+  body[data-view=darkroom] .compare.reopen .photo .shot { max-height: 60vh; }
+  .dr-btns { flex-wrap: wrap; gap: 0.4rem; }
+  section.step { border-top: 1px solid var(--line); padding-top: 0.2rem; }
+  section.step > h3.step-title { font-size: 0.95rem; font-weight: 500; margin: 0.5rem 0 0.4rem; }
   .dr-about .lib-marks { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; }
   .dr-shape { margin-top: 0.5rem; }
   .dr-shape .tick { margin: 0; }
