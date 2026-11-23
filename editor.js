@@ -16,7 +16,7 @@
 
 import { slug } from './site.js';
 import { SITES, tidy, ok } from './links.js';
-import { library, describe, remove, newItem, addOriginal, newRendition, nameRecipe, haveFile, putFile, original } from './library.js';
+import { library, describe, remove, forget, newItem, addOriginal, newRendition, nameRecipe, haveFile, putFile, original } from './library.js';
 import { renditions, NAMED } from './media.js';
 
 const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -80,6 +80,7 @@ export async function api(request, env, url, who) {
     if (path === 'discard') return json(await discard(env, body.ids));
     if (path === 'publish') return json(await publish(env, who, body.ids, body.note));
     if (path === 'restore') return json(await restore(env, who, body.revision));
+    if (path === 'history/forget') return json(await forget(env, url, body));
     if (path === 'hide') return json(await setHidden(env, who, String(body.id || ''), body.hidden === true));
     if (path === 'library/item') return json(await describe(env, body));
     if (path === 'library/delete') return json(await remove(env, url, body));

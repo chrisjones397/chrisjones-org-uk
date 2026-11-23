@@ -14,7 +14,8 @@
    What uses a rendition: drafts and published documents that name its id, and History (what "Bring back"
    restores). "Delete for good": an item only while no draft or published document names any of its renditions
    (if History does, it must be asked for, and those versions leave History); a rendition only while nothing at
-   all names it. A file goes from storage when no original, no rendition and no item's small picture refers to it any more. */
+   all names it. From History, a removed thing can be deleted for good (forget): its versions, and the pictures
+   only they named (not a recipe's newest). A file goes from storage when no original, no rendition and no item's small picture refers to it any more. */
 
 import { CODE, DIGEST, fileUrl } from './paths.js';
 import { dimensions, HEAD_BYTES } from './dimensions.js';
@@ -433,6 +434,39 @@ export async function remove(env, url, b) {
   await env.DB.batch(stmts);
   const gone = await sweep(env, url, digests);
   return { deleted: id, history: past.length, ...gone };
+}
+
+/* POST /edit/api/history/forget { entry }: something removed from the site (its removal published, so it is no
+   longer in the editor at all) deleted for good from History: every version of it goes (and any publication left
+   with nothing in it), so it can't be brought back. Pictures that only those versions named go too, files and
+   all, except a recipe's newest picture, which is the darkroom's latest work and stays in the Library (delete it
+   there, line or item, if it isn't wanted either). The Library item, its photo and its recipes stay: removing a
+   use never deletes what it used (the two layers, docs/entities.md). */
+export async function forget(env, url, b) {
+  const id = String(b.entry || '');
+  if (!id || id.length > 100) throw new Bad('Bad entry');
+  if (await env.DB.prepare('SELECT 1 FROM entries WHERE id = ?').bind(id).first()) {
+    throw new Bad('It is still in the editor: remove it and publish that first', 409);
+  }
+  const versions = (await env.DB.prepare('SELECT data, previous FROM revisions WHERE entry_id = ?').bind(id).all()).results;
+  if (!versions.length) throw new Bad('History has nothing of that', 404);
+  const named = new Set();
+  for (const v of versions) for (const t of [v.data, v.previous]) {
+    try { const r = t && JSON.parse(t).rendition; if (Number.isInteger(r)) named.add(r); } catch { /* not a document with a picture */ }
+  }
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM revisions WHERE entry_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM releases WHERE id NOT IN (SELECT release_id FROM revisions)'),
+  ]);
+  const uses = await allUses(env);
+  const loose = JSON.stringify([...named].filter((r) => !uses.has(r)));
+  const olds = await env.DB.prepare(`SELECT r.id FROM rendition r WHERE r.id IN (SELECT value FROM json_each(?1))
+    AND r.n < (SELECT MAX(x.n) FROM rendition x WHERE x.recipe_id = r.recipe_id)`).bind(loose).all();
+  const gone = JSON.stringify(olds.results.map((r) => r.id));
+  const digests = (await env.DB.prepare('SELECT DISTINCT digest FROM rendition_file WHERE rendition_id IN (SELECT value FROM json_each(?))')
+    .bind(gone).all()).results.map((f) => f.digest);
+  if (olds.results.length) await env.DB.prepare('DELETE FROM rendition WHERE id IN (SELECT value FROM json_each(?))').bind(gone).run();
+  return { forgotten: id, versions: versions.length, renditions: olds.results.length, ...(await sweep(env, url, digests)) };
 }
 
 /* Of these files, delete from storage those that no original and no rendition refers to any more; and with
