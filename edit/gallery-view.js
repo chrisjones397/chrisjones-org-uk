@@ -1,7 +1,7 @@
 /* The Gallery view: add a painting (at the top), and change the genres and their paintings; both are dragged by
    their grips to rearrange them (drag.js). */
 
-import { h } from './dom.js';
+import { h, glyph, GLYPHS } from './dom.js';
 import { state, byId, liveOf, isHidden, genres, paintingsIn } from './state.js';
 import { save, discard } from './server.js';
 import { HINT } from './render.js';
@@ -28,10 +28,12 @@ export function galleryView() {
         save([{ id: s.id, kind: 'genre', data: { title: ev.target.value, order: s.order, hidden: s.hidden } }], null, `${s.id}:title`);
       } }),
       badge(se),
-      hideButton(se, 'this genre and its paintings'),
-      h('button', { class: 'danger', title: items.some((e) => e.draft != null) ? 'Move or remove its paintings first' : 'Remove this genre',
-        disabled: items.some((e) => e.draft != null),
-        onclick: () => { if (confirm(`Remove the genre "${s.title}"?`)) save([{ id: s.id, kind: 'genre', data: null }], 'Genre removed in the draft'); } }, 'Remove'),
+      // the same column of symbols as its paintings' rows, so the eyes line up
+      h('span', { class: 'move' }, h('span', { class: 'move-space' }),
+        hideButton(se, 'this genre and its paintings') || h('span', { class: 'move-space' }),
+        h('button', { class: 'danger', title: items.some((e) => e.draft != null) ? 'Remove this genre (move or remove its paintings first)' : 'Remove this genre',
+          'aria-label': 'Remove this genre', disabled: items.some((e) => e.draft != null),
+          onclick: () => { if (confirm(`Remove the genre "${s.title}"?`)) save([{ id: s.id, kind: 'genre', data: null }], 'Genre removed in the draft'); } }, glyph(GLYPHS.bin))),
     ));
     // its paintings: a list they can be dragged within, into and out of
     const list = h('div', { class: 'paintings', 'data-genre': s.id });
@@ -44,7 +46,7 @@ export function galleryView() {
   // genres deleted in the draft but still live
   for (const e of state.entries.filter((x) => x.kind === 'genre' && x.draft == null)) {
     out.push(h('div', { class: 'card row' }, h('span', { class: 'grow muted' }, `${liveOf(e).title} (removed in the draft)`), badge(e),
-      h('button', { onclick: () => discard([e.id]) }, 'Keep it')));
+      h('span', { class: 'move' }, h('button', { title: 'Keep it: undo the removal', 'aria-label': 'Keep it', onclick: () => discard([e.id]) }, glyph(GLYPHS.back)))));
   }
 
   return out;

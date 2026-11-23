@@ -27,30 +27,30 @@ export function paintingRow(e, secs) {
     gone ? h('span', { class: 'grip-space' }) : grip('painting', e.id, 'this painting'),
     h('img', { src: thumb(d), alt: '', loading: 'lazy' }),
     h('div', { class: 'what' }, h('span', { class: 't' }, d.title),
-      h('span', { class: 'd' }, detailsLine(d) || ' ', sizeNote(d))),
-    badge(e),
-    gone ? h('button', { onclick: () => discard([e.id]) }, 'Keep it')
-      : h('span', { class: 'move' },
-        starButton(e),
-        hideButton(e, 'this painting'),
-        h('button', { onclick: () => { if (open.has(e.id)) closeEdit(e.id); else open.add(e.id); render(); } }, open.has(e.id) ? 'Close' : 'Edit')));
+      h('span', { class: 'd' }, badge(e), badge(e) ? ' ' : '', detailsLine(d) || ' ', sizeNote(d))),
+    h('span', { class: 'move' },
+      gone ? h('button', { title: 'Keep it: undo the removal', 'aria-label': 'Keep it', onclick: () => discard([e.id]) }, glyph(GLYPHS.back))
+        : [starButton(e), hideButton(e, 'this painting') || h('span', { class: 'move-space' }),
+          h('button', { class: open.has(e.id) ? 'on' : '', 'aria-expanded': String(open.has(e.id)), title: open.has(e.id) ? 'Close its details' : 'Edit its title, details and picture',
+            'aria-label': open.has(e.id) ? 'Close' : 'Edit', onclick: () => { if (open.has(e.id)) closeEdit(e.id); else open.add(e.id); render(); } },
+          glyph(open.has(e.id) ? GLYPHS.close : GLYPHS.draft))]));
   if (gone || !open.has(e.id)) { editFields.delete(e.id); return [row]; }
 
   /* One saving rule: each field saves the painting as a draft as soon as it's changed (a tick beside it), and a
      change to the picture is made and stored by itself (pictureChanged, below). No Save button. */
   const f = {}, k = (name) => `${e.id}:${name}`;
   const form = h('div', { class: 'edit' },
+    ...pictureFields(e, d),
     h('label', {}, 'Title'), f.title = h('input', { type: 'text', value: d.title }),
     ...detailsFields(f, d),
     h('label', {}, 'Genre'), f.genre = h('select', {}, ...secs.map((s) => h('option', { value: s.id, selected: s.id === d.genre }, s.title))),
     h('label', { class: 'tick' }, f.wide = h('input', { type: 'checkbox', checked: d.wide }), 'Wide: spans the whole width of the list'),
-    ...pictureFields(e, d),
     h('p', { class: 'hint' }, `Address: /gallery/${d.name}/ (stays the same if the title changes)`),
     h('div', { class: 'actions' },
       // never published: undoing would take it away altogether, which is what Remove (with its question) is for
-      changed(e) && e.published != null ? h('button', { onclick: () => discard([e.id]) }, 'Undo changes') : null,
-      h('button', { class: 'danger', title: 'Take it out of the gallery: its photo stays in the Library',
-        onclick: () => { if (confirm(`Remove "${d.title}" from the gallery? Its photo stays in the Library, and it stays on the site until you publish.`)) { closeEdit(e.id); save([{ id: e.id, kind: 'artwork', data: null }], 'Removed in the draft'); } } }, 'Remove')));
+      changed(e) && e.published != null ? h('button', { class: 'icon-btn', title: 'Undo its changes: back to what visitors see', 'aria-label': 'Undo changes', onclick: () => discard([e.id]) }, glyph(GLYPHS.back)) : null,
+      h('button', { class: 'icon-btn danger', title: 'Remove it from the gallery (its photo stays in the Library)', 'aria-label': 'Remove from the gallery',
+        onclick: () => { if (confirm(`Remove "${d.title}" from the gallery? Its photo stays in the Library, and it stays on the site until you publish.`)) { closeEdit(e.id); save([{ id: e.id, kind: 'artwork', data: null }], 'Removed in the draft'); } } }, glyph(GLYPHS.bin))));
   for (const [name, el] of [['title', f.title], ['medium', f.medium], ['height', f.height], ['width', f.width], ['year', f.year],
     ['genre', f.genre], ['wide', f.wide], ['measured', f.measured], ['estimated', f.estimated], ['shown', f.shown]]) {
     el.dataset.k = k(name);
@@ -114,7 +114,7 @@ function pictureFields(e, d) {
     h('div', { class: 'row pic-row' },
       r ? h('img', { class: 'pic-now', src: pictureAt(d, 480), alt: '' }) : h('span', { class: 'lib-pick-none pic-now' }, glyph(GLYPHS.photo, 28)),
       h('div', { class: 'pic-about' },
-        h('span', { class: 'muted' }, r ? `${r.kind === 'flat' ? 'Squared up' : 'Straightened and cropped'}${r.label ? ` (${r.label})` : ''}, ${r.w} × ${r.h} pixels` : 'Its picture isn\'t known here'),
+        h('span', { class: 'muted' }, r ? `${r.label || (r.kind === 'flat' ? 'Squared up' : 'Straightened')}, ${r.w} × ${r.h}` : 'Its picture isn\'t known here'),
         off ? h('span', { class: 'pic-off', title: `Its picture's proportions don't match its measured size, ${d.cm[0]} × ${d.cm[1]} centimetres: open it in the darkroom to square it up to that` },
           glyph(GLYPHS.square, 14), ' Not its measured proportions') : null,
         h('div', { class: 'row' },

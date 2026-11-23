@@ -45,7 +45,9 @@
   .tick input { width: 1.2rem; height: 1.2rem; }
   button { font: inherit; font-size: 0.9rem; padding: 0.45rem 0.8rem; color: var(--ink); background: #333;
            border: 1px solid #4a4a4a; border-radius: 6px; cursor: pointer; }
-  button:hover { background: #3c3c3c; }
+  button:hover, a.icon-btn:hover { background: #3c3c3c; }
+  /* a link that does a button's job looks like one */
+  a.icon-btn { color: var(--ink); background: #333; border: 1px solid #4a4a4a; border-radius: 6px; text-decoration: none; }
   button.main { background: #ddd; color: #111; border-color: #ddd; }
   button.main:hover { background: #fff; }
   button.danger { color: var(--gone); }
@@ -89,7 +91,11 @@
     background-repeat: no-repeat; background-position: right 0.5rem center; padding-right: 2rem;
     animation: saved-field 3.5s linear forwards; }
   textarea.saved { background-position: right 0.5rem top 0.5rem; }
-  .move button { padding: 0.3rem 0.55rem; }
+  .move { display: inline-flex; gap: 0.3rem; flex: none; }
+  .move > button, .move > .move-space { width: 2.3rem; height: 2.3rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .move > button.on { border-color: var(--ink); }
+  .edit { border-left: 2px solid var(--line); padding-left: 0.9rem; margin-left: 1.6rem; }
+  .edit .actions .icon-btn { padding: 0.45rem; }
   /* Dragging to rearrange (drag.js): the grip, six dots on the left of a painting's or genre's row. Only the grip
      starts a drag, so touching anything else still scrolls the page. */
   button.grip { display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0.35rem 0.15rem;
@@ -230,6 +236,7 @@
   .dr-angle { flex: 1; min-width: 8rem; max-width: 26rem; }
   /* A painting's picture in its Edit form: the picture, how it was prepared, choose another, open in the darkroom */
   .pic-row { align-items: flex-start; gap: 0.8rem; }
+  .edit .pic-now { width: 5rem; }
   .pic-now { width: 7.5rem; aspect-ratio: 4 / 3; object-fit: contain; background: #111; border-radius: 4px; flex: none; }
   .pic-about { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; min-width: 0; flex: 1; }
   .pic-off { display: inline-flex; gap: 0.3rem; align-items: center; color: var(--changed); }
