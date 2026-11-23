@@ -631,6 +631,9 @@ editor redraws the whole view after every change; fonts come from Google, not th
    **Next: the rest of slice 4's smaller extras** (one original shared by several paintings is now done by
    recipes; left: "Delete for good" from History, a clear Review of background changes), then step 5. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
    place, replacing the Content tab).
+   **Slices 3 and 4 put live by him, 23 Nov 2026** (main at 63827ed, with 4 (b)'s dragging and the corners
+   view's Safari fix): live's build succeeded and applied migration 0007; checked through the API: every
+   document finds its rendition, no foreign key faults.
 5. **Framings and backgrounds as lists**: a section points at a list of framings (one shown; carousel later),
    keeps its shade; a framing has settings for wide and upright screens (focus, crop, perhaps section height);
    paintings usable as backgrounds by reference. On a phone turning: photos follow by CSS; a playing video is
