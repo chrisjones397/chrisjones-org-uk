@@ -650,6 +650,19 @@ editor redraws the whole view after every change; fonts come from Google, not th
    History bin, its confirm and toast; Review with a changed, a new and a removed background and a re-prepared
    painting, at computer and phone widths; the Content tab's background boxes unchanged. Not tested: a video
    background in Review, real phones, Safari, real D1 and R2.
+   **His feedback the same evening (23 Nov 2026), acted on, on dev:** replies to him must be short and plain
+   (he can't follow walls of text). Gallery: row buttons are symbols of one size in one right-hand column
+   (star, eye, pencil to edit / cross to close; genres: eye and bin in the same column); the "Changed" badge sits
+   on the details line; the Edit form is indented, picture first and small, Undo and Remove as symbols.
+   Darkroom: opens straight into the newest recipe, or a new one squaring up, with no choosing tiles first;
+   every control is open (no fold-out sections), pictures on the left and controls on the right from 900
+   pixels; square up / straighten is a two-symbol switch (on a recipe not yet saved it just changes; on a saved
+   one it starts a new recipe keeping the white balance); tapping the photo opens the corners or crop view;
+   a new recipe saves only once something is changed (or it's hung), so looking makes nothing; reopening shows
+   the photo and one picture. Rendition numbers: his first recipe on live came out "r3" because the darkroom
+   deletes the trials it replaces; migration 0008 renumbers every recipe's renditions 1, 2, 3... and deleting
+   one now closes the gap (library.js closeGap). Still to consider: dragging corners on the page itself
+   rather than in the full-screen view.
    **Slice 4 is then finished**; next, step 5. After it: step 5 (framings and backgrounds as lists), step 6 (edit in
    place, replacing the Content tab).
    **Slices 3 and 4 put live by him, 23 Nov 2026** (main at 63827ed, with 4 (b)'s dragging and the corners
